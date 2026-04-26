@@ -1,0 +1,93 @@
+import { useState } from "react";
+import { useLang } from "../contexts/LangContext.jsx";
+import { FLAGS } from "../constants/cuisineConstants.js";
+import { calcBite, scoreColor, scoreLabel, tasteLabel } from "../utils/scoring.js";
+import { S } from "../styles/sharedStyles.js";
+import { Pill } from "./Pill.jsx";
+import { CafeNameInput } from "./CafeNameInput.jsx";
+import { CuisineInput } from "./CuisineInput.jsx";
+import { Toggle } from "./Toggle.jsx";
+import { RepeatPicker } from "./RepeatPicker.jsx";
+import { SectionLabel } from "./SectionLabel.jsx";
+import { FieldLabel } from "./FieldLabel.jsx";
+
+export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,existingNames,existingEntries}) {
+  const {t} = useLang();
+  const [f,setF] = useState(initial);
+  const [sub,setSub] = useState(false);
+  const inp = (k,v) => setF(p=>({...p,[k]:v}));
+  const score = calcBite(+f.taste,+f.cost,+f.portions,+f.wait,f.useR,+f.repeatability,weights);
+  const bg = score===null?"#2C2C2A":score>=3?"#1A2E0A":score>=2?"#0C2A3A":score>=1?"#2A1E05":"#3C1F13";
+  function save() {
+    if(!f.name||!f.cost){setSub(true);return;}
+    onSave({...f,taste:+f.taste,cost:+f.cost,portions:+f.portions,wait:+f.wait,repeatability:+f.repeatability});
+  }
+  return (
+    <div style={{...S.card,marginBottom:12}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        {addType!==undefined?(
+          <div style={{display:"flex",gap:0,background:"#141413",borderRadius:20,padding:3}}>
+            <Pill active={addType==="restaurant"} onClick={()=>setAddType("restaurant")}>{t.restaurantTab}</Pill>
+            <Pill active={addType==="cafe"} onClick={()=>setAddType("cafe")}>{t.cafeTab}</Pill>
+          </div>
+        ):<div/>}
+        <div style={{textAlign:"right"}}>
+          <div style={{fontSize:22,fontWeight:600,color:scoreColor(score),lineHeight:1}}>{score!=null?score.toFixed(2):"—"}</div>
+          <div style={{fontSize:11,color:scoreColor(score)}}>{scoreLabel(score,t)}</div>
+        </div>
+      </div>
+      <SectionLabel>{t.theBasics}</SectionLabel>
+      <div style={S.mb16}>
+        <FieldLabel>{t.restaurantName}</FieldLabel>
+        <CafeNameInput value={f.name} onChange={v=>{
+          inp("name",v);
+          const match=(existingEntries||[]).find(e=>e.name===v);
+          if(match){
+            inp("cuisine",match.cuisine||"");
+            inp("letter",(match.cuisine?.[0]||"").toUpperCase());
+            inp("cuisine2",match.cuisine2||"");
+            inp("isFusion",match.isFusion||false);
+            inp("portions",match.portions||1);
+            inp("wait",0);
+            inp("useR",match.useR!==false);
+            inp("repeatability",match.repeatability||1);
+          }
+        }} existingNames={existingNames||[]}/>
+        {sub&&!f.name&&<div style={S.err}>Required</div>}
+      </div>
+      <div style={{display:"flex",gap:10,marginBottom:16}}>
+        <div style={S.f1}><FieldLabel>{t.cuisine}</FieldLabel><CuisineInput value={f.cuisine} placeholder={t.cuisine} onChange={v=>{inp("cuisine",v);inp("letter",v.trim()[0]?.toUpperCase()||"");}}/></div>
+        {f.letter&&<div style={{display:"flex",alignItems:"flex-end",paddingBottom:2}}><div style={{width:36,height:36,borderRadius:8,background:"#3C1F13",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>{FLAGS[f.cuisine]||f.letter}</div></div>}
+      </div>
+
+      <div style={{marginBottom:16}}>
+        <FieldLabel>{t.city||"City"} <span style={{color:"#888780",fontWeight:400,fontSize:11}}>({t.optional||"optional"})</span></FieldLabel>
+        <input value={f.city||""} onChange={e=>inp("city",e.target.value)} placeholder="e.g. NYC, Tokyo, Lisbon" style={S.wb}/>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}>
+        <Toggle on={f.isFusion} onClick={()=>inp("isFusion",!f.isFusion)}/><span style={{fontSize:13,color:"#888780"}}>{t.fusionDish}</span>
+      </div>
+      {f.isFusion&&<div style={S.mb16}><FieldLabel>{t.secondCuisine}</FieldLabel><CuisineInput value={f.cuisine2||""} placeholder={t.cuisine} onChange={v=>inp("cuisine2",v)}/></div>}
+      <div style={S.sec}><SectionLabel>{t.scoreInputs}</SectionLabel></div>
+      <div style={S.mb16}>
+        <FieldLabel>Taste — <span style={{color:"#F0997B"}}>{f.taste} · {tasteLabel(f.taste,t)}</span></FieldLabel>
+        <input type="range" min="0" max="10" step="0.1" value={f.taste} onChange={e=>inp("taste",e.target.value)} style={{width:"100%"}}/>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#888780",marginTop:4}}><span>0 sucks</span><span>5 avg</span><span>10 incredible</span></div>
+      </div>
+      <div style={{display:"flex",gap:10,marginBottom:16}}>
+        <div style={S.f1}><FieldLabel>{t.totalCost}</FieldLabel><input type="number" value={f.cost} onChange={e=>inp("cost",e.target.value)} placeholder="$ e.g. 45" style={S.wb}/>{sub&&!f.cost&&<div style={S.err}>Required</div>}</div>
+        <div style={S.f1}><FieldLabel>{t.portions}</FieldLabel><input type="number" min="0.5" step="0.5" value={f.portions} onChange={e=>inp("portions",e.target.value)} style={S.wb}/></div>
+        <div style={S.f1}><FieldLabel>{t.waitMins}</FieldLabel><input type="number" min="0" step="1" value={f.wait} onChange={e=>inp("wait",e.target.value)} style={S.wb}/></div>
+      </div>
+      <div style={S.sec}><SectionLabel>{t.repeatability}</SectionLabel></div>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}><Toggle on={f.useR} onClick={()=>inp("useR",!f.useR)}/><span style={{fontSize:13,color:"#888780"}}>{t.includeInScore}</span></div>
+      {f.useR&&<div style={S.mb16}><FieldLabel>Repeatability — <span style={{color:"#F0997B"}}>{"⭐".repeat(f.repeatability)||"✕"}</span></FieldLabel><RepeatPicker value={f.repeatability} onChange={v=>inp("repeatability",v)}/></div>}
+      <div style={S.sec}><SectionLabel>{t.notes}</SectionLabel></div>
+      <div style={{marginBottom:20}}><textarea value={f.notes} onChange={e=>inp("notes",e.target.value)} placeholder={t.whatMemorable} rows={3} style={{width:"100%",boxSizing:"border-box",resize:"vertical"}}/></div>
+      <div style={S.row8}>
+        <button onClick={onCancel} style={{flex:1,padding:"10px",background:"transparent",color:"#888780",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:8,fontSize:14,cursor:"pointer"}}>{t.cancel}</button>
+        <button onClick={save} style={{flex:2,padding:"10px",background:"#F0997B",color:"#141413",border:"none",borderRadius:8,fontSize:15,fontWeight:500,cursor:"pointer"}}>{t.save}</button>
+      </div>
+    </div>
+  );
+}
