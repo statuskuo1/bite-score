@@ -6,8 +6,8 @@ Welcome and palette restaurant weight sliders used proportional `rebalance` on e
 
 ## Decision
 
-- **Restaurant weights:** Only **taste** and **bpb** are draggable, each capped so `taste + bpb ≤ 100`. **Wait** is always `100 − taste − bpb` and shown as a **read-only** bar (no `onUpdate` for `wait`). Logic lives in `App.jsx` (`adjustRestaurantWeights` + `updW`); café two-slider weights still use **`rebalance`** only in `updCafeW`.
-- **UI:** Reuse **`WeightSliders`** in the welcome modal (remove duplicated markup). **`WeightSliders`** adds a **`bite-weight-range`** class with larger WebKit/Moz thumbs and a taller touch row; optional **`derivedKeys`** marks keys that render as a filled bar only.
+- **Restaurant weights:** Exactly **two** of taste / bpb / wait are the active “pair” (`restaurantSliderPair`, default taste+bpb). Moving either updates the **third** to keep sum 100. Moving the **third** swaps it into the pair (partner = last-adjusted slider in the old pair) so any two can be set first; café two-slider weights still use **`rebalance`** in `updCafeW` only.
+- **UI:** Reuse **`WeightSliders`** in the welcome modal. **`WeightSliders`** uses **`bite-weight-range`** for larger thumbs; restaurant weights use **`manualKeys`** plus a **vertical stack** (one row per factor); café keeps a 2-column grid.
 - **Removed** unused **`WelcomeWeights.jsx`** (nothing imported it).
 
 ## Alternatives considered
@@ -18,7 +18,7 @@ Welcome and palette restaurant weight sliders used proportional `rebalance` on e
 
 ## Consequences
 
-- `PaletteView` passes **`derivedKeys={["wait"]}`** for restaurant weights; drinks/sweets café sliders omit it.
-- If new weight keys are added, revisit **`derivedKeys`** and caps.
+- `PaletteView` passes **`restaurantSliderPair`** into **`WeightSliders`** as **`manualKeys`**; drinks/sweets omit **`manualKeys`** (two sliders only).
+- If new weight keys are added, revisit pair logic and layout.
 
 **Primary files:** `src/App.jsx`, `src/components/WeightSliders.jsx`, `src/components/PaletteView.jsx`; removed `src/components/WelcomeWeights.jsx`.

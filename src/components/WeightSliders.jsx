@@ -43,15 +43,27 @@ const RANGE_STYLE = `
 }
 `;
 
-export function WeightSliders({weights, labels, onUpdate, onReset, defaults, derivedKeys = []}) {
+export function WeightSliders({weights, labels, onUpdate, onReset, defaults, manualKeys}) {
   const {t} = useLang();
   const COLORS = {"taste":"#F0997B","bpb":"#5B9BD5","wait":"#97C459"};
-  const cols = labels.length >= 3 ? "repeat(3,1fr)" : "repeat(2,1fr)";
-  const derived = new Set(derivedKeys);
-  const restaurantDerivedWait = derived.has("wait") && labels.some(([,k])=>k==="taste") && labels.some(([,k])=>k==="bpb");
+  const keys = labels.map(([,k])=>k);
+  const pair = manualKeys && manualKeys.length === 2 ? manualKeys : null;
+  const usePair = pair && keys.length === 3;
+  const stack = keys.length >= 3;
+  const gridStyle = stack
+    ? {display:"flex",flexDirection:"column",gap:12}
+    : {display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:12};
   function reset() {
     if(!defaults || !onReset) return;
     onReset(defaults);
+  }
+  function maxForKey(key) {
+    if(!usePair || !pair) return 100;
+    if(pair.includes(key)){
+      const other = pair.find(k=>k!==key);
+      return 100 - weights[other];
+    }
+    return 100;
   }
   return (
     <div>
@@ -60,30 +72,13 @@ export function WeightSliders({weights, labels, onUpdate, onReset, defaults, der
         <span style={{fontSize:11,color:"#888780",fontStyle:"italic"}}>{t.howMuchCare}</span>
         {defaults&&<button type="button" onClick={reset} style={{fontSize:10,color:"#888780",background:"none",border:"none",cursor:"pointer",padding:0,textDecoration:"underline",flexShrink:0}}>Reset</button>}
       </div>
-      <div style={{display:"grid",gridTemplateColumns:cols,gap:12}}>
+      <div style={gridStyle}>
         {labels.map(([label,key])=>{
           const color = COLORS[key]||"#F0997B";
           const pct = weights[key];
-          if(derived.has(key)){
-            return (
-              <div key={key}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                  <span style={{fontSize:11,color:"#888780"}}>{label}</span>
-                  <span style={{fontSize:11,fontWeight:500,color:color}}>{pct}%</span>
-                </div>
-                <div style={{minHeight:28,display:"flex",alignItems:"center",padding:"4px 0"}} aria-hidden>
-                  <div style={{width:"100%",height:8,borderRadius:4,background:"rgba(255,255,255,0.1)",overflow:"hidden"}}>
-                    <div style={{width:`${pct}%`,height:"100%",background:color,borderRadius:4,minWidth:pct>0?2:0}}/>
-                  </div>
-                </div>
-              </div>
-            );
-          }
-          const maxVal = restaurantDerivedWait && key==="taste" ? 100 - weights.bpb
-            : restaurantDerivedWait && key==="bpb" ? 100 - weights.taste
-            : 100;
+          const maxVal = maxForKey(key);
           return (
-            <div key={key}>
+            <div key={key} style={stack?{width:"100%"}:undefined}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
                 <span style={{fontSize:11,color:"#888780"}}>{label}</span>
                 <span style={{fontSize:11,fontWeight:500,color:color}}>{pct}%</span>
@@ -95,7 +90,7 @@ export function WeightSliders({weights, labels, onUpdate, onReset, defaults, der
                   min={0}
                   max={maxVal}
                   step={1}
-                  value={pct}
+                  value={Math.min(pct,maxVal)}
                   onChange={e=>onUpdate(key,+e.target.value)}
                   style={{width:"100%",accentColor:color,"--thumb-color":color}}
                 />

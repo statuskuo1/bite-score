@@ -105,6 +105,9 @@ export default function App() {
   const [showSearch, setShowSearch] = useState(false);
   const [search, setSearch] = useState("");
   const [weights, setWeights] = useState({taste:50,bpb:40,wait:10});
+  const [restaurantSliderPair, setRestaurantSliderPair] = useState(["taste","bpb"]);
+  const restaurantSliderPairRef = useRef(["taste","bpb"]);
+  const lastRestaurantSliderKeyRef = useRef("taste");
   const [cafeWeights, setCafeWeights] = useState({taste:70,bpb:30});
   const [cafeWErr, setCafeWErr] = useState("");
   const [wErr, setWErr] = useState("");
@@ -138,6 +141,10 @@ export default function App() {
     return()=>{document.removeEventListener("mousedown",h);document.removeEventListener("touchstart",h);};
   },[]);
 
+  useEffect(()=>{
+    restaurantSliderPairRef.current = restaurantSliderPair;
+  },[restaurantSliderPair]);
+
   /** Café weights (2 sliders): redistribute the other key to keep sum 100. */
   function rebalance(current, changedKey, newVal) {
     const nv = Math.min(100, Math.max(0, Math.round(newVal)));
@@ -156,28 +163,49 @@ export default function App() {
     return newW;
   }
 
-  /** Restaurant weights: taste and bpb independent (capped); wait = remainder to 100. */
-  function adjustRestaurantWeights(current, changedKey, rawVal) {
-    const r = (x)=>Math.min(100,Math.max(0,Math.round(x)));
-    const {taste,bpb}=current;
-    if(changedKey==="taste"){
-      const capped=Math.min(r(rawVal),100-bpb);
-      return{taste:capped,bpb,wait:100-capped-bpb};
-    }
-    if(changedKey==="bpb"){
-      const capped=Math.min(r(rawVal),100-taste);
-      return{taste,bpb:capped,wait:100-taste-capped};
-    }
-    return current;
-  }
-
+  /** Restaurant weights: two keys in `restaurantSliderPair` are sliders; the third fills to 100%. Adjusting the third swaps it into the pair (partner = last touched free slider). */
   function updW(k,v){
-    if(k==="wait")return;
-    setWeights(w=>adjustRestaurantWeights(w,k,+v));
+    const nv = Math.round(Math.min(100,Math.max(0,+v)));
+    const pair = restaurantSliderPairRef.current;
+    const all = ["taste","bpb","wait"];
+    if(pair.includes(k)){
+      const other = pair.find(x=>x!==k);
+      const dep = all.find(x=>!pair.includes(x));
+      setWeights(w=>{
+        const wOther = w[other];
+        const maxK = 100 - wOther;
+        const newK = Math.min(nv,maxK);
+        const newDep = Math.max(0,100-newK-wOther);
+        return {...w,[k]:newK,[dep]:newDep};
+      });
+      lastRestaurantSliderKeyRef.current = k;
+      setWErr("");
+      return;
+    }
+    const partner = pair.includes(lastRestaurantSliderKeyRef.current) ? lastRestaurantSliderKeyRef.current : pair[0];
+    const dropped = pair.find(x=>x!==partner);
+    const newPair = [k,partner];
+    setWeights(w=>{
+      const wPartner = w[partner];
+      let newK = Math.min(nv,100-wPartner);
+      let newDropped = 100-newK-wPartner;
+      if(newDropped<0){newDropped=0;newK=100-wPartner;}
+      return {...w,[k]:newK,[dropped]:newDropped};
+    });
+    restaurantSliderPairRef.current = newPair;
+    setRestaurantSliderPair(newPair);
+    lastRestaurantSliderKeyRef.current = k;
     setWErr("");
   }
 
-  function resetWeights(defaults){ setWeights({...defaults});setWErr(""); }
+  function resetWeights(defaults){
+    setWeights({...defaults});
+    const p = ["taste","bpb"];
+    setRestaurantSliderPair(p);
+    restaurantSliderPairRef.current = p;
+    lastRestaurantSliderKeyRef.current = "taste";
+    setWErr("");
+  }
 
   function updCafeW(k,v){
     const newW=rebalance(cafeWeights,k,+v);
@@ -344,7 +372,7 @@ export default function App() {
                 ):(
                   <div>
                     <div style={{borderTop:"0.5px solid rgba(255,255,255,0.08)",paddingTop:14,marginBottom:14}}>
-                      <WeightSliders weights={weights} labels={[[t.taste,"taste"],[t.bangBuck,"bpb"],[t.wait,"wait"]]} onUpdate={updW} onReset={resetWeights} defaults={{taste:50,bpb:40,wait:10}} derivedKeys={["wait"]}/>
+                      <WeightSliders weights={weights} labels={[[t.taste,"taste"],[t.bangBuck,"bpb"],[t.wait,"wait"]]} onUpdate={updW} onReset={resetWeights} defaults={{taste:50,bpb:40,wait:10}} manualKeys={restaurantSliderPair}/>
                     </div>
                     {(welcomeOverride[lang+"_body"]||t.welcome2).split("\n\n").slice(1).map((para,i)=>(
                       <p key={i} style={{fontSize:13,color:"#888780",margin:"0 0 12px",lineHeight:1.7,textAlign:"center",whiteSpace:"pre-line"}}>{para}</p>
@@ -808,7 +836,7 @@ export default function App() {
       )}
 
       {st.view==="suggest"&&<SuggestView entries={st.entries} onBack={()=>dispatch({type:"VIEW",view:"quests"})}/>}
-      {st.view==="palette"&&<PaletteView entries={st.entries} cafes={cafes} weights={weights} updateWeight={updW} resetWeights={resetWeights} totalW={totalW} weightError={wErr} cafeWeights={cafeWeights} updateCafeW={updCafeW} resetCafeWeights={resetCafeWeights} cafeTotalW={+(cafeWeights.taste+cafeWeights.bpb).toFixed(0)} cafeWErr={cafeWErr}/>}
+      {st.view==="palette"&&<PaletteView entries={st.entries} cafes={cafes} weights={weights} updateWeight={updW} resetWeights={resetWeights} totalW={totalW} weightError={wErr} restaurantSliderPair={restaurantSliderPair} cafeWeights={cafeWeights} updateCafeW={updCafeW} resetCafeWeights={resetCafeWeights} cafeTotalW={+(cafeWeights.taste+cafeWeights.bpb).toFixed(0)} cafeWErr={cafeWErr}/>}
 
       {/* ── FAQ ── */}
       {st.view==="faq"&&<FaqView isAdmin={isAdmin} faqOverrides={faqOverrides} setFaqOverrides={setFaqOverrides}/>}
