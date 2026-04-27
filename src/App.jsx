@@ -10,7 +10,6 @@ import { reducer } from "./state/logReducer.js";
 import {
   calcBite,
   calcCafe,
-  calcMaxBite,
   scoreColor,
   scoreLabel,
   tasteLabel,
@@ -47,8 +46,6 @@ export default function App() {
   const [lang, setLang] = useState(()=>localStorage.getItem("bite_lang")||"en");
   const t = T[lang]||T.en;
   const welcomeBodyDisplay = omitPlayWelcomeAside(welcomeOverride[lang+"_body"]||t.welcome2);
-  const welcomeTotal = weights.taste + weights.bpb + weights.wait;
-  const canProceedWelcome = welcomeTotal === 100;
   function toggleLang(){const nl=lang==="en"?"zh":"en";setLang(nl);localStorage.setItem("bite_lang",nl);}
 
   useEffect(()=>{
@@ -112,6 +109,8 @@ export default function App() {
   const [showSearch, setShowSearch] = useState(false);
   const [search, setSearch] = useState("");
   const [weights, setWeights] = useState({taste:50,bpb:40,wait:10});
+  const welcomeTotal = weights.taste + weights.bpb + weights.wait;
+  const canProceedWelcome = welcomeTotal === 100;
   const [cafeWeights, setCafeWeights] = useState({taste:70,bpb:30});
   const [cafeWErr, setCafeWErr] = useState("");
   const [questL, setQuestL] = useState(new Set(["T","M","S","U","C","D","Y","K"]));
@@ -307,7 +306,6 @@ export default function App() {
             {welcomeBodyDisplay.split("\n\n").slice(1).map((para,i)=>(
               <p key={i} style={{fontSize:13,color:"#F1EFE8",margin:"0 0 12px",lineHeight:1.7,textAlign:"center",whiteSpace:"pre-line"}}>{para}</p>
             ))}
-            <div style={{fontSize:10,color:"#F1EFE8",textAlign:"right",marginBottom:10}}>Max score at these weights: <span style={{color:"#F0997B",fontWeight:500}}>{calcMaxBite(weights).toFixed(1)}</span></div>
             <button disabled={!canProceedWelcome} onClick={dismissWelcome} style={{width:"100%",padding:"12px",background:canProceedWelcome?"#F0997B":"#5A4A43",color:canProceedWelcome?"#141413":"#AFA8A3",border:"none",borderRadius:10,fontSize:14,fontWeight:500,cursor:canProceedWelcome?"pointer":"not-allowed",opacity:canProceedWelcome?1:0.85}}>{t.welcomeBtn}</button>
           </div>
         </div>
