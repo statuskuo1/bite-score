@@ -4,6 +4,22 @@ import { useAuth } from "./contexts/AuthContext.jsx";
 import { T } from "./translations.js";
 import { supabase } from "./config/supabaseClient.js";
 import { canMutateVisit } from "./utils/rowAccess.js";
+import {
+  fetchRestaurantVisitsJoined,
+  fetchCafeVisitsJoined,
+  fetchCommunityRestaurantVisits,
+  fetchCommunityCafeVisits,
+  ensureRestaurantPlace,
+  ensureCafePlace,
+  restaurantVisitInsertPayload,
+  restaurantVisitUpdatePayload,
+  cafeVisitInsertPayload,
+  cafeVisitUpdatePayload,
+  mapRestaurantVisitRow,
+  mapCafeVisitRow,
+  RESTAURANT_VISIT_SELECT,
+  CAFE_VISIT_SELECT,
+} from "./utils/visitPlacesApi.js";
 import { ALPHABET, CUISINE_REGIONS, FLAGS } from "./constants/cuisineConstants.js";
 import { INIT_REST, INIT_CAFE } from "./data/initialData.js";
 import { reducer } from "./state/logReducer.js";
@@ -42,7 +58,7 @@ function omitPlayWelcomeAside(body) {
 }
 
 export default function App() {
-  const { user, authReady } = useAuth();
+  const { user, authReady, displayName } = useAuth();
   const [st, dispatch] = useReducer(reducer, { entries: [], view: "log" });
   const [cafes, setCafes] = useState([]);
   const [dbLoaded, setDbLoaded] = useState(false);
@@ -74,6 +90,10 @@ export default function App() {
   const [editR, setEditR] = useState(null);
   const [editC, setEditC] = useState(null);
   const [logTab, setLogTab] = useState("restaurants");
+  const [communitySub, setCommunitySub] = useState("restaurants");
+  const [communityRest, setCommunityRest] = useState([]);
+  const [communityCafes, setCommunityCafes] = useState([]);
+  const [communityLoading, setCommunityLoading] = useState(false);
   const [addType, setAddType] = useState("restaurant");
   const [sortBy, setSortBy] = useState("bite");
   const [sortAsc, setSortAsc] = useState(false);
@@ -123,55 +143,23 @@ export default function App() {
     let cancelled = false;
     async function load() {
       try {
-        const mapRestaurant = (r) => ({
-          id: r.id,
-          name: r.name,
-          cuisine: r.cuisine || "",
-          cuisine2: r.cuisine2 || "",
-          isFusion: r.is_fusion || false,
-          taste: +r.taste,
-          cost: +r.cost,
-          portions: +r.portions,
-          wait: +r.wait,
-          repeatability: +r.repeatability,
-          useR: r.use_r !== false,
-          notes: r.notes || "",
-          letter: (r.cuisine?.[0] || "").toUpperCase(),
-          ownerId: r.user_id ?? null,
-        });
-        const mapCafe = (c) => ({
-          id: c.id,
-          name: c.name,
-          category: c.category || "Coffee",
-          order: c.order_item || "",
-          taste: +c.taste,
-          cost: +c.cost,
-          portions: +c.portions,
-          wait: +(c.wait || 0),
-          beanRegion: c.bean_region || "",
-          milkLevel: c.milk_level || "",
-          repeatability: +c.repeatability,
-          useR: c.use_r !== false,
-          notes: c.notes || "",
-          ownerId: c.user_id ?? null,
-        });
-
         if (!user) {
           dispatch({ type: "LOAD", entries: [] });
           setCafes([]);
         } else {
           dispatch({ type: "LOAD", entries: [] });
           setCafes([]);
-          const [rRes, cRes] = await Promise.all([
-            supabase.from("restaurants").select("*").eq("user_id", user.id).order("created_at", { ascending: true }),
-            supabase.from("cafes").select("*").eq("user_id", user.id).order("created_at", { ascending: true }),
+          const [entries, cafeRows] = await Promise.all([
+            fetchRestaurantVisitsJoined(supabase, user.id),
+            fetchCafeVisitsJoined(supabase, user.id),
           ]);
           if (cancelled) return;
-          dispatch({ type: "LOAD", entries: (rRes.data || []).map(mapRestaurant) });
-          setCafes((cRes.data || []).map(mapCafe));
+          dispatch({ type: "LOAD", entries });
+          setCafes(cafeRows);
         }
 
-        const { data: sData } = await supabase.from("settings").select("*");
+        const { data: sData, error: settingsErr } = await supabase.from("settings").select("*");
+        if (settingsErr) console.warn("[BITE] settings:", settingsErr.message);
         if (cancelled) return;
         if (sData) {
           let questHandled = false;
@@ -202,10 +190,10 @@ export default function App() {
           });
           if (Object.keys(wo).length > 0) setWelcomeOverride(wo);
         }
-        setDbLoaded(true);
       } catch (err) {
         console.error("Supabase load error:", err);
-        setDbLoaded(true);
+      } finally {
+        if (!cancelled) setDbLoaded(true);
       }
     }
     load();
@@ -213,6 +201,31 @@ export default function App() {
       cancelled = true;
     };
   }, [authReady, user?.id]);
+
+  useEffect(() => {
+    if (!user?.id || !dbLoaded || logTab !== "community") return;
+    let cancelled = false;
+    setCommunityLoading(true);
+    (async () => {
+      try {
+        const [r, c] = await Promise.all([
+          fetchCommunityRestaurantVisits(supabase),
+          fetchCommunityCafeVisits(supabase),
+        ]);
+        if (!cancelled) {
+          setCommunityRest(r);
+          setCommunityCafes(c);
+        }
+      } catch (e) {
+        console.error("[BITE] community load:", e);
+      } finally {
+        if (!cancelled) setCommunityLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, dbLoaded, logTab]);
 
   /** Café weights (2 sliders): redistribute the other key to keep sum 100. */
   function rebalance(current, changedKey, newVal) {
@@ -355,10 +368,16 @@ export default function App() {
           </div>
         </div>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          <button type="button" onClick={()=>setShowAuthModal(true)} style={{fontSize:11,fontWeight:500,padding:"5px 12px",borderRadius:20,border:"1.5px solid rgba(255,255,255,0.2)",background:user?"#3C1F13":"transparent",color:user?"#F0997B":"#888780",cursor:"pointer",letterSpacing:"0.03em",flexShrink:0,maxWidth:120,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={user?.email||t.signIn}>{user?(user.email?.split("@")[0]||t.account):t.signIn}</button>
+          <button type="button" onClick={()=>setShowAuthModal(true)} style={{fontSize:11,fontWeight:500,padding:"5px 12px",borderRadius:20,border:"1.5px solid rgba(255,255,255,0.2)",background:user?"#3C1F13":"transparent",color:user?"#F0997B":"#888780",cursor:"pointer",letterSpacing:"0.03em",flexShrink:0,maxWidth:120,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={user?.email||t.signIn}>{user?(displayName||user.email?.split("@")[0]||t.account):t.signIn}</button>
           <button onClick={toggleLang} style={{fontSize:11,fontWeight:500,padding:"5px 12px",borderRadius:20,border:"1.5px solid rgba(255,255,255,0.2)",background:"transparent",color:"#888780",cursor:"pointer",letterSpacing:"0.03em",flexShrink:0}}>{lang==="en"?"繁中":"EN"}</button>
         </div>
       </div>
+
+      {!authReady && (
+        <p style={{ fontSize: 14, color: "#888780", margin: "8px 0 0" }}>
+          {lang === "zh" ? "連線中…" : "Connecting…"}
+        </p>
+      )}
 
       {needsAuth && (
         <div style={{ marginTop: 24, marginBottom: 16 }}>
@@ -448,11 +467,12 @@ export default function App() {
         <div>
           <div style={{marginBottom:12}}>
             <div style={{display:"flex",background:"#252523",borderRadius:10,padding:3,gap:2,marginBottom:8}}>
-              {[["restaurants","🍽 "+t.restaurants],["drinks","☕ "+t.drinks],["sweets","🥐 "+t.sweets]].map(([v,l])=>(
+              {[["restaurants","🍽 "+t.restaurants],["drinks","☕ "+t.drinks],["sweets","🥐 "+t.sweets],["community","🌐 "+t.communityTab]].map(([v,l])=>(
                 <button key={v} onClick={()=>setLogTab(v)} style={{flex:1,padding:"6px 0",textAlign:"center",borderRadius:8,border:"none",background:logTab===v?"#3C1F13":"transparent",color:logTab===v?"#F0997B":"#888780",fontSize:11,fontWeight:logTab===v?700:500,cursor:"pointer",transition:"all 0.15s"}}>{l}</button>
               ))}
             </div>
-            {user&&<p style={{fontSize:12,color:"#888780",margin:0}}>{t.swipeHint}</p>}
+            {user&&logTab!=="community"&&<p style={{fontSize:12,color:"#888780",margin:0}}>{t.swipeHint}</p>}
+            {user&&logTab==="community"&&<p style={{fontSize:12,color:"#888780",margin:0}}>{t.communityHint}</p>}
           </div>
           <div style={{borderBottom:"0.5px solid rgba(255,255,255,0.08)",marginBottom:12}}/>
 
@@ -539,7 +559,7 @@ export default function App() {
                         const did=id||e.id;
                         const row=st.entries.find(x=>x.id===did);
                         if(!canMutateVisit(row,user))return;
-                        try{await supabase.from("restaurants").delete().eq("id",did);}catch(err){console.error("restaurant delete threw:",err);}
+                        try{await supabase.from("restaurant_visits").delete().eq("id",did);}catch(err){console.error("restaurant delete threw:",err);}
                         dispatch({type:"DEL",id:did});
                       }}/>
                   );
@@ -626,7 +646,7 @@ export default function App() {
                   <CafeGroupRow key={name} group={grp} cafeSortBy={cafeSortBy} user={user} onEdit={e=>{setEditC(e);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={async id=>{
                         const row=cafes.find(x=>x.id===id);
                         if(!canMutateVisit(row,user))return;
-                        try{await supabase.from("cafes").delete().eq("id",id);}catch(err){console.error("cafe delete threw:",err);}
+                        try{await supabase.from("cafe_visits").delete().eq("id",id);}catch(err){console.error("cafe delete threw:",err);}
                         setCafes(p=>p.filter(x=>x.id!==id));
                       }}/>
                 ));
@@ -683,7 +703,7 @@ export default function App() {
                   <CafeGroupRow key={name} group={grp} cafeSortBy={sweetsSortBy} user={user} onEdit={e=>{setEditC(e);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={async id=>{
                         const row=cafes.find(x=>x.id===id);
                         if(!canMutateVisit(row,user))return;
-                        try{await supabase.from("cafes").delete().eq("id",id);}catch(err){console.error("cafe delete threw:",err);}
+                        try{await supabase.from("cafe_visits").delete().eq("id",id);}catch(err){console.error("cafe delete threw:",err);}
                         setCafes(p=>p.filter(x=>x.id!==id));
                       }}/>
                 ));
@@ -700,37 +720,97 @@ export default function App() {
               )}
             </div>
           )}
+
+          {logTab==="community"&&(
+            <div>
+              <div style={{display:"flex",background:"#252523",borderRadius:10,padding:3,gap:2,marginBottom:12}}>
+                {[["restaurants","🍽 "+t.restaurants],["drinks","☕ "+t.drinks],["sweets","🥐 "+t.sweets]].map(([v,l])=>(
+                  <button key={v} type="button" onClick={()=>setCommunitySub(v)} style={{flex:1,padding:"6px 0",textAlign:"center",borderRadius:8,border:"none",background:communitySub===v?"#3C1F13":"transparent",color:communitySub===v?"#F0997B":"#888780",fontSize:11,fontWeight:communitySub===v?700:500,cursor:"pointer",transition:"all 0.15s"}}>{l}</button>
+                ))}
+              </div>
+              {communityLoading&&(
+                <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:8}}>
+                  {[1,2,3,4].map(i=>(
+                    <div key={i} style={{background:"#1E1E1C",borderRadius:10,height:62,opacity:0.4+i*0.1}}/>
+                  ))}
+                </div>
+              )}
+              {!communityLoading&&communitySub==="restaurants"&&(
+                <>
+                  {!communityRest.length&&<p style={{color:"#888780",fontSize:14}}>{t.noEntriesYet}</p>}
+                  {communityRest.map((e,i)=>{
+                    const sc=calcBiteOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights);
+                    const display={val:sc!=null?sc.toFixed(2):"—",label:scoreLabel(sc,t),color:scoreColor(sc)};
+                    return (
+                      <RestRow key={e.id} e={e} i={i} display={display} user={user} visits={1} group={[e]} weights={weights} showAuthor
+                        onEdit={()=>{}} onDelete={()=>{}}/>
+                    );
+                  })}
+                </>
+              )}
+              {!communityLoading&&communitySub==="drinks"&&(()=>{
+                const rows=[...communityCafes].filter(e=>DRINK_CATS.includes(e.category)).sort((a,b)=>
+                  (calcCafeOutOf10(b.taste,b.cost,b.portions,b.wait,b.useR,b.repeatability)??0)-(calcCafeOutOf10(a.taste,a.cost,a.portions,a.wait,a.useR,a.repeatability)??0));
+                if(!rows.length)return <p style={{color:"#888780",fontSize:14}}>{t.noDrinks}</p>;
+                return rows.map(e=>(
+                  <CafeGroupRow key={e.id} group={[e]} cafeSortBy="bite" user={user} showAuthor onEdit={()=>{}} onDelete={()=>{}}/>
+                ));
+              })()}
+              {!communityLoading&&communitySub==="sweets"&&(()=>{
+                const rows=[...communityCafes].filter(e=>e.category==="Sweets").sort((a,b)=>
+                  (calcCafeOutOf10(b.taste,b.cost,b.portions,b.wait,b.useR,b.repeatability)??0)-(calcCafeOutOf10(a.taste,a.cost,a.portions,a.wait,a.useR,a.repeatability)??0));
+                if(!rows.length)return <p style={{color:"#888780",fontSize:14}}>{t.noSweets}</p>;
+                return rows.map(e=>(
+                  <CafeGroupRow key={e.id} group={[e]} cafeSortBy="bite" user={user} showAuthor onEdit={()=>{}} onDelete={()=>{}}/>
+                ));
+              })()}
+            </div>
+          )}
         </div>
       )}
 
       {st.view==="log"&&editR&&<RestForm initial={editR} weights={weights} existingNames={st.entries.map(e=>e.name)} existingEntries={st.entries} onSave={async e=>{
+        let resolvedPlaceId = e.placeId;
         if(canMutateVisit(e,user)) {
           try {
-            const {error} = await supabase.from("restaurants").update({
-              name:e.name, cuisine:e.cuisine, cuisine2:e.cuisine2||"",
-              is_fusion:e.isFusion||false, taste:e.taste, cost:e.cost,
-              portions:e.portions, wait:e.wait, repeatability:e.repeatability,
-              use_r:e.useR, notes:e.notes||""
-            }).eq("id",e.id);
-            if(error) console.error("restaurant update error:", error);
-          } catch(err) { console.error("restaurant update threw:", err); }
+            resolvedPlaceId = await ensureRestaurantPlace(supabase, {
+              name: e.name,
+              cuisine: e.cuisine,
+              cuisine2: e.cuisine2 || "",
+              isFusion: e.isFusion || false,
+              city: e.city || "",
+            });
+            const { error } = await supabase
+              .from("restaurant_visits")
+              .update(restaurantVisitUpdatePayload(resolvedPlaceId, e))
+              .eq("id", e.id);
+            if (error) console.error("restaurant update error:", error);
+          } catch (err) {
+            console.error("restaurant update threw:", err);
+          }
         }
-        dispatch({type:"UPD",e:{...e,ownerId:e.ownerId??user?.id??null}}); setEditR(null);
+        dispatch({ type: "UPD", e: { ...e, placeId: resolvedPlaceId, ownerId: e.ownerId ?? user?.id ?? null } });
+        setEditR(null);
       }} onCancel={()=>{setEditR(null);window.scrollTo({top:0,behavior:"smooth"});}}/>}
       {st.view==="log"&&editC&&<CafeForm initial={editC} onSave={async entries=>{
         const e=Array.isArray(entries)?entries[0]:entries;
+        let resolvedPlaceId = e.placeId;
         if(canMutateVisit(e,user)) {
           try {
-            const {error} = await supabase.from("cafes").update({
-              name:e.name, category:e.category, order_item:e.order||"",
-              taste:e.taste, cost:e.cost, portions:e.portions, wait:e.wait||0,
-              bean_region:e.beanRegion||"", milk_level:e.milkLevel||"",
-              repeatability:e.repeatability, use_r:e.useR, notes:e.notes||""
-            }).eq("id",e.id);
-            if(error) console.error("cafe update error:", error, "id:", e.id);
-          } catch(err) { console.error("cafe update threw:", err); }
+            resolvedPlaceId = await ensureCafePlace(supabase, {
+              name: e.name,
+              city: e.city || "",
+            });
+            const { error } = await supabase
+              .from("cafe_visits")
+              .update(cafeVisitUpdatePayload(resolvedPlaceId, e))
+              .eq("id", e.id);
+            if (error) console.error("cafe update error:", error, "id:", e.id);
+          } catch (err) {
+            console.error("cafe update threw:", err);
+          }
         }
-        setCafes(p=>p.map(x=>x.id===e.id?{...e,id:x.id,ownerId:e.ownerId??user?.id??x.ownerId}:x)); setEditC(null);
+        setCafes(p=>p.map(x=>x.id===e.id?{...e,id:x.id,placeId:resolvedPlaceId??x.placeId,ownerId:e.ownerId??user?.id??x.ownerId}:x)); setEditC(null);
       }} onCancel={()=>{setEditC(null);window.scrollTo({top:0,behavior:"smooth"});}} existingNames={cafes.map(e=>e.name)} existingCafes={cafes} pastOrders={cafes.map(e=>e.order).filter(Boolean)}/>}
 
       {/* ── Add Rating ── */}
@@ -739,21 +819,25 @@ export default function App() {
           {addType==="restaurant"
             ?<RestForm initial={{...INIT_REST,city:lastCity.current}} weights={weights} existingNames={st.entries.map(e=>e.name)} existingEntries={st.entries}
                 onSave={async e=>{
-                  if(user) {
-                    try {
-                      const {data,error} = await supabase.from("restaurants").insert([{
-                        name:e.name, cuisine:e.cuisine, cuisine2:e.cuisine2||"",
-                        is_fusion:e.isFusion||false, taste:e.taste, cost:e.cost,
-                        portions:e.portions, wait:e.wait, repeatability:e.repeatability,
-                        use_r:e.useR, notes:e.notes||"", letter:(e.cuisine?.[0]||"").toUpperCase(),
-                        user_id:user.id
-                      }]).select().single();
-                      if(error) console.error("restaurant insert error:",error);
-                      dispatch({type:"ADD",e:{...e,id:data?.id||Date.now(),ownerId:user.id}});
-                    } catch(err) { console.error("restaurant insert threw:",err); dispatch({type:"ADD",e:{...e,id:Date.now()}}); }
-                  } else {
-                    if(e.city)lastCity.current=e.city;
-                    dispatch({type:"ADD",e:{...e,id:Date.now()}});
+                  if (e.city) lastCity.current = e.city;
+                  if (!user) return;
+                  try {
+                    const placeId = await ensureRestaurantPlace(supabase, {
+                      name: e.name,
+                      cuisine: e.cuisine,
+                      cuisine2: e.cuisine2 || "",
+                      isFusion: e.isFusion || false,
+                      city: e.city || "",
+                    });
+                    const { data, error } = await supabase
+                      .from("restaurant_visits")
+                      .insert([restaurantVisitInsertPayload(placeId, user.id, e)])
+                      .select(RESTAURANT_VISIT_SELECT)
+                      .single();
+                    if (error) console.error("restaurant insert error:", error);
+                    if (data) dispatch({ type: "ADD", e: mapRestaurantVisitRow(data) });
+                  } catch (err) {
+                    console.error("restaurant insert threw:", err);
                   }
                 }}
                 onCancel={()=>dispatch({type:"VIEW",view:"log"})}
@@ -762,21 +846,28 @@ export default function App() {
             :<CafeForm initial={INIT_CAFE}
                 onSave={async entries=>{
                   const arr=Array.isArray(entries)?entries:[entries];
-                  if(user) {
-                    try {
-                      const rows = arr.map(e=>({
-                        name:e.name, category:e.category, order_item:e.order||"",
-                        taste:e.taste, cost:e.cost, portions:e.portions, wait:e.wait||0,
-                        bean_region:e.beanRegion||"", milk_level:e.milkLevel||"",
-                        repeatability:e.repeatability, use_r:e.useR, notes:e.notes||"",
-                        user_id:user.id
-                      }));
-                      const {data,error} = await supabase.from("cafes").insert(rows).select();
-                      if(error) console.error("cafe insert error:",error);
-                      setCafes(p=>[...p,...(data?data.map((c,i)=>({...arr[i],id:c.id,ownerId:user.id})):arr.map(e=>({...e,id:Date.now()+Math.random()})))]);
-                    } catch(err) { console.error("cafe insert threw:",err); setCafes(p=>[...p,...arr.map(e=>({...e,id:Date.now()+Math.random()}))]); }
-                  } else {
-                    setCafes(p=>[...p,...arr.map(e=>({...e,id:Date.now()+Math.random()}))]);
+                  if (!user) {
+                    dispatch({ type: "VIEW", view: "log" });
+                    setLogTab(arr.some(e=>e.category==="Sweets")?"sweets":"drinks");
+                    return;
+                  }
+                  try {
+                    const placeId = await ensureCafePlace(supabase, {
+                      name: arr[0].name,
+                      city: arr[0].city || "",
+                    });
+                    const rows = arr.map((entry) =>
+                      cafeVisitInsertPayload(placeId, user.id, entry)
+                    );
+                    const { data, error } = await supabase
+                      .from("cafe_visits")
+                      .insert(rows)
+                      .select(CAFE_VISIT_SELECT);
+                    if (error) console.error("cafe insert error:", error);
+                    const mapped = (data || []).map(mapCafeVisitRow);
+                    setCafes((p) => [...p, ...mapped]);
+                  } catch (err) {
+                    console.error("cafe insert threw:", err);
                   }
                   dispatch({type:"VIEW",view:"log"});
                   setLogTab(arr.some(e=>e.category==="Sweets")?"sweets":"drinks");

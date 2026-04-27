@@ -6,7 +6,7 @@ import { S } from "../styles/sharedStyles.js";
 import { SwipeRow } from "./SwipeRow.jsx";
 import { canMutateVisit, canSwipeGroup } from "../utils/rowAccess.js";
 
-export function RestRow({ e, i, display, onEdit, onDelete, user, visits = 1, group, weights }) {
+export function RestRow({ e, i, display, onEdit, onDelete, user, visits = 1, group, weights, showAuthor = false }) {
   const {t} = useLang();
   const [exp,setExp] = useState(false);
   const [showVisits,setShowVisits] = useState(false);
@@ -65,6 +65,9 @@ export function RestRow({ e, i, display, onEdit, onDelete, user, visits = 1, gro
               <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
                 <span style={{fontSize:12,color:"#888780"}}>{e.cuisine}</span>
                 <span style={{fontSize:10,padding:"1px 6px",borderRadius:8,background:"rgba(91,155,213,0.12)",color:"#5B9BD5",border:"0.5px solid rgba(91,155,213,0.25)"}}>📍 {e.city||"NYC"}</span>
+                {showAuthor && e.authorDisplayName && (
+                  <span style={{fontSize:11,color:"#97C459"}}>{t.loggedBy} {e.authorDisplayName}</span>
+                )}
               </div>
             </div>
             <div style={{textAlign:"right"}}>
