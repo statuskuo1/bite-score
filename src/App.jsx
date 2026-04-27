@@ -1,7 +1,9 @@
 import { useState, useReducer, useRef, useEffect } from "react";
 import { LangContext } from "./contexts/LangContext.jsx";
+import { useAuth } from "./contexts/AuthContext.jsx";
 import { T } from "./translations.js";
 import { supabase } from "./config/supabaseClient.js";
+import { canMutateVisit } from "./utils/rowAccess.js";
 import { ALPHABET, CUISINE_REGIONS, FLAGS } from "./constants/cuisineConstants.js";
 import { RESTAURANTS, CAFES_INIT, INIT_REST, INIT_CAFE } from "./data/initialData.js";
 import { reducer } from "./state/logReducer.js";
@@ -24,15 +26,16 @@ import { Tooltip } from "./components/Tooltip.jsx";
 import { SuggestView } from "./components/SuggestView.jsx";
 import { PaletteView } from "./components/PaletteView.jsx";
 import { FaqView } from "./components/FaqView.jsx";
+import { AuthModal } from "./components/AuthModal.jsx";
 
 export default function App() {
+  const { user, isAdmin } = useAuth();
   const [st, dispatch] = useReducer(reducer, {entries:RESTAURANTS, view:"log"});
   const [cafes, setCafes] = useState(CAFES_INIT);
   const [dbLoaded, setDbLoaded] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const [showWelcome, setShowWelcome] = useState(true);
   const [faqOverrides, setFaqOverrides] = useState({});
-  const waveTaps = useRef([]);
   const [welcomeOverride, setWelcomeOverride] = useState({});
   const [editingWelcome, setEditingWelcome] = useState(false);
   const [welcomeEditVal, setWelcomeEditVal] = useState("");
@@ -50,7 +53,8 @@ export default function App() {
           id:r.id, name:r.name, cuisine:r.cuisine||"", cuisine2:r.cuisine2||"",
           isFusion:r.is_fusion||false, taste:+r.taste, cost:+r.cost,
           portions:+r.portions, wait:+r.wait, repeatability:+r.repeatability,
-          useR:r.use_r!==false, notes:r.notes||"", letter:(r.cuisine?.[0]||"").toUpperCase()
+          useR:r.use_r!==false, notes:r.notes||"", letter:(r.cuisine?.[0]||"").toUpperCase(),
+          ownerId:r.user_id??null
         }));
         dispatch({type:"LOAD", entries:mapped});
       }
@@ -59,7 +63,8 @@ export default function App() {
           id:c.id, name:c.name, category:c.category||"Coffee", order:c.order_item||"",
           taste:+c.taste, cost:+c.cost, portions:+c.portions, wait:+(c.wait||0),
           beanRegion:c.bean_region||"", milkLevel:c.milk_level||"",
-          repeatability:+c.repeatability, useR:c.use_r!==false, notes:c.notes||""
+          repeatability:+c.repeatability, useR:c.use_r!==false, notes:c.notes||"",
+          ownerId:c.user_id??null
         }));
         setCafes(mapped);
       }
@@ -254,16 +259,14 @@ export default function App() {
 
       <div style={{marginBottom:"1.5rem",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <LogoWithTripleTap onTripleTap={()=>{
-            if(!isAdmin){const pw=prompt("Password:");if(pw==="nomnomNOM")setIsAdmin(true);}
-            else setIsAdmin(false);
-          }} isAdmin={isAdmin}/>
+          <LogoWithTripleTap onTripleTap={()=>setShowAuthModal(true)} isAdmin={isAdmin}/>
           <div>
             <h1 style={{fontSize:28,fontWeight:600,color:isAdmin?"#97C459":"#F0997B",margin:0,fontFamily:"'Fredoka',sans-serif",transition:"color 0.3s"}}>{lang==="zh"?"BITE Score 吃貨榜":"BITE Score"}</h1>
           </div>
         </div>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
           {isAdmin&&<button onClick={()=>{setWelcomeEditVal({title:welcomeOverride[lang+"_title"]||t.welcome1,body:welcomeOverride[lang+"_body"]||t.welcome2});setEditingWelcome(true);}} style={{fontSize:10,color:"#888780",background:"none",border:"0.5px solid rgba(255,255,255,0.2)",borderRadius:4,padding:"3px 8px",cursor:"pointer"}}>Edit welcome</button>}
+          <button type="button" onClick={()=>setShowAuthModal(true)} style={{fontSize:11,fontWeight:500,padding:"5px 12px",borderRadius:20,border:"1.5px solid rgba(255,255,255,0.2)",background:user?"#3C1F13":"transparent",color:user?"#F0997B":"#888780",cursor:"pointer",letterSpacing:"0.03em",flexShrink:0,maxWidth:120,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={user?.email||t.signIn}>{user?(user.email?.split("@")[0]||t.account):t.signIn}</button>
           <button onClick={toggleLang} style={{fontSize:11,fontWeight:500,padding:"5px 12px",borderRadius:20,border:"1.5px solid rgba(255,255,255,0.2)",background:"transparent",color:"#888780",cursor:"pointer",letterSpacing:"0.03em",flexShrink:0}}>{lang==="en"?"繁中":"EN"}</button>
         </div>
       </div>
@@ -271,11 +274,7 @@ export default function App() {
       {((showWelcome&&!isAdmin&&dbLoaded)||isAdmin&&editingWelcome)&&(
         <div onClick={()=>{if(!isAdmin)dismissWelcome();}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:"1.5rem"}}>
           <div onClick={e=>e.stopPropagation()} style={{background:"#1E1E1C",borderRadius:16,padding:"1.5rem",maxWidth:360,width:"100%",border:"0.5px solid rgba(255,255,255,0.15)"}}>
-            <div style={{fontSize:24,marginBottom:12,textAlign:"center",cursor:"default",userSelect:"none"}} onClick={()=>{
-              const now=Date.now();
-              waveTaps.current=[...waveTaps.current.filter(t=>now-t<800),now];
-              if(waveTaps.current.length>=3){waveTaps.current=[];const pw=prompt("Password:");if(pw==="nomnomNOM"){setIsAdmin(true);dismissWelcome();}}
-            }}>👋</div>
+            <div style={{fontSize:24,marginBottom:12,textAlign:"center",cursor:"default",userSelect:"none"}}>👋</div>
             <div style={{display:"flex",justifyContent:"center",gap:8,marginBottom:16}}>
               {["en","zh"].map(l=>(
                 <button key={l} onClick={()=>{
@@ -389,7 +388,7 @@ export default function App() {
                 <button key={v} onClick={()=>setLogTab(v)} style={{flex:1,padding:"6px 0",textAlign:"center",borderRadius:8,border:"none",background:logTab===v?"#3C1F13":"transparent",color:logTab===v?"#F0997B":"#888780",fontSize:11,fontWeight:logTab===v?700:500,cursor:"pointer",transition:"all 0.15s"}}>{l}</button>
               ))}
             </div>
-            {isAdmin&&<p style={{fontSize:12,color:"#888780",margin:0}}>{t.swipeHint}</p>}
+            {(isAdmin||user)&&<p style={{fontSize:12,color:"#888780",margin:0}}>{t.swipeHint}</p>}
           </div>
           <div style={{borderBottom:"0.5px solid rgba(255,255,255,0.08)",marginBottom:12}}/>
 
@@ -469,9 +468,15 @@ export default function App() {
                   const visits=grp.length;
                   const display=getDisplay(e);
                   return (
-                    <RestRow key={e.id} e={e} i={i} display={display} isAdmin={isAdmin} visits={visits} group={grp} weights={weights}
+                    <RestRow key={e.id} e={e} i={i} display={display} isAdmin={isAdmin} user={user} visits={visits} group={grp} weights={weights}
                       onEdit={v=>{setEditR(v||e);window.scrollTo({top:0,behavior:"smooth"});}}
-                      onDelete={async id=>{ const did=id||e.id; if(isAdmin) { try { await supabase.from("restaurants").delete().eq("id",did); } catch(err){ console.error("restaurant delete threw:",err); } } dispatch({type:"DEL",id:did}); }}/>
+                      onDelete={async id=>{
+                        const did=id||e.id;
+                        const row=st.entries.find(x=>x.id===did);
+                        if(!canMutateVisit(row,user,isAdmin))return;
+                        try{await supabase.from("restaurants").delete().eq("id",did);}catch(err){console.error("restaurant delete threw:",err);}
+                        dispatch({type:"DEL",id:did});
+                      }}/>
                   );
                 });
               })()}
@@ -553,7 +558,12 @@ export default function App() {
                   return avg(e=>calcCafe(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability)??0);
                 };
                 return Object.entries(groups).sort((a,b)=>cafeSortAsc?getSortVal(a[1])-getSortVal(b[1]):getSortVal(b[1])-getSortVal(a[1])).map(([name,grp])=>(
-                  <CafeGroupRow key={name} group={grp} cafeSortBy={cafeSortBy} isAdmin={isAdmin} onEdit={e=>{setEditC(e);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={async id=>{ if(isAdmin) { try { await supabase.from("cafes").delete().eq("id",id); } catch(err){ console.error("cafe delete threw:",err); } } setCafes(p=>p.filter(x=>x.id!==id)); }}/>
+                  <CafeGroupRow key={name} group={grp} cafeSortBy={cafeSortBy} isAdmin={isAdmin} user={user} onEdit={e=>{setEditC(e);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={async id=>{
+                        const row=cafes.find(x=>x.id===id);
+                        if(!canMutateVisit(row,user,isAdmin))return;
+                        try{await supabase.from("cafes").delete().eq("id",id);}catch(err){console.error("cafe delete threw:",err);}
+                        setCafes(p=>p.filter(x=>x.id!==id));
+                      }}/>
                 ));
               })()}
               {sortedDrinks.length>0&&(
@@ -605,7 +615,12 @@ export default function App() {
                   return avg(e=>calcCafe(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability)??0);
                 };
                 return Object.entries(groups).sort((a,b)=>sweetsSortAsc?getSortValS(a[1])-getSortValS(b[1]):getSortValS(b[1])-getSortValS(a[1])).map(([name,grp])=>(
-                  <CafeGroupRow key={name} group={grp} cafeSortBy={sweetsSortBy} isAdmin={isAdmin} onEdit={e=>{setEditC(e);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={async id=>{ if(isAdmin) { try { await supabase.from("cafes").delete().eq("id",id); } catch(err){ console.error("cafe delete threw:",err); } } setCafes(p=>p.filter(x=>x.id!==id)); }}/>
+                  <CafeGroupRow key={name} group={grp} cafeSortBy={sweetsSortBy} isAdmin={isAdmin} user={user} onEdit={e=>{setEditC(e);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={async id=>{
+                        const row=cafes.find(x=>x.id===id);
+                        if(!canMutateVisit(row,user,isAdmin))return;
+                        try{await supabase.from("cafes").delete().eq("id",id);}catch(err){console.error("cafe delete threw:",err);}
+                        setCafes(p=>p.filter(x=>x.id!==id));
+                      }}/>
                 ));
               })()}
               {sortedSweets.length>0&&(
@@ -624,8 +639,7 @@ export default function App() {
       )}
 
       {st.view==="log"&&editR&&<RestForm initial={editR} weights={weights} existingNames={st.entries.map(e=>e.name)} existingEntries={st.entries} onSave={async e=>{
-        console.log("restaurant save — isAdmin:", isAdmin, "id:", e.id);
-        if(isAdmin) {
+        if(canMutateVisit(e,user,isAdmin)) {
           try {
             const {error} = await supabase.from("restaurants").update({
               name:e.name, cuisine:e.cuisine, cuisine2:e.cuisine2||"",
@@ -636,12 +650,11 @@ export default function App() {
             if(error) console.error("restaurant update error:", error);
           } catch(err) { console.error("restaurant update threw:", err); }
         }
-        dispatch({type:"UPD",e}); setEditR(null);
+        dispatch({type:"UPD",e:{...e,ownerId:e.ownerId??user?.id??null}}); setEditR(null);
       }} onCancel={()=>{setEditR(null);window.scrollTo({top:0,behavior:"smooth"});}}/>}
       {st.view==="log"&&editC&&<CafeForm initial={editC} onSave={async entries=>{
         const e=Array.isArray(entries)?entries[0]:entries;
-        console.log("cafe save — isAdmin:", isAdmin, "id:", e.id, "type:", typeof e.id);
-        if(isAdmin) {
+        if(canMutateVisit(e,user,isAdmin)) {
           try {
             const {error} = await supabase.from("cafes").update({
               name:e.name, category:e.category, order_item:e.order||"",
@@ -652,7 +665,7 @@ export default function App() {
             if(error) console.error("cafe update error:", error, "id:", e.id);
           } catch(err) { console.error("cafe update threw:", err); }
         }
-        setCafes(p=>p.map(x=>x.id===e.id?{...e,id:x.id}:x)); setEditC(null);
+        setCafes(p=>p.map(x=>x.id===e.id?{...e,id:x.id,ownerId:e.ownerId??user?.id??x.ownerId}:x)); setEditC(null);
       }} onCancel={()=>{setEditC(null);window.scrollTo({top:0,behavior:"smooth"});}} existingNames={cafes.map(e=>e.name)} existingCafes={cafes} pastOrders={cafes.map(e=>e.order).filter(Boolean)}/>}
 
       {/* ── Add Rating ── */}
@@ -661,16 +674,17 @@ export default function App() {
           {addType==="restaurant"
             ?<RestForm initial={{...INIT_REST,city:lastCity.current}} weights={weights} existingNames={st.entries.map(e=>e.name)} existingEntries={st.entries}
                 onSave={async e=>{
-                  if(isAdmin) {
+                  if(user) {
                     try {
                       const {data,error} = await supabase.from("restaurants").insert([{
                         name:e.name, cuisine:e.cuisine, cuisine2:e.cuisine2||"",
                         is_fusion:e.isFusion||false, taste:e.taste, cost:e.cost,
                         portions:e.portions, wait:e.wait, repeatability:e.repeatability,
-                        use_r:e.useR, notes:e.notes||"", letter:(e.cuisine?.[0]||"").toUpperCase()
+                        use_r:e.useR, notes:e.notes||"", letter:(e.cuisine?.[0]||"").toUpperCase(),
+                        user_id:user.id
                       }]).select().single();
                       if(error) console.error("restaurant insert error:",error);
-                      dispatch({type:"ADD",e:{...e,id:data?.id||Date.now()}});
+                      dispatch({type:"ADD",e:{...e,id:data?.id||Date.now(),ownerId:user.id}});
                     } catch(err) { console.error("restaurant insert threw:",err); dispatch({type:"ADD",e:{...e,id:Date.now()}}); }
                   } else {
                     if(e.city)lastCity.current=e.city;
@@ -683,17 +697,18 @@ export default function App() {
             :<CafeForm initial={INIT_CAFE}
                 onSave={async entries=>{
                   const arr=Array.isArray(entries)?entries:[entries];
-                  if(isAdmin) {
+                  if(user) {
                     try {
                       const rows = arr.map(e=>({
                         name:e.name, category:e.category, order_item:e.order||"",
                         taste:e.taste, cost:e.cost, portions:e.portions, wait:e.wait||0,
                         bean_region:e.beanRegion||"", milk_level:e.milkLevel||"",
-                        repeatability:e.repeatability, use_r:e.useR, notes:e.notes||""
+                        repeatability:e.repeatability, use_r:e.useR, notes:e.notes||"",
+                        user_id:user.id
                       }));
                       const {data,error} = await supabase.from("cafes").insert(rows).select();
                       if(error) console.error("cafe insert error:",error);
-                      setCafes(p=>[...p,...(data?data.map((c,i)=>({...arr[i],id:c.id})):arr.map(e=>({...e,id:Date.now()+Math.random()})))]);
+                      setCafes(p=>[...p,...(data?data.map((c,i)=>({...arr[i],id:c.id,ownerId:user.id})):arr.map(e=>({...e,id:Date.now()+Math.random()})))]);
                     } catch(err) { console.error("cafe insert threw:",err); setCafes(p=>[...p,...arr.map(e=>({...e,id:Date.now()+Math.random()}))]); }
                   } else {
                     setCafes(p=>[...p,...arr.map(e=>({...e,id:Date.now()+Math.random()}))]);
@@ -794,6 +809,8 @@ export default function App() {
 
       {/* ── FAQ ── */}
       {st.view==="faq"&&<FaqView isAdmin={isAdmin} faqOverrides={faqOverrides} setFaqOverrides={setFaqOverrides}/>}
+
+      <AuthModal open={showAuthModal} onClose={()=>setShowAuthModal(false)} />
     </div>
     </LangContext.Provider>
   );

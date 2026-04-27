@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLang } from "../contexts/LangContext.jsx";
 
-export function SwipeRow({children,onEdit,onDelete,isAdmin}) {
+export function SwipeRow({children,onEdit,onDelete,mutable=true}) {
   const {t} = useLang();
   const [off,setOff] = useState(0);
   const sx = useRef(null);
@@ -26,6 +26,14 @@ export function SwipeRow({children,onEdit,onDelete,isAdmin}) {
     el.addEventListener("touchmove",onTM,{passive:false});
     return()=>el.removeEventListener("touchmove",onTM);
   },[]);
+
+  if (!mutable) {
+    return (
+      <div style={{position:"relative",overflow:"hidden",borderRadius:10,marginBottom:8}}>
+        {children}
+      </div>
+    );
+  }
 
   return (
     <div ref={ref} style={{position:"relative",overflow:"hidden",borderRadius:10,marginBottom:8,isolation:"isolate"}}>
