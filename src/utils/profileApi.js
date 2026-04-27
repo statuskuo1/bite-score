@@ -68,7 +68,6 @@ export async function ensureProfile(client, user) {
 
   const { error } = await client.from("profiles").insert({
     id: user.id,
-    is_admin: false,
     ...payload,
   });
   if (error) {

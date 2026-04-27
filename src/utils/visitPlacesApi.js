@@ -84,30 +84,6 @@ async function attachAuthorProfiles(client, rows) {
   }));
 }
 
-/** Prefer JWT `sub` over any React-cached id so `.eq('user_id', …)` matches DB rows (`profiles.id` / old `auth.users`). */
-async function resolveCanonicalUserId(client, fallbackUserId) {
-  const { data: authData, error } = await client.auth.getUser();
-  if (error) {
-    console.warn("[BITE] auth.getUser:", error.message);
-  }
-  const canonicalUserId = authData?.user?.id ?? fallbackUserId ?? null;
-  if (
-    canonicalUserId &&
-    fallbackUserId &&
-    authData?.user?.id &&
-    authData.user.id !== fallbackUserId
-  ) {
-    console.warn("[BITE] Using JWT user id for visit fetch (caller id differed)", {
-      callerId: fallbackUserId,
-      jwtSub: authData.user.id,
-    });
-  }
-  return {
-    canonicalUserId,
-    email: authData?.user?.email ?? null,
-  };
-}
-
 /**
  * PostgREST embedded resource (not raw SQL). Parent rows are `restaurant_visits` / `cafe_visits`;
  * always order by **`visited_at`** on those tables — they have no `created_at`.
@@ -132,44 +108,16 @@ export function normalizeCafeVisitEmbed(row) {
 
 /** Load visits with place + author; never throws — logs and returns []. */
 export async function fetchRestaurantVisitsJoined(client, userId) {
+  console.log("[BITE] fetching with userId:", userId);
   if (userId == null || userId === "") {
     console.warn("[BITE] fetchRestaurantVisitsJoined: userId argument is null or empty");
-  }
-
-  const { canonicalUserId, email } = await resolveCanonicalUserId(client, userId);
-  if (!canonicalUserId) {
-    console.warn("[BITE] fetchRestaurantVisitsJoined: missing user id after auth.getUser()");
     return [];
   }
 
-  if (import.meta.env.DEV) {
-    console.log("[BITE] My Log auth context", {
-      authUserId: canonicalUserId,
-      email,
-      callerUserId: userId,
-      idsMatch: userId === canonicalUserId,
-    });
-  }
-
-  if (import.meta.env.DEV) {
-    const host =
-      typeof import.meta.env.VITE_SUPABASE_URL === "string"
-        ? (() => {
-            try {
-              return new URL(import.meta.env.VITE_SUPABASE_URL).host;
-            } catch {
-              return "(invalid URL)";
-            }
-          })()
-        : "(unset)";
-    console.log("[BITE] My Log Supabase host (from .env)", host);
-  }
-
-  // Filter by JWT-resolved uuid (never null here); aligns with visit.user_id → profiles.id
   const { data, error } = await client
     .from("restaurant_visits")
     .select(RESTAURANT_VISIT_SELECT)
-    .eq("user_id", canonicalUserId)
+    .eq("user_id", userId)
     .order("visited_at", { ascending: false });
 
   console.log("[BITE] restaurant_visits { data, error }", { data, error });
@@ -180,30 +128,20 @@ export async function fetchRestaurantVisitsJoined(client, userId) {
   if (!data?.length) return [];
 
   const withAuthors = await attachAuthorProfiles(client, data);
-  const entries = withAuthors.map(mapRestaurantVisitRow);
-
-  if (import.meta.env.DEV) {
-    console.log("[BITE] My Log mapped entries", { count: entries.length, first: entries[0] });
-  }
-
-  return entries;
+  return withAuthors.map(mapRestaurantVisitRow);
 }
 
 export async function fetchCafeVisitsJoined(client, userId) {
+  console.log("[BITE] fetching with userId:", userId);
   if (userId == null || userId === "") {
     console.warn("[BITE] fetchCafeVisitsJoined: userId argument is null or empty");
-  }
-
-  const { canonicalUserId } = await resolveCanonicalUserId(client, userId);
-  if (!canonicalUserId) {
-    console.warn("[BITE] fetchCafeVisitsJoined: missing user id after auth.getUser()");
     return [];
   }
 
   const { data, error } = await client
     .from("cafe_visits")
     .select(CAFE_VISIT_SELECT)
-    .eq("user_id", canonicalUserId)
+    .eq("user_id", userId)
     .order("visited_at", { ascending: false });
 
   console.log("[BITE] cafe_visits { data, error }", { data, error });

@@ -35,7 +35,7 @@ import {
 } from "./utils/scoring.js";
 import { rating010FilterRows } from "./constants/ratingTiers0to10.js";
 import { S } from "./styles/sharedStyles.js";
-import { LogoWithTripleTap } from "./components/LogoWithTripleTap.jsx";
+import { MouthLogo } from "./components/MouthLogo.jsx";
 import { InfoBubble } from "./components/InfoBubble.jsx";
 import { RestRow } from "./components/RestRow.jsx";
 import { RestForm } from "./components/RestForm.jsx";
@@ -381,7 +381,9 @@ export default function App() {
 
       <div style={{marginBottom:"1.5rem",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <LogoWithTripleTap onTripleTap={()=>setShowAuthModal(true)} />
+          <div style={{ flexShrink: 0, position: "relative" }}>
+            <MouthLogo />
+          </div>
           <div>
             <h1 style={{fontSize:28,fontWeight:600,color:"#F0997B",margin:0,fontFamily:"'Fredoka',sans-serif"}}>{lang==="zh"?"BITE Score 吃貨榜":"BITE Score"}</h1>
           </div>
