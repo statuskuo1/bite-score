@@ -15,4 +15,8 @@ Welcome `welcome2` had grown into a long normalization explainer; the modal alre
 
 ## Consequences
 
-- **Primary file:** `src/translations.js`. Supabase `welcome_*_body` overrides still apply when present.
+- **Primary file:** `src/translations.js`. Supabase `welcome_*` overrides apply in **production builds** (`import.meta.env.PROD`). **`npm run dev`** ignores those keys so copy edits show immediately without editing the DB.
+
+## Follow-up
+
+- **`src/App.jsx`:** `welcomeTitleDisplay` / `welcomeBodyDisplay` take `welcome_*` from Supabase only when `import.meta.env.PROD` is true.

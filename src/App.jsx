@@ -51,7 +51,10 @@ export default function App() {
   const [welcomeOverride, setWelcomeOverride] = useState({});
   const [lang, setLang] = useState(()=>localStorage.getItem("bite_lang")||"en");
   const t = T[lang]||T.en;
-  const welcomeBodyDisplay = omitPlayWelcomeAside(welcomeOverride[lang+"_body"]||t.welcome2);
+  /** In dev, ignore Supabase `welcome_*` so localhost reflects `translations.js`; production still uses DB copy. */
+  const welcomeUseDbCopy = import.meta.env.PROD;
+  const welcomeTitleDisplay = (welcomeUseDbCopy && welcomeOverride[lang+"_title"]) || t.welcome1;
+  const welcomeBodyDisplay = omitPlayWelcomeAside((welcomeUseDbCopy && welcomeOverride[lang+"_body"]) || t.welcome2);
   function toggleLang(){const nl=lang==="en"?"zh":"en";setLang(nl);localStorage.setItem("bite_lang",nl);}
 
   useEffect(()=>{
@@ -295,7 +298,7 @@ export default function App() {
               ))}
             </div>
             <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:16}}>
-              <p style={{fontSize:16,fontWeight:600,color:"#F1EFE8",margin:0,lineHeight:1.5,textAlign:"center"}}>{welcomeOverride[lang+"_title"]||t.welcome1}</p>
+              <p style={{fontSize:16,fontWeight:600,color:"#F1EFE8",margin:0,lineHeight:1.5,textAlign:"center"}}>{welcomeTitleDisplay}</p>
               <InfoBubble content={welcomeBodyDisplay.split("\n\n")[0]||""}/>
             </div>
             <div style={{borderTop:"0.5px solid rgba(255,255,255,0.08)",paddingTop:14,marginBottom:14}}>
