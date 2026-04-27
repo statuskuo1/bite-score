@@ -20,7 +20,7 @@ No React Router — **views** are a string on reducer state (`log`, `add`, `pale
 
 ## Runtime data flow
 
-1. **Boot**: `App` mounts with **empty** restaurant/café state until **`authReady`**. If the user is **signed out**, seed data from `src/data/initialData.js` (`RESTAURANTS` / `CAFES_INIT`) is applied **without** loading other users’ rows from Supabase. If **signed in**, only that user’s `restaurants` / `cafes` rows are fetched (`user_id` filter + RLS).
+1. **Boot**: `App` mounts with **empty** restaurant/café state until **`authReady`**. If the user is **signed out**, no seed data is shown: a **sign-in gate** blocks the log until authentication. If **signed in**, only that user’s `restaurants` / `cafes` rows are fetched (`user_id` filter + RLS). Demo lists in `initialData.js` are **not** used for anonymous browsing anymore.
 2. **Supabase load** (`useEffect`, depends on `authReady` + `user.id`): fetches **`settings`** (read-only from the client’s perspective); fetches visit tables only when signed in, scoped to the current user. Hydrates FAQ overrides and welcome copy from `settings` where applicable. **A–Z quest letter toggles** for signed-in users override from **`localStorage`** (`bite_questLetters_<userId>`) when present; otherwise defaults / `settings.questLetters` bootstrap.
 3. **Scores**: never stored as a single “BITE” column in app code for restaurants; **computed on the fly** in the UI via `src/utils/scoring.js` (`calcBiteOutOf10`, `calcCafeOutOf10`, built on raw `calcBite` / `calcCafe`, weights, repeatability).
 4. **Mutations**: restaurant/café rows go through **`App.jsx`**. Global **`settings`** are not written from the browser client.

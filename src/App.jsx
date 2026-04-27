@@ -5,7 +5,7 @@ import { T } from "./translations.js";
 import { supabase } from "./config/supabaseClient.js";
 import { canMutateVisit } from "./utils/rowAccess.js";
 import { ALPHABET, CUISINE_REGIONS, FLAGS } from "./constants/cuisineConstants.js";
-import { RESTAURANTS, CAFES_INIT, INIT_REST, INIT_CAFE } from "./data/initialData.js";
+import { INIT_REST, INIT_CAFE } from "./data/initialData.js";
 import { reducer } from "./state/logReducer.js";
 import {
   calcBiteOutOf10,
@@ -52,6 +52,16 @@ export default function App() {
   const [welcomeOverride, setWelcomeOverride] = useState({});
   const [lang, setLang] = useState(()=>localStorage.getItem("bite_lang")||"en");
   const t = T[lang]||T.en;
+  const needsAuth = authReady && !user;
+
+  useEffect(() => {
+    if (user) setShowAuthModal(false);
+  }, [user]);
+
+  useEffect(() => {
+    if (authReady && !user) setShowAuthModal(true);
+  }, [authReady, user]);
+
   /** Bundled `translations.js` by default. Supabase `welcome_*` only when hosting sets `VITE_WELCOME_USE_SUPABASE=true` (opt-in). */
   const welcomeUseDbCopy = import.meta.env.VITE_WELCOME_USE_SUPABASE === 'true';
   const welcomeTitleDisplay = (welcomeUseDbCopy && welcomeOverride[lang+"_title"]) || t.welcome1;
@@ -147,8 +157,8 @@ export default function App() {
         });
 
         if (!user) {
-          dispatch({ type: "LOAD", entries: RESTAURANTS });
-          setCafes(CAFES_INIT);
+          dispatch({ type: "LOAD", entries: [] });
+          setCafes([]);
         } else {
           dispatch({ type: "LOAD", entries: [] });
           setCafes([]);
@@ -327,7 +337,7 @@ export default function App() {
 
   return (
     <LangContext.Provider value={{t,lang,toggleLang}}>
-    <div style={{fontFamily:"var(--font-sans)",maxWidth:640,margin:"0 auto",padding:"1.25rem 1rem 8rem 1rem",background:"#141413",minHeight:"100vh",color:"#F1EFE8",overflowX:"hidden"}}>
+    <div style={{fontFamily:"var(--font-sans)",maxWidth:640,margin:"0 auto",padding:user?"1.25rem 1rem max(8rem, env(safe-area-inset-bottom)) 1rem":"1.25rem 1rem 2rem 1rem",background:"#141413",minHeight:"100vh",color:"#F1EFE8",overflowX:"hidden"}}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&display=swap');
         input,select,textarea{background:#252523!important;color:#F1EFE8!important;border:1px solid rgba(255,255,255,0.2)!important;border-radius:8px;padding:9px 12px;}
@@ -350,7 +360,31 @@ export default function App() {
         </div>
       </div>
 
-      {showWelcome&&dbLoaded&&(
+      {needsAuth && (
+        <div style={{ marginTop: 24, marginBottom: 16 }}>
+          <p style={{ fontSize: 20, fontWeight: 600, color: "#F1EFE8", margin: "0 0 12px", lineHeight: 1.35 }}>{t.signInGateTitle}</p>
+          <p style={{ fontSize: 14, color: "#888780", margin: "0 0 22px", lineHeight: 1.65 }}>{t.signInGateBody}</p>
+          <button
+            type="button"
+            onClick={() => setShowAuthModal(true)}
+            style={{
+              width: "100%",
+              padding: "14px 18px",
+              borderRadius: 12,
+              border: "none",
+              background: "#F0997B",
+              color: "#141413",
+              fontSize: 15,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            {t.signInGateButton}
+          </button>
+        </div>
+      )}
+
+      {user && showWelcome && dbLoaded && (
         <div onClick={()=>dismissWelcome()} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:"1.5rem"}}>
           <div onClick={e=>e.stopPropagation()} style={{background:"#1E1E1C",borderRadius:16,padding:"1.5rem",maxWidth:360,width:"100%",border:"0.5px solid rgba(255,255,255,0.15)"}}>
             <div style={{fontSize:24,marginBottom:12,textAlign:"center",cursor:"default",userSelect:"none"}}>👋</div>
@@ -384,6 +418,8 @@ export default function App() {
         </div>
       )}
 
+      {user && (
+      <>
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:640,background:"#1A1A18",borderTop:"0.5px solid rgba(255,255,255,0.1)",display:"flex",justifyContent:"space-around",alignItems:"center",padding:"8px 0 max(8px,env(safe-area-inset-bottom))",zIndex:100}}>
         {[["log","📋",t.myLog],["palette","😋",t.myTaste],["add","➕",t.add],["quests","🗺️",t.quests],["faq","❓",t.faq]].map(([v,icon,label])=>(
           <button key={v} onClick={()=>{dispatch({type:"VIEW",view:v});setEditR(null);setEditC(null);window.scrollTo({top:0,behavior:"instant"});}} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",padding:"4px 8px",minWidth:56}}>
@@ -838,6 +874,9 @@ export default function App() {
 
       {/* ── FAQ ── */}
       {st.view==="faq"&&<FaqView faqOverrides={faqOverrides}/>}
+
+      </>
+      )}
 
       <AuthModal open={showAuthModal} onClose={()=>setShowAuthModal(false)} />
     </div>

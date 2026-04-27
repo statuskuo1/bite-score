@@ -60,6 +60,9 @@ export const T = {
     authCheckEmail:"Check your email for a sign-in link.",authGoogle:"Continue with Google",
     authOr:"or",authSignedIn:"Account",authSignedInAs:"Signed in as",
     authEmailRequired:"Enter your email.",authErrorGeneric:"Something went wrong. Try again.",
+    signInGateTitle:"Sign in to continue",
+    signInGateBody:"Use email (magic link) or Google to create an account or sign in. Your restaurant and café log is private to you.",
+    signInGateButton:"Sign in or create account",
   },
   zh: {
     appTagline:null,myLog:"我的紀錄",myTaste:"我的口味",add:"新增",quests:"任務",faq:"說明",
@@ -122,5 +125,8 @@ export const T = {
     authCheckEmail:"請到信箱開啟登入連結。",authGoogle:"使用 Google 登入",
     authOr:"或",authSignedIn:"帳號",authSignedInAs:"已登入",
     authEmailRequired:"請輸入電子郵件。",authErrorGeneric:"發生錯誤，請再試一次。",
+    signInGateTitle:"登入後開始使用",
+    signInGateBody:"使用電子郵件（登入連結）或 Google 建立帳號或登入。餐廳與咖啡紀錄僅本人可見。",
+    signInGateButton:"登入或建立帳號",
   }
 };
