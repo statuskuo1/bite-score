@@ -6,13 +6,13 @@ import { S } from "../styles/sharedStyles.js";
 import { SwipeRow } from "./SwipeRow.jsx";
 import { canMutateVisit, canSwipeGroup } from "../utils/rowAccess.js";
 
-export function RestRow({e,i,display,onEdit,onDelete,isAdmin,user,visits=1,group,weights}) {
+export function RestRow({ e, i, display, onEdit, onDelete, user, visits = 1, group, weights }) {
   const {t} = useLang();
   const [exp,setExp] = useState(false);
   const [showVisits,setShowVisits] = useState(false);
   const flag = FLAGS[e.cuisine]||(e.letter||e.cuisine?.[0])?.toUpperCase()||"?";
   const grp = group||[e];
-  const swipeOk = canSwipeGroup(grp, user, isAdmin);
+  const swipeOk = canSwipeGroup(grp, user);
   return (
     <div>
       {showVisits&&(
@@ -34,8 +34,8 @@ export function RestRow({e,i,display,onEdit,onDelete,isAdmin,user,visits=1,group
                       <div style={{fontSize:13,fontWeight:500,color:"#F1EFE8"}}>Visit {grp.length-idx}</div>
                       <div style={{display:"flex",alignItems:"center",gap:8}}>
                         <div style={{fontSize:16,fontWeight:500,color:scoreColor(sc)}}>{sc!=null?sc.toFixed(2):"—"}</div>
-                        {canMutateVisit(v,user,isAdmin)&&<button onClick={()=>{setShowVisits(false);onEdit(v);window.scrollTo({top:0,behavior:"smooth"});}} style={{fontSize:11,color:"#5B9BD5",background:"none",border:"0.5px solid #5B9BD5",borderRadius:4,padding:"3px 10px",cursor:"pointer"}}>Edit</button>}
-                        {canMutateVisit(v,user,isAdmin)&&<button onClick={()=>{onDelete(v.id);}} style={{fontSize:11,color:"#A32D2D",background:"none",border:"0.5px solid #A32D2D",borderRadius:4,padding:"3px 10px",cursor:"pointer"}}>Delete</button>}
+                        {canMutateVisit(v,user)&&<button onClick={()=>{setShowVisits(false);onEdit(v);window.scrollTo({top:0,behavior:"smooth"});}} style={{fontSize:11,color:"#5B9BD5",background:"none",border:"0.5px solid #5B9BD5",borderRadius:4,padding:"3px 10px",cursor:"pointer"}}>Edit</button>}
+                        {canMutateVisit(v,user)&&<button onClick={()=>{onDelete(v.id);}} style={{fontSize:11,color:"#A32D2D",background:"none",border:"0.5px solid #A32D2D",borderRadius:4,padding:"3px 10px",cursor:"pointer"}}>Delete</button>}
                       </div>
                     </div>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>

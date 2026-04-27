@@ -6,7 +6,7 @@ import { S } from "../styles/sharedStyles.js";
 import { SwipeRow } from "./SwipeRow.jsx";
 import { canMutateVisit, canSwipeGroup } from "../utils/rowAccess.js";
 
-export function CafeGroupRow({group, cafeSortBy, onEdit, onDelete, isAdmin, user}) {
+export function CafeGroupRow({ group, cafeSortBy, onEdit, onDelete, user }) {
   const {t,lang} = useLang();
   const [exp, setExp] = useState(false);
   const [showVisits, setShowVisits] = useState(false);
@@ -29,7 +29,7 @@ export function CafeGroupRow({group, cafeSortBy, onEdit, onDelete, isAdmin, user
   }
   const display = getDisplay();
   const orders = [...new Set(group.map(e=>e.order).filter(Boolean))].join(", ");
-  const swipeOk = canSwipeGroup(group, user, isAdmin);
+  const swipeOk = canSwipeGroup(group, user);
 
   return (
     <>
@@ -53,8 +53,8 @@ export function CafeGroupRow({group, cafeSortBy, onEdit, onDelete, isAdmin, user
                       <div style={{fontSize:13,fontWeight:500,color:"#F1EFE8"}}>{lang==="zh"?t.visitLabel+(visits-i)+t.visitsLabel:"Visit "+(visits-i)}{e.order?" · "+e.order:""}</div>
                       <div style={{display:"flex",alignItems:"center",gap:8}}>
                         <div style={{fontSize:16,fontWeight:500,color:cafeScoreColor(sc)}}>{sc!=null?sc.toFixed(2):"—"}</div>
-                        {canMutateVisit(e,user,isAdmin)&&<button onClick={()=>{setShowVisits(false);onEdit(e);}} style={{fontSize:11,color:"#5B9BD5",background:"none",border:"0.5px solid #5B9BD5",borderRadius:4,padding:"3px 10px",cursor:"pointer"}}>{t.editWeights}</button>}
-                        {canMutateVisit(e,user,isAdmin)&&<button onClick={()=>onDelete(e.id)} style={{fontSize:11,color:"#A32D2D",background:"none",border:"0.5px solid #A32D2D",borderRadius:4,padding:"3px 10px",cursor:"pointer"}}>{t.deleteLabel}</button>}
+                        {canMutateVisit(e,user)&&<button onClick={()=>{setShowVisits(false);onEdit(e);}} style={{fontSize:11,color:"#5B9BD5",background:"none",border:"0.5px solid #5B9BD5",borderRadius:4,padding:"3px 10px",cursor:"pointer"}}>{t.editWeights}</button>}
+                        {canMutateVisit(e,user)&&<button onClick={()=>onDelete(e.id)} style={{fontSize:11,color:"#A32D2D",background:"none",border:"0.5px solid #A32D2D",borderRadius:4,padding:"3px 10px",cursor:"pointer"}}>{t.deleteLabel}</button>}
                       </div>
                     </div>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>

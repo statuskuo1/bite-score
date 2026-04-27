@@ -5,7 +5,7 @@ import { T } from "./translations.js";
 import { supabase } from "./config/supabaseClient.js";
 import { canMutateVisit } from "./utils/rowAccess.js";
 import { ALPHABET, CUISINE_REGIONS, FLAGS } from "./constants/cuisineConstants.js";
-import { RESTAURANTS, CAFES_INIT, INIT_REST, INIT_CAFE } from "./data/initialData.js";
+import { INIT_REST, INIT_CAFE } from "./data/initialData.js";
 import { reducer } from "./state/logReducer.js";
 import {
   calcBiteOutOf10,
@@ -42,9 +42,9 @@ function omitPlayWelcomeAside(body) {
 }
 
 export default function App() {
-  const { user, isAdmin } = useAuth();
-  const [st, dispatch] = useReducer(reducer, {entries:RESTAURANTS, view:"log"});
-  const [cafes, setCafes] = useState(CAFES_INIT);
+  const { user, authReady } = useAuth();
+  const [st, dispatch] = useReducer(reducer, { entries: [], view: "log" });
+  const [cafes, setCafes] = useState([]);
   const [dbLoaded, setDbLoaded] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showWelcome, setShowWelcome] = useState(true);
@@ -52,56 +52,21 @@ export default function App() {
   const [welcomeOverride, setWelcomeOverride] = useState({});
   const [lang, setLang] = useState(()=>localStorage.getItem("bite_lang")||"en");
   const t = T[lang]||T.en;
+  const needsAuth = authReady && !user;
+
+  useEffect(() => {
+    if (user) setShowAuthModal(false);
+  }, [user]);
+
+  useEffect(() => {
+    if (authReady && !user) setShowAuthModal(true);
+  }, [authReady, user]);
+
   /** Bundled `translations.js` by default. Supabase `welcome_*` only when hosting sets `VITE_WELCOME_USE_SUPABASE=true` (opt-in). */
   const welcomeUseDbCopy = import.meta.env.VITE_WELCOME_USE_SUPABASE === 'true';
   const welcomeTitleDisplay = (welcomeUseDbCopy && welcomeOverride[lang+"_title"]) || t.welcome1;
   const welcomeBodyDisplay = omitPlayWelcomeAside((welcomeUseDbCopy && welcomeOverride[lang+"_body"]) || t.welcome2);
   function toggleLang(){const nl=lang==="en"?"zh":"en";setLang(nl);localStorage.setItem("bite_lang",nl);}
-
-  useEffect(()=>{
-    async function load() {
-      try {
-      const {data:rData} = await supabase.from("restaurants").select("*").order("created_at",{ascending:true});
-      const {data:cData} = await supabase.from("cafes").select("*").order("created_at",{ascending:true});
-      if(rData&&rData.length>0) {
-        const mapped = rData.map(r=>({
-          id:r.id, name:r.name, cuisine:r.cuisine||"", cuisine2:r.cuisine2||"",
-          isFusion:r.is_fusion||false, taste:+r.taste, cost:+r.cost,
-          portions:+r.portions, wait:+r.wait, repeatability:+r.repeatability,
-          useR:r.use_r!==false, notes:r.notes||"", letter:(r.cuisine?.[0]||"").toUpperCase(),
-          ownerId:r.user_id??null
-        }));
-        dispatch({type:"LOAD", entries:mapped});
-      }
-      if(cData&&cData.length>0) {
-        const mapped = cData.map(c=>({
-          id:c.id, name:c.name, category:c.category||"Coffee", order:c.order_item||"",
-          taste:+c.taste, cost:+c.cost, portions:+c.portions, wait:+(c.wait||0),
-          beanRegion:c.bean_region||"", milkLevel:c.milk_level||"",
-          repeatability:+c.repeatability, useR:c.use_r!==false, notes:c.notes||"",
-          ownerId:c.user_id??null
-        }));
-        setCafes(mapped);
-      }
-      const {data:sData} = await supabase.from("settings").select("*");
-      if(sData) {
-        const ql = sData.find(s=>s.key==="questLetters");
-        if(ql) setQuestL(new Set(JSON.parse(ql.value)));
-        const faqOverrides={};
-        sData.filter(s=>s.key.startsWith("faq_override_")).forEach(s=>{
-          const idx=parseInt(s.key.replace("faq_override_",""));
-          faqOverrides[idx]=s.value;
-        });
-        if(Object.keys(faqOverrides).length>0) setFaqOverrides(faqOverrides);
-        const wo={};
-        sData.filter(s=>s.key.startsWith("welcome_")).forEach(s=>{wo[s.key.replace("welcome_","")]=s.value;});
-        if(Object.keys(wo).length>0) setWelcomeOverride(wo);
-      }
-      setDbLoaded(true);
-      } catch(err) { console.error("Supabase load error:", err); setDbLoaded(true); }
-    }
-    load();
-  },[]);
 
   function dismissWelcome() {
     setShowWelcome(false);
@@ -153,6 +118,102 @@ export default function App() {
     return()=>{document.removeEventListener("mousedown",h);document.removeEventListener("touchstart",h);};
   },[]);
 
+  useEffect(() => {
+    if (!authReady) return;
+    let cancelled = false;
+    async function load() {
+      try {
+        const mapRestaurant = (r) => ({
+          id: r.id,
+          name: r.name,
+          cuisine: r.cuisine || "",
+          cuisine2: r.cuisine2 || "",
+          isFusion: r.is_fusion || false,
+          taste: +r.taste,
+          cost: +r.cost,
+          portions: +r.portions,
+          wait: +r.wait,
+          repeatability: +r.repeatability,
+          useR: r.use_r !== false,
+          notes: r.notes || "",
+          letter: (r.cuisine?.[0] || "").toUpperCase(),
+          ownerId: r.user_id ?? null,
+        });
+        const mapCafe = (c) => ({
+          id: c.id,
+          name: c.name,
+          category: c.category || "Coffee",
+          order: c.order_item || "",
+          taste: +c.taste,
+          cost: +c.cost,
+          portions: +c.portions,
+          wait: +(c.wait || 0),
+          beanRegion: c.bean_region || "",
+          milkLevel: c.milk_level || "",
+          repeatability: +c.repeatability,
+          useR: c.use_r !== false,
+          notes: c.notes || "",
+          ownerId: c.user_id ?? null,
+        });
+
+        if (!user) {
+          dispatch({ type: "LOAD", entries: [] });
+          setCafes([]);
+        } else {
+          dispatch({ type: "LOAD", entries: [] });
+          setCafes([]);
+          const [rRes, cRes] = await Promise.all([
+            supabase.from("restaurants").select("*").eq("user_id", user.id).order("created_at", { ascending: true }),
+            supabase.from("cafes").select("*").eq("user_id", user.id).order("created_at", { ascending: true }),
+          ]);
+          if (cancelled) return;
+          dispatch({ type: "LOAD", entries: (rRes.data || []).map(mapRestaurant) });
+          setCafes((cRes.data || []).map(mapCafe));
+        }
+
+        const { data: sData } = await supabase.from("settings").select("*");
+        if (cancelled) return;
+        if (sData) {
+          let questHandled = false;
+          if (user) {
+            try {
+              const raw = localStorage.getItem(`bite_questLetters_${user.id}`);
+              if (raw) {
+                setQuestL(new Set(JSON.parse(raw)));
+                questHandled = true;
+              }
+            } catch (e) {
+              console.error("quest letters localStorage:", e);
+            }
+          }
+          if (!questHandled) {
+            const ql = sData.find((s) => s.key === "questLetters");
+            if (ql) setQuestL(new Set(JSON.parse(ql.value)));
+          }
+          const faqOverrides = {};
+          sData.filter((s) => s.key.startsWith("faq_override_")).forEach((s) => {
+            const idx = parseInt(s.key.replace("faq_override_", ""), 10);
+            faqOverrides[idx] = s.value;
+          });
+          if (Object.keys(faqOverrides).length > 0) setFaqOverrides(faqOverrides);
+          const wo = {};
+          sData.filter((s) => s.key.startsWith("welcome_")).forEach((s) => {
+            wo[s.key.replace("welcome_", "")] = s.value;
+          });
+          if (Object.keys(wo).length > 0) setWelcomeOverride(wo);
+        }
+        setDbLoaded(true);
+      } catch (err) {
+        console.error("Supabase load error:", err);
+        setDbLoaded(true);
+      }
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [authReady, user?.id]);
+
   /** Café weights (2 sliders): redistribute the other key to keep sum 100. */
   function rebalance(current, changedKey, newVal) {
     const nv = Math.min(100, Math.max(0, Math.round(newVal)));
@@ -197,12 +258,16 @@ export default function App() {
   function resetCafeWeights(defaults){ setCafeWeights({...defaults});setCafeWErr(""); }
 
   const covered = new Set(st.entries.map(e=>(e.letter||e.cuisine?.[0])?.toUpperCase()));
-  async function toggleQ(l){
-    if(!covered.has(l)||!isAdmin)return;
-    const next=new Set(questL);
-    next.has(l)?next.delete(l):next.add(l);
+  function toggleQ(l) {
+    if (!covered.has(l) || !user) return;
+    const next = new Set(questL);
+    next.has(l) ? next.delete(l) : next.add(l);
     setQuestL(next);
-    try { await supabase.from("settings").upsert({key:"questLetters",value:JSON.stringify([...next])},{onConflict:"key"}); } catch(err){ console.error("quest save threw:",err); }
+    try {
+      localStorage.setItem(`bite_questLetters_${user.id}`, JSON.stringify([...next]));
+    } catch (err) {
+      console.error("quest letters save:", err);
+    }
   }
 
   const loggedC = new Set(st.entries.map(e=>e.cuisine&&e.cuisine.trim()));
@@ -272,7 +337,7 @@ export default function App() {
 
   return (
     <LangContext.Provider value={{t,lang,toggleLang}}>
-    <div style={{fontFamily:"var(--font-sans)",maxWidth:640,margin:"0 auto",padding:"1.25rem 1rem 8rem 1rem",background:"#141413",minHeight:"100vh",color:"#F1EFE8",overflowX:"hidden"}}>
+    <div style={{fontFamily:"var(--font-sans)",maxWidth:640,margin:"0 auto",padding:user?"1.25rem 1rem max(8rem, env(safe-area-inset-bottom)) 1rem":"1.25rem 1rem 2rem 1rem",background:"#141413",minHeight:"100vh",color:"#F1EFE8",overflowX:"hidden"}}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&display=swap');
         input,select,textarea{background:#252523!important;color:#F1EFE8!important;border:1px solid rgba(255,255,255,0.2)!important;border-radius:8px;padding:9px 12px;}
@@ -284,9 +349,9 @@ export default function App() {
 
       <div style={{marginBottom:"1.5rem",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <LogoWithTripleTap onTripleTap={()=>setShowAuthModal(true)} isAdmin={isAdmin}/>
+          <LogoWithTripleTap onTripleTap={()=>setShowAuthModal(true)} />
           <div>
-            <h1 style={{fontSize:28,fontWeight:600,color:isAdmin?"#97C459":"#F0997B",margin:0,fontFamily:"'Fredoka',sans-serif",transition:"color 0.3s"}}>{lang==="zh"?"BITE Score 吃貨榜":"BITE Score"}</h1>
+            <h1 style={{fontSize:28,fontWeight:600,color:"#F0997B",margin:0,fontFamily:"'Fredoka',sans-serif"}}>{lang==="zh"?"BITE Score 吃貨榜":"BITE Score"}</h1>
           </div>
         </div>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
@@ -295,7 +360,31 @@ export default function App() {
         </div>
       </div>
 
-      {showWelcome&&dbLoaded&&(
+      {needsAuth && (
+        <div style={{ marginTop: 24, marginBottom: 16 }}>
+          <p style={{ fontSize: 20, fontWeight: 600, color: "#F1EFE8", margin: "0 0 12px", lineHeight: 1.35 }}>{t.signInGateTitle}</p>
+          <p style={{ fontSize: 14, color: "#888780", margin: "0 0 22px", lineHeight: 1.65 }}>{t.signInGateBody}</p>
+          <button
+            type="button"
+            onClick={() => setShowAuthModal(true)}
+            style={{
+              width: "100%",
+              padding: "14px 18px",
+              borderRadius: 12,
+              border: "none",
+              background: "#F0997B",
+              color: "#141413",
+              fontSize: 15,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            {t.signInGateButton}
+          </button>
+        </div>
+      )}
+
+      {user && showWelcome && dbLoaded && (
         <div onClick={()=>dismissWelcome()} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:"1.5rem"}}>
           <div onClick={e=>e.stopPropagation()} style={{background:"#1E1E1C",borderRadius:16,padding:"1.5rem",maxWidth:360,width:"100%",border:"0.5px solid rgba(255,255,255,0.15)"}}>
             <div style={{fontSize:24,marginBottom:12,textAlign:"center",cursor:"default",userSelect:"none"}}>👋</div>
@@ -329,6 +418,8 @@ export default function App() {
         </div>
       )}
 
+      {user && (
+      <>
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:640,background:"#1A1A18",borderTop:"0.5px solid rgba(255,255,255,0.1)",display:"flex",justifyContent:"space-around",alignItems:"center",padding:"8px 0 max(8px,env(safe-area-inset-bottom))",zIndex:100}}>
         {[["log","📋",t.myLog],["palette","😋",t.myTaste],["add","➕",t.add],["quests","🗺️",t.quests],["faq","❓",t.faq]].map(([v,icon,label])=>(
           <button key={v} onClick={()=>{dispatch({type:"VIEW",view:v});setEditR(null);setEditC(null);window.scrollTo({top:0,behavior:"instant"});}} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",padding:"4px 8px",minWidth:56}}>
@@ -356,12 +447,12 @@ export default function App() {
       {st.view==="log"&&!editR&&!editC&&dbLoaded&&(
         <div>
           <div style={{marginBottom:12}}>
-            <div style={{display:"flex",background:"#252523",borderRadius:10,padding:3,gap:2,marginBottom:isAdmin?8:0}}>
+            <div style={{display:"flex",background:"#252523",borderRadius:10,padding:3,gap:2,marginBottom:8}}>
               {[["restaurants","🍽 "+t.restaurants],["drinks","☕ "+t.drinks],["sweets","🥐 "+t.sweets]].map(([v,l])=>(
                 <button key={v} onClick={()=>setLogTab(v)} style={{flex:1,padding:"6px 0",textAlign:"center",borderRadius:8,border:"none",background:logTab===v?"#3C1F13":"transparent",color:logTab===v?"#F0997B":"#888780",fontSize:11,fontWeight:logTab===v?700:500,cursor:"pointer",transition:"all 0.15s"}}>{l}</button>
               ))}
             </div>
-            {(isAdmin||user)&&<p style={{fontSize:12,color:"#888780",margin:0}}>{t.swipeHint}</p>}
+            {user&&<p style={{fontSize:12,color:"#888780",margin:0}}>{t.swipeHint}</p>}
           </div>
           <div style={{borderBottom:"0.5px solid rgba(255,255,255,0.08)",marginBottom:12}}/>
 
@@ -442,12 +533,12 @@ export default function App() {
                   const visits=grp.length;
                   const display=getDisplay(e);
                   return (
-                    <RestRow key={e.id} e={e} i={i} display={display} isAdmin={isAdmin} user={user} visits={visits} group={grp} weights={weights}
+                    <RestRow key={e.id} e={e} i={i} display={display} user={user} visits={visits} group={grp} weights={weights}
                       onEdit={v=>{setEditR(v||e);window.scrollTo({top:0,behavior:"smooth"});}}
                       onDelete={async id=>{
                         const did=id||e.id;
                         const row=st.entries.find(x=>x.id===did);
-                        if(!canMutateVisit(row,user,isAdmin))return;
+                        if(!canMutateVisit(row,user))return;
                         try{await supabase.from("restaurants").delete().eq("id",did);}catch(err){console.error("restaurant delete threw:",err);}
                         dispatch({type:"DEL",id:did});
                       }}/>
@@ -532,9 +623,9 @@ export default function App() {
                   return avg(e=>calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability)??0);
                 };
                 return Object.entries(groups).sort((a,b)=>cafeSortAsc?getSortVal(a[1])-getSortVal(b[1]):getSortVal(b[1])-getSortVal(a[1])).map(([name,grp])=>(
-                  <CafeGroupRow key={name} group={grp} cafeSortBy={cafeSortBy} isAdmin={isAdmin} user={user} onEdit={e=>{setEditC(e);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={async id=>{
+                  <CafeGroupRow key={name} group={grp} cafeSortBy={cafeSortBy} user={user} onEdit={e=>{setEditC(e);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={async id=>{
                         const row=cafes.find(x=>x.id===id);
-                        if(!canMutateVisit(row,user,isAdmin))return;
+                        if(!canMutateVisit(row,user))return;
                         try{await supabase.from("cafes").delete().eq("id",id);}catch(err){console.error("cafe delete threw:",err);}
                         setCafes(p=>p.filter(x=>x.id!==id));
                       }}/>
@@ -589,9 +680,9 @@ export default function App() {
                   return avg(e=>calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability)??0);
                 };
                 return Object.entries(groups).sort((a,b)=>sweetsSortAsc?getSortValS(a[1])-getSortValS(b[1]):getSortValS(b[1])-getSortValS(a[1])).map(([name,grp])=>(
-                  <CafeGroupRow key={name} group={grp} cafeSortBy={sweetsSortBy} isAdmin={isAdmin} user={user} onEdit={e=>{setEditC(e);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={async id=>{
+                  <CafeGroupRow key={name} group={grp} cafeSortBy={sweetsSortBy} user={user} onEdit={e=>{setEditC(e);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={async id=>{
                         const row=cafes.find(x=>x.id===id);
-                        if(!canMutateVisit(row,user,isAdmin))return;
+                        if(!canMutateVisit(row,user))return;
                         try{await supabase.from("cafes").delete().eq("id",id);}catch(err){console.error("cafe delete threw:",err);}
                         setCafes(p=>p.filter(x=>x.id!==id));
                       }}/>
@@ -613,7 +704,7 @@ export default function App() {
       )}
 
       {st.view==="log"&&editR&&<RestForm initial={editR} weights={weights} existingNames={st.entries.map(e=>e.name)} existingEntries={st.entries} onSave={async e=>{
-        if(canMutateVisit(e,user,isAdmin)) {
+        if(canMutateVisit(e,user)) {
           try {
             const {error} = await supabase.from("restaurants").update({
               name:e.name, cuisine:e.cuisine, cuisine2:e.cuisine2||"",
@@ -628,7 +719,7 @@ export default function App() {
       }} onCancel={()=>{setEditR(null);window.scrollTo({top:0,behavior:"smooth"});}}/>}
       {st.view==="log"&&editC&&<CafeForm initial={editC} onSave={async entries=>{
         const e=Array.isArray(entries)?entries[0]:entries;
-        if(canMutateVisit(e,user,isAdmin)) {
+        if(canMutateVisit(e,user)) {
           try {
             const {error} = await supabase.from("cafes").update({
               name:e.name, category:e.category, order_item:e.order||"",
@@ -782,7 +873,10 @@ export default function App() {
       {st.view==="palette"&&<PaletteView entries={st.entries} cafes={cafes} weights={weights} replaceRestaurantWeights={replaceRestaurantWeights} cafeWeights={cafeWeights} updateCafeW={updCafeW} resetCafeWeights={resetCafeWeights} cafeTotalW={+(cafeWeights.taste+cafeWeights.bpb).toFixed(0)} cafeWErr={cafeWErr}/>}
 
       {/* ── FAQ ── */}
-      {st.view==="faq"&&<FaqView isAdmin={isAdmin} faqOverrides={faqOverrides} setFaqOverrides={setFaqOverrides}/>}
+      {st.view==="faq"&&<FaqView faqOverrides={faqOverrides}/>}
+
+      </>
+      )}
 
       <AuthModal open={showAuthModal} onClose={()=>setShowAuthModal(false)} />
     </div>
