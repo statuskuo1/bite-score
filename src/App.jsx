@@ -28,10 +28,14 @@ import { FaqView } from "./components/FaqView.jsx";
 import { AuthModal } from "./components/AuthModal.jsx";
 import { WeightSliders } from "./components/WeightSliders.jsx";
 
-/** Strips optional “play mode” line from settings/default welcome copy (DB or legacy bundles). */
+/** Drops optional paragraphs from welcome body (DB or defaults): play-mode aside; sign-in/cloud disclaimer (EN+ZH) so languages stay aligned when overrides differ. */
 function omitPlayWelcomeAside(body) {
   if (!body) return body;
-  return body.split("\n\n").filter((p) => !p.includes("Play around! Nothing saves permanently")).join("\n\n");
+  const drop = (p) =>
+    p.includes("Play around! Nothing saves permanently") ||
+    p.includes("Sign in to sync your ratings to the cloud") ||
+    p.includes("登入後，你的評分會同步到雲端");
+  return body.split("\n\n").filter((p) => !drop(p)).join("\n\n");
 }
 
 export default function App() {
