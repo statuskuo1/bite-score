@@ -42,9 +42,9 @@ function omitPlayWelcomeAside(body) {
 }
 
 export default function App() {
-  const { user, isAdmin } = useAuth();
-  const [st, dispatch] = useReducer(reducer, {entries:RESTAURANTS, view:"log"});
-  const [cafes, setCafes] = useState(CAFES_INIT);
+  const { user, isAdmin, authReady } = useAuth();
+  const [st, dispatch] = useReducer(reducer, { entries: [], view: "log" });
+  const [cafes, setCafes] = useState([]);
   const [dbLoaded, setDbLoaded] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showWelcome, setShowWelcome] = useState(true);
@@ -57,51 +57,6 @@ export default function App() {
   const welcomeTitleDisplay = (welcomeUseDbCopy && welcomeOverride[lang+"_title"]) || t.welcome1;
   const welcomeBodyDisplay = omitPlayWelcomeAside((welcomeUseDbCopy && welcomeOverride[lang+"_body"]) || t.welcome2);
   function toggleLang(){const nl=lang==="en"?"zh":"en";setLang(nl);localStorage.setItem("bite_lang",nl);}
-
-  useEffect(()=>{
-    async function load() {
-      try {
-      const {data:rData} = await supabase.from("restaurants").select("*").order("created_at",{ascending:true});
-      const {data:cData} = await supabase.from("cafes").select("*").order("created_at",{ascending:true});
-      if(rData&&rData.length>0) {
-        const mapped = rData.map(r=>({
-          id:r.id, name:r.name, cuisine:r.cuisine||"", cuisine2:r.cuisine2||"",
-          isFusion:r.is_fusion||false, taste:+r.taste, cost:+r.cost,
-          portions:+r.portions, wait:+r.wait, repeatability:+r.repeatability,
-          useR:r.use_r!==false, notes:r.notes||"", letter:(r.cuisine?.[0]||"").toUpperCase(),
-          ownerId:r.user_id??null
-        }));
-        dispatch({type:"LOAD", entries:mapped});
-      }
-      if(cData&&cData.length>0) {
-        const mapped = cData.map(c=>({
-          id:c.id, name:c.name, category:c.category||"Coffee", order:c.order_item||"",
-          taste:+c.taste, cost:+c.cost, portions:+c.portions, wait:+(c.wait||0),
-          beanRegion:c.bean_region||"", milkLevel:c.milk_level||"",
-          repeatability:+c.repeatability, useR:c.use_r!==false, notes:c.notes||"",
-          ownerId:c.user_id??null
-        }));
-        setCafes(mapped);
-      }
-      const {data:sData} = await supabase.from("settings").select("*");
-      if(sData) {
-        const ql = sData.find(s=>s.key==="questLetters");
-        if(ql) setQuestL(new Set(JSON.parse(ql.value)));
-        const faqOverrides={};
-        sData.filter(s=>s.key.startsWith("faq_override_")).forEach(s=>{
-          const idx=parseInt(s.key.replace("faq_override_",""));
-          faqOverrides[idx]=s.value;
-        });
-        if(Object.keys(faqOverrides).length>0) setFaqOverrides(faqOverrides);
-        const wo={};
-        sData.filter(s=>s.key.startsWith("welcome_")).forEach(s=>{wo[s.key.replace("welcome_","")]=s.value;});
-        if(Object.keys(wo).length>0) setWelcomeOverride(wo);
-      }
-      setDbLoaded(true);
-      } catch(err) { console.error("Supabase load error:", err); setDbLoaded(true); }
-    }
-    load();
-  },[]);
 
   function dismissWelcome() {
     setShowWelcome(false);
@@ -152,6 +107,88 @@ export default function App() {
     document.addEventListener("mousedown",h);document.addEventListener("touchstart",h);
     return()=>{document.removeEventListener("mousedown",h);document.removeEventListener("touchstart",h);};
   },[]);
+
+  useEffect(() => {
+    if (!authReady) return;
+    let cancelled = false;
+    async function load() {
+      try {
+        const mapRestaurant = (r) => ({
+          id: r.id,
+          name: r.name,
+          cuisine: r.cuisine || "",
+          cuisine2: r.cuisine2 || "",
+          isFusion: r.is_fusion || false,
+          taste: +r.taste,
+          cost: +r.cost,
+          portions: +r.portions,
+          wait: +r.wait,
+          repeatability: +r.repeatability,
+          useR: r.use_r !== false,
+          notes: r.notes || "",
+          letter: (r.cuisine?.[0] || "").toUpperCase(),
+          ownerId: r.user_id ?? null,
+        });
+        const mapCafe = (c) => ({
+          id: c.id,
+          name: c.name,
+          category: c.category || "Coffee",
+          order: c.order_item || "",
+          taste: +c.taste,
+          cost: +c.cost,
+          portions: +c.portions,
+          wait: +(c.wait || 0),
+          beanRegion: c.bean_region || "",
+          milkLevel: c.milk_level || "",
+          repeatability: +c.repeatability,
+          useR: c.use_r !== false,
+          notes: c.notes || "",
+          ownerId: c.user_id ?? null,
+        });
+
+        if (!user) {
+          dispatch({ type: "LOAD", entries: RESTAURANTS });
+          setCafes(CAFES_INIT);
+        } else {
+          dispatch({ type: "LOAD", entries: [] });
+          setCafes([]);
+          const [rRes, cRes] = await Promise.all([
+            supabase.from("restaurants").select("*").eq("user_id", user.id).order("created_at", { ascending: true }),
+            supabase.from("cafes").select("*").eq("user_id", user.id).order("created_at", { ascending: true }),
+          ]);
+          if (cancelled) return;
+          dispatch({ type: "LOAD", entries: (rRes.data || []).map(mapRestaurant) });
+          setCafes((cRes.data || []).map(mapCafe));
+        }
+
+        const { data: sData } = await supabase.from("settings").select("*");
+        if (cancelled) return;
+        if (sData) {
+          const ql = sData.find((s) => s.key === "questLetters");
+          if (ql) setQuestL(new Set(JSON.parse(ql.value)));
+          const faqOverrides = {};
+          sData.filter((s) => s.key.startsWith("faq_override_")).forEach((s) => {
+            const idx = parseInt(s.key.replace("faq_override_", ""), 10);
+            faqOverrides[idx] = s.value;
+          });
+          if (Object.keys(faqOverrides).length > 0) setFaqOverrides(faqOverrides);
+          const wo = {};
+          sData.filter((s) => s.key.startsWith("welcome_")).forEach((s) => {
+            wo[s.key.replace("welcome_", "")] = s.value;
+          });
+          if (Object.keys(wo).length > 0) setWelcomeOverride(wo);
+        }
+        setDbLoaded(true);
+      } catch (err) {
+        console.error("Supabase load error:", err);
+        setDbLoaded(true);
+      }
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [authReady, user?.id]);
 
   /** Café weights (2 sliders): redistribute the other key to keep sum 100. */
   function rebalance(current, changedKey, newVal) {

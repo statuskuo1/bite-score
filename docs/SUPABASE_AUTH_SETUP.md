@@ -19,7 +19,10 @@ The client uses `window.location.origin` as `redirectTo` / `emailRedirectTo`; th
 
 ## Database
 
-Run the SQL in [`supabase/migrations/20260426_auth_rls.sql`](../supabase/migrations/20260426_auth_rls.sql) in **SQL Editor** (or use the Supabase CLI if you adopt it later).
+Run the SQL in these migrations in **SQL Editor** (or use the Supabase CLI if you adopt it later), in order:
+
+1. [`supabase/migrations/20260426_auth_rls.sql`](../supabase/migrations/20260426_auth_rls.sql) — profiles, `user_id`, base RLS  
+2. [`supabase/migrations/20260427_restaurants_cafes_select_own.sql`](../supabase/migrations/20260427_restaurants_cafes_select_own.sql) — private `SELECT` on `restaurants` / `cafes` per user (and admins)
 
 After migration, promote at least one curator account:
 
