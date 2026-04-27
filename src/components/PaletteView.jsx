@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLang } from "../contexts/LangContext.jsx";
 import { FLAGS, REGION_MAP, CUISINE_REGIONS, REGION_COLORS } from "../constants/cuisineConstants.js";
-import { calcBite } from "../utils/scoring.js";
+import { calcBiteOutOf10 } from "../utils/scoring.js";
 import { S } from "../styles/sharedStyles.js";
 import { DonutChart } from "./DonutChart.jsx";
 import { DrinksPalette } from "./DrinksPalette.jsx";
@@ -28,7 +28,7 @@ export function PaletteView({entries,cafes,weights,updateWeight,resetWeights,caf
   const avgT=total?(entries.reduce((a,e)=>a+e.taste,0)/total).toFixed(1):"0";
   const avgC=total?(entries.reduce((a,e)=>a+e.cost,0)/total).toFixed(0):"0";
   const groupedEntries = Object.values(entries.reduce((acc,e)=>{if(!acc[e.name])acc[e.name]=[];acc[e.name].push(e);return acc;},{}));
-  const topB = groupedEntries.map(grp=>({name:grp[0].name,avg:grp.reduce((a,e)=>a+(calcBite(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights)??0),0)/grp.length})).sort((a,b)=>b.avg-a.avg)[0];
+  const topB = groupedEntries.map(grp=>({name:grp[0].name,avg:grp.reduce((a,e)=>a+(calcBiteOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights)??0),0)/grp.length})).sort((a,b)=>b.avg-a.avg)[0];
 
   const pr0=lang_==="zh"?(topR==="East Asia"?"你的味蕾對東亞料理有種無法抗拒的吸引力——說真的，品味一流。":topR==="Western Europe"?"西歐的經典料理說到你心坎裡了。經典。":"你對"+topR+"料理有真正的好奇心。"):(topR==="East Asia"?"Your palate has a clear gravitational pull toward East Asia — and honestly, you have great taste.":topR==="Western Europe"?"Classic European dining speaks to your soul. Timeless.":"You have a genuine curiosity for "+topR+" cuisine.");
   const pr1=lang_==="zh"?(+avgT>=8?"你的標準很高，評分就是證明。你不接受普通。":+avgT>=6.5?"你欣賞品質，但不會太挑剔。一個價格合理的包子就能讓你很滿足。":"你帶著真正的好奇心吃飯。每一次踩雷都是數據。"):(+avgT>=8?"Your standards are high and your reviews reflect it. You don't do mid.":+avgT>=6.5?"You appreciate quality but you're not precious about it. A well-priced bao hits different.":"You eat with genuine curiosity. Every miss is data.");
@@ -93,7 +93,7 @@ export function PaletteView({entries,cafes,weights,updateWeight,resetWeights,caf
             {(()=>{
               const noteTopRated="Irene's judgement may have been clouded by bias and how underwhelming her home food has been, so this is not actually objectively #1. But let her live. She misses home 🥹";
               const noteRegions="Tap the Quests tab to explore by cuisine region!";
-              const statRows=[[t.topCuisine,(FLAGS[topC]||"")+" "+topC],[t.topRated,topB?topB.name:"—","topRated"],[t.avgBite,(total?([...entries].reduce((a,e)=>a+(calcBite(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights)??0),0)/total).toFixed(2):"—")],[t.avgTaste,avgT+"/10"],[t.avgSpend,"$"+avgC+" / meal"],[t.regionsExplored,rCount+" / "+Object.keys(CUISINE_REGIONS).length,"regions"]];
+              const statRows=[[t.topCuisine,(FLAGS[topC]||"")+" "+topC],[t.topRated,topB?topB.name:"—","topRated"],[t.avgBite,(total?([...entries].reduce((a,e)=>a+(calcBiteOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights)??0),0)/total).toFixed(2):"—")],[t.avgTaste,avgT+"/10"],[t.avgSpend,"$"+avgC+" / meal"],[t.regionsExplored,rCount+" / "+Object.keys(CUISINE_REGIONS).length,"regions"]];
               return statRows.map(([label,val,key])=>(
                 <StatCard key={label} label={label} val={val} note={key==="topRated"?noteTopRated:key==="regions"?noteRegions:undefined}/>
               ));

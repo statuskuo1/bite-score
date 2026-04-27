@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLang } from "../contexts/LangContext.jsx";
-import { calcCafe } from "../utils/scoring.js";
+import { calcCafeOutOf10 } from "../utils/scoring.js";
 import { S } from "../styles/sharedStyles.js";
 import { WeightSliders } from "./WeightSliders.jsx";
 
@@ -11,7 +11,7 @@ export function SweetsPalette({cafes, cafeWeights, updateCafeW, resetCafeWeights
   const total = sweets.length;
   if(!total) return <p style={{color:"#888780",fontSize:14}}>{t.noSweets}</p>;
 
-  const scored = [...sweets].map(e=>({...e,sc:calcCafe(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability)})).sort((a,b)=>(b.sc??0)-(a.sc??0));
+  const scored = [...sweets].map(e=>({...e,sc:calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability)})).sort((a,b)=>(b.sc??0)-(a.sc??0));
   const avgT=(sweets.reduce((a,e)=>a+e.taste,0)/total).toFixed(1);
   const mustReturn=sweets.filter(e=>e.repeatability===3).length;
   const mustReturnPct=Math.round(mustReturn/total*100);
@@ -91,7 +91,7 @@ export function SweetsPalette({cafes, cafeWeights, updateCafeW, resetCafeWeights
           const typeEntries=Object.entries(typeCounts).sort((a,b)=>b[1]-a[1]);
           const topType=typeEntries[0];
           const best2=scored[0];
-          const avgBiteSweets=total?(sweets.reduce((a,e)=>a+(calcCafe(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability)??0),0)/total).toFixed(2):"—";
+          const avgBiteSweets=total?(sweets.reduce((a,e)=>a+(calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability)??0),0)/total).toFixed(2):"—";
           const avgCostSweets=total?"$"+(sweets.reduce((a,e)=>a+e.cost,0)/total).toFixed(2):"—";
 
           const S2=160,CX2=80,CY2=80,R2=68,RI2=44;

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLang } from "../contexts/LangContext.jsx";
 import { getCafeIcon } from "../constants/cafeCatalog.js";
-import { calcCafe, scoreColor, tasteLabel, cafeScoreColor, cafeScoreLabel } from "../utils/scoring.js";
+import { calcCafeOutOf10, tasteLabel, tasteColor, cafeScoreColor, cafeScoreLabel } from "../utils/scoring.js";
 import { S } from "../styles/sharedStyles.js";
 import { SwipeRow } from "./SwipeRow.jsx";
 import { canMutateVisit, canSwipeGroup } from "../utils/rowAccess.js";
@@ -13,7 +13,7 @@ export function CafeGroupRow({group, cafeSortBy, onEdit, onDelete, isAdmin, user
   const icon = getCafeIcon(group[0].category, group[0].order);
   const visits = group.length;
 
-  const scores = group.map(e=>calcCafe(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability)).filter(s=>s!=null);
+  const scores = group.map(e=>calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability)).filter(s=>s!=null);
   const avgScore = scores.length ? scores.reduce((a,b)=>a+b,0)/scores.length : null;
   const avgTaste = group.reduce((a,e)=>a+e.taste,0)/visits;
   const avgCost = group.reduce((a,e)=>a+e.cost,0)/visits;
@@ -21,7 +21,7 @@ export function CafeGroupRow({group, cafeSortBy, onEdit, onDelete, isAdmin, user
   const avgRepeat = Math.round(group.reduce((a,e)=>a+e.repeatability,0)/visits);
 
   function getDisplay() {
-    if(cafeSortBy==="taste"){const tv=avgTaste,lbl=tasteLabel(tv,t),col=tv<=2?"#A32D2D":tv<=4?"#888780":tv<=7?"#EF9F27":tv<=8.5?"#5B9BD5":"#97C459";return{val:tv.toFixed(1),label:lbl,color:col};}
+    if(cafeSortBy==="taste"){const tv=avgTaste,lbl=tasteLabel(tv,t),col=tasteColor(tv);return{val:tv.toFixed(1),label:lbl,color:col};}
     if(cafeSortBy==="bpb") return{val:"$"+avgCost.toFixed(2),label:"avg/item",color:"#5B9BD5"};
     if(cafeSortBy==="wait") return{val:avgWait.toFixed(0)+" min",label:"avg wait",color:"#888780"};
     if(cafeSortBy==="repeat") return{val:"⭐".repeat(avgRepeat)||"✕",label:"avg repeat",color:"#EF9F27"};
@@ -46,13 +46,13 @@ export function CafeGroupRow({group, cafeSortBy, onEdit, onDelete, isAdmin, user
             </div>
             <div style={{overflowY:"auto",padding:"1rem 1.25rem",flex:1}}>
               {[...group].reverse().map((e,i)=>{
-                const sc = calcCafe(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability);
+                const sc = calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability);
                 return (
                   <div key={e.id} style={{background:"#141413",borderRadius:10,padding:"12px 14px",marginBottom:10}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
                       <div style={{fontSize:13,fontWeight:500,color:"#F1EFE8"}}>{lang==="zh"?t.visitLabel+(visits-i)+t.visitsLabel:"Visit "+(visits-i)}{e.order?" · "+e.order:""}</div>
                       <div style={{display:"flex",alignItems:"center",gap:8}}>
-                        <div style={{fontSize:16,fontWeight:500,color:scoreColor(sc)}}>{sc!=null?sc.toFixed(2):"—"}</div>
+                        <div style={{fontSize:16,fontWeight:500,color:cafeScoreColor(sc)}}>{sc!=null?sc.toFixed(2):"—"}</div>
                         {canMutateVisit(e,user,isAdmin)&&<button onClick={()=>{setShowVisits(false);onEdit(e);}} style={{fontSize:11,color:"#5B9BD5",background:"none",border:"0.5px solid #5B9BD5",borderRadius:4,padding:"3px 10px",cursor:"pointer"}}>{t.editWeights}</button>}
                         {canMutateVisit(e,user,isAdmin)&&<button onClick={()=>onDelete(e.id)} style={{fontSize:11,color:"#A32D2D",background:"none",border:"0.5px solid #A32D2D",borderRadius:4,padding:"3px 10px",cursor:"pointer"}}>{t.deleteLabel}</button>}
                       </div>
