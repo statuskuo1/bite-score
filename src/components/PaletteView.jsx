@@ -8,10 +8,24 @@ import { DrinksPalette } from "./DrinksPalette.jsx";
 import { SweetsPalette } from "./SweetsPalette.jsx";
 import { WeightSliders } from "./WeightSliders.jsx";
 import { StatCard } from "./StatCard.jsx";
+import { QuestsPaletteSection } from "./QuestsPaletteSection.jsx";
 
 const WEIGHT_DEFAULTS = { taste: 50, bpb: 40, wait: 10 };
 
-export function PaletteView({entries,cafes,weights,replaceRestaurantWeights,cafeWeights,updateCafeW,resetCafeWeights,cafeTotalW,cafeWErr}) {
+export function PaletteView({
+  entries,
+  cafes,
+  weights,
+  replaceRestaurantWeights,
+  cafeWeights,
+  updateCafeW,
+  resetCafeWeights,
+  cafeTotalW,
+  cafeWErr,
+  questL,
+  toggleQ,
+  onOpenSuggest,
+}) {
   const {t,lang:lang_} = useLang();
   const [paletteTab,setPaletteTab] = useState("restaurants");
   const [editingW,setEditingW] = useState(false);
@@ -64,7 +78,6 @@ export function PaletteView({entries,cafes,weights,replaceRestaurantWeights,cafe
 
   const l0=pr0, l1=pr1, l2=pr2, l3=pr3;
 
-  const pillSt = (on) => ({padding:"6px 14px",borderRadius:20,border:"1.5px solid "+(on?"#F0997B":"rgba(255,255,255,0.1)"),background:on?"#3C1F13":"transparent",color:on?"#F0997B":"#888780",fontSize:12,fontWeight:on?500:400,cursor:"pointer"});
   const btnGhost = {fontSize:11,color:"#5B9BD5",background:"none",border:"1px solid rgba(91,155,213,0.45)",borderRadius:8,padding:"5px 12px",cursor:"pointer",fontWeight:500};
   /** Hide personality / breakdown / stats only when there are no entries or committed weights don’t sum to 100 — not while editing draft (so the page doesn’t “disappear”). */
   const showRestaurantBody = total>0&&weightsOk;
@@ -142,15 +155,36 @@ export function PaletteView({entries,cafes,weights,replaceRestaurantWeights,cafe
               </div>
             </div>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8}}>
-            {(()=>{
-              const noteTopRated="Irene's judgement may have been clouded by bias and how underwhelming her home food has been, so this is not actually objectively #1. But let her live. She misses home 🥹";
-              const noteRegions="Tap the Quests tab to explore by cuisine region!";
+          <div style={{ borderTop: "0.5px solid rgba(255,255,255,0.12)", margin: "20px 0 16px" }} />
+          <div style={{ ...S.lbl, marginBottom: 10 }}>{t.cuisineQuestsSection}</div>
+          <QuestsPaletteSection entries={entries} questL={questL} toggleQ={toggleQ} onOpenSuggest={onOpenSuggest} />
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 8 }}>
+            {(() => {
               const avgBiteMean = total ? meanRestaurantBiteOutOf10(entries, weights) : null;
               const avgBiteStr = avgBiteMean != null ? `${avgBiteMean.toFixed(2)}/10` : "—";
-              const statRows=[[t.topCuisine,(FLAGS[topC]||"")+" "+topC],[t.topRated,topB?topB.name:"—","topRated"],[t.avgBite,avgBiteStr,"avgBite"],[t.avgTaste,avgT+"/10"],[t.avgSpend,"$"+avgC+" / meal"],[t.regionsExplored,rCount+" / "+Object.keys(CUISINE_REGIONS).length,"regions"]];
-              return statRows.map(([label,val,key])=>(
-                <StatCard key={label} label={label} val={val} note={key==="topRated"?noteTopRated:key==="regions"?noteRegions:key==="avgBite"?t.avgBitePaletteNote:undefined}/>
+              const statRows = [
+                [t.topCuisine, (FLAGS[topC] || "") + " " + topC],
+                [t.topRated, topB ? topB.name : "—", "topRated"],
+                [t.avgBite, avgBiteStr, "avgBite"],
+                [t.avgTaste, avgT + "/10"],
+                [t.avgSpend, "$" + avgC + " / meal"],
+                [t.regionsExplored, rCount + " / " + Object.keys(CUISINE_REGIONS).length, "regions"],
+              ];
+              return statRows.map(([label, val, key]) => (
+                <StatCard
+                  key={label}
+                  label={label}
+                  val={val}
+                  note={
+                    key === "topRated"
+                      ? t.tasteTopNote
+                      : key === "regions"
+                        ? t.regionsNote
+                        : key === "avgBite"
+                          ? t.avgBitePaletteNote
+                          : undefined
+                  }
+                />
               ));
             })()}
           </div>

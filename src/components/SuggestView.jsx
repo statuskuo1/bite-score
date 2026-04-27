@@ -20,7 +20,7 @@ export function SuggestView({entries,weights,onBack}) {
 
   return (
     <div>
-      <button onClick={onBack} style={{fontSize:12,color:"#888780",background:"none",border:"none",cursor:"pointer",padding:0,marginBottom:20}}>{t.backToQuests}</button>
+      <button onClick={onBack} style={{fontSize:12,color:"#888780",background:"none",border:"none",cursor:"pointer",padding:0,marginBottom:20}}>{t.backToMyTaste}</button>
       <div style={{background:"#1E1E1C",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"1.5rem",textAlign:"center",marginBottom:16}}>
         <div style={{fontSize:24,marginBottom:8}}>✨</div>
         <div style={{fontSize:15,fontWeight:500,color:"#F1EFE8",marginBottom:6}}>{t.moodFor}</div>
