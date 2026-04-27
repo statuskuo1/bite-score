@@ -14,52 +14,56 @@ function mapAuthor(row) {
   };
 }
 
-/** Map joined restaurant_visits row → UI entry shape. */
+/** Flatten `restaurant_places` embed, then map to UI entry shape. */
 export function mapRestaurantVisitRow(row) {
-  const p = row.place || row.restaurant_places || {};
+  const { restaurant_places, ...rest } = row;
+  const rp = Array.isArray(restaurant_places) ? restaurant_places[0] : restaurant_places;
+  const flat = { ...rest, ...(rp || {}) };
   return {
-    id: row.id,
-    placeId: row.place_id,
-    name: p.name ?? "",
-    cuisine: p.cuisine ?? "",
-    cuisine2: p.cuisine2 ?? "",
-    isFusion: !!p.is_fusion,
-    city: p.city ?? "",
-    taste: +row.taste,
-    cost: +row.cost,
-    portions: +row.portions,
-    wait: +row.wait,
-    repeatability: +row.repeatability,
-    useR: row.use_r !== false,
-    notes: row.notes ?? "",
-    letter: (p.cuisine?.[0] || "").toUpperCase(),
-    ownerId: row.user_id ?? null,
-    visitedAt: row.visited_at ?? null,
+    id: flat.id,
+    placeId: flat.place_id,
+    name: flat.name ?? "",
+    cuisine: flat.cuisine ?? "",
+    cuisine2: flat.cuisine2 ?? "",
+    isFusion: !!flat.is_fusion,
+    city: flat.city ?? "",
+    taste: +flat.taste,
+    cost: +flat.cost,
+    portions: +flat.portions,
+    wait: +flat.wait,
+    repeatability: +flat.repeatability,
+    useR: flat.use_r !== false,
+    notes: flat.notes ?? "",
+    letter: (flat.cuisine?.[0] || "").toUpperCase(),
+    ownerId: flat.user_id ?? null,
+    visitedAt: flat.visited_at ?? null,
     ...mapAuthor(row),
   };
 }
 
-/** Map joined cafe_visits row → UI entry shape. */
+/** Flatten `cafe_places` embed, then map to UI entry shape. */
 export function mapCafeVisitRow(row) {
-  const p = row.place || row.cafe_places || {};
+  const { cafe_places, ...rest } = row;
+  const cp = Array.isArray(cafe_places) ? cafe_places[0] : cafe_places;
+  const flat = { ...rest, ...(cp || {}) };
   return {
-    id: row.id,
-    placeId: row.place_id,
-    name: p.name ?? "",
-    city: p.city ?? "",
-    category: row.category || "Coffee",
-    order: row.order_item || "",
-    taste: +row.taste,
-    cost: +row.cost,
-    portions: +row.portions,
-    wait: +(row.wait || 0),
-    beanRegion: row.bean_region || "",
-    milkLevel: row.milk_level || "",
-    repeatability: +row.repeatability,
-    useR: row.use_r !== false,
-    notes: row.notes ?? "",
-    ownerId: row.user_id ?? null,
-    visitedAt: row.visited_at ?? null,
+    id: flat.id,
+    placeId: flat.place_id,
+    name: flat.name ?? "",
+    city: flat.city ?? "",
+    category: flat.category || "Coffee",
+    order: flat.order_item || "",
+    taste: +flat.taste,
+    cost: +flat.cost,
+    portions: +flat.portions,
+    wait: +(flat.wait || 0),
+    beanRegion: flat.bean_region || "",
+    milkLevel: flat.milk_level || "",
+    repeatability: +flat.repeatability,
+    useR: flat.use_r !== false,
+    notes: flat.notes ?? "",
+    ownerId: flat.user_id ?? null,
+    visitedAt: flat.visited_at ?? null,
     ...mapAuthor(row),
   };
 }
@@ -80,131 +84,174 @@ async function attachAuthorProfiles(client, rows) {
   }));
 }
 
-/** PostgREST select shape for inserts/updates that return a full row to the client. */
-export const RESTAURANT_VISIT_SELECT = `*, place:restaurant_places (*), author:profiles!restaurant_visits_user_id_fkey (${PROFILE_FIELDS})`;
-export const CAFE_VISIT_SELECT = `*, place:cafe_places (*), author:profiles!cafe_visits_user_id_fkey (${PROFILE_FIELDS})`;
+/** Prefer JWT `sub` over any React-cached id so `.eq('user_id', …)` matches DB rows (`profiles.id` / old `auth.users`). */
+async function resolveCanonicalUserId(client, fallbackUserId) {
+  const { data: authData, error } = await client.auth.getUser();
+  if (error) {
+    console.warn("[BITE] auth.getUser:", error.message);
+  }
+  const canonicalUserId = authData?.user?.id ?? fallbackUserId ?? null;
+  if (
+    canonicalUserId &&
+    fallbackUserId &&
+    authData?.user?.id &&
+    authData.user.id !== fallbackUserId
+  ) {
+    console.warn("[BITE] Using JWT user id for visit fetch (caller id differed)", {
+      callerId: fallbackUserId,
+      jwtSub: authData.user.id,
+    });
+  }
+  return {
+    canonicalUserId,
+    email: authData?.user?.email ?? null,
+  };
+}
 
-const REST_EMBED = RESTAURANT_VISIT_SELECT;
-const CAFE_EMBED = CAFE_VISIT_SELECT;
+/**
+ * PostgREST embedded resource (not raw SQL). Parent rows are `restaurant_visits` / `cafe_visits`;
+ * always order by **`visited_at`** on those tables — they have no `created_at`.
+ */
+export const RESTAURANT_VISIT_SELECT =
+  "*, restaurant_places(name, cuisine, cuisine2, is_fusion, city)";
+
+export const CAFE_VISIT_SELECT = "*, cafe_places(name, city)";
+
+/** FK embed may be an object or a single-element array depending on PostgREST. */
+export function normalizeRestaurantVisitEmbed(row) {
+  const rp = row.restaurant_places;
+  const placeObj = Array.isArray(rp) ? rp[0] : rp;
+  return { ...row, place: placeObj ?? {}, restaurant_places: placeObj };
+}
+
+export function normalizeCafeVisitEmbed(row) {
+  const cp = row.cafe_places;
+  const placeObj = Array.isArray(cp) ? cp[0] : cp;
+  return { ...row, place: placeObj ?? {}, cafe_places: placeObj };
+}
 
 /** Load visits with place + author; never throws — logs and returns []. */
 export async function fetchRestaurantVisitsJoined(client, userId) {
-  const joined = await client
-    .from("restaurant_visits")
-    .select(REST_EMBED)
-    .eq("user_id", userId)
-    .order("visited_at", { ascending: true });
-  if (!joined.error && joined.data) {
-    return joined.data.map(mapRestaurantVisitRow);
-  }
-  if (joined.error) {
-    console.warn("[BITE] restaurant_visits joined select:", joined.error.message);
+  if (userId == null || userId === "") {
+    console.warn("[BITE] fetchRestaurantVisitsJoined: userId argument is null or empty");
   }
 
-  const { data: visits, error: vErr } = await client
-    .from("restaurant_visits")
-    .select("*")
-    .eq("user_id", userId)
-    .order("visited_at", { ascending: true });
-  if (vErr) {
-    console.error("[BITE] restaurant_visits:", vErr.message);
+  const { canonicalUserId, email } = await resolveCanonicalUserId(client, userId);
+  if (!canonicalUserId) {
+    console.warn("[BITE] fetchRestaurantVisitsJoined: missing user id after auth.getUser()");
     return [];
   }
-  if (!visits?.length) return [];
 
-  const ids = [...new Set(visits.map((v) => v.place_id).filter(Boolean))];
-  const { data: places, error: pErr } = await client.from("restaurant_places").select("*").in("id", ids);
-  if (pErr) console.error("[BITE] restaurant_places:", pErr.message);
-  const pmap = Object.fromEntries((places || []).map((p) => [p.id, p]));
-  const withPlaces = visits.map((row) => ({ ...row, place: pmap[row.place_id] || {} }));
-  const withAuthors = await attachAuthorProfiles(client, withPlaces);
-  return withAuthors.map(mapRestaurantVisitRow);
+  if (import.meta.env.DEV) {
+    console.log("[BITE] My Log auth context", {
+      authUserId: canonicalUserId,
+      email,
+      callerUserId: userId,
+      idsMatch: userId === canonicalUserId,
+    });
+  }
+
+  if (import.meta.env.DEV) {
+    const host =
+      typeof import.meta.env.VITE_SUPABASE_URL === "string"
+        ? (() => {
+            try {
+              return new URL(import.meta.env.VITE_SUPABASE_URL).host;
+            } catch {
+              return "(invalid URL)";
+            }
+          })()
+        : "(unset)";
+    console.log("[BITE] My Log Supabase host (from .env)", host);
+  }
+
+  // Filter by JWT-resolved uuid (never null here); aligns with visit.user_id → profiles.id
+  const { data, error } = await client
+    .from("restaurant_visits")
+    .select(RESTAURANT_VISIT_SELECT)
+    .eq("user_id", canonicalUserId)
+    .order("visited_at", { ascending: false });
+
+  console.log("[BITE] restaurant_visits { data, error }", { data, error });
+  if (error) {
+    console.error("[BITE] restaurant_visits query error:", error.message, error.details ?? "");
+    return [];
+  }
+  if (!data?.length) return [];
+
+  const withAuthors = await attachAuthorProfiles(client, data);
+  const entries = withAuthors.map(mapRestaurantVisitRow);
+
+  if (import.meta.env.DEV) {
+    console.log("[BITE] My Log mapped entries", { count: entries.length, first: entries[0] });
+  }
+
+  return entries;
 }
 
 export async function fetchCafeVisitsJoined(client, userId) {
-  const joined = await client
-    .from("cafe_visits")
-    .select(CAFE_EMBED)
-    .eq("user_id", userId)
-    .order("visited_at", { ascending: true });
-  if (!joined.error && joined.data) {
-    return joined.data.map(mapCafeVisitRow);
-  }
-  if (joined.error) {
-    console.warn("[BITE] cafe_visits joined select:", joined.error.message);
+  if (userId == null || userId === "") {
+    console.warn("[BITE] fetchCafeVisitsJoined: userId argument is null or empty");
   }
 
-  const { data: visits, error: vErr } = await client
-    .from("cafe_visits")
-    .select("*")
-    .eq("user_id", userId)
-    .order("visited_at", { ascending: true });
-  if (vErr) {
-    console.error("[BITE] cafe_visits:", vErr.message);
+  const { canonicalUserId } = await resolveCanonicalUserId(client, userId);
+  if (!canonicalUserId) {
+    console.warn("[BITE] fetchCafeVisitsJoined: missing user id after auth.getUser()");
     return [];
   }
-  if (!visits?.length) return [];
 
-  const ids = [...new Set(visits.map((v) => v.place_id).filter(Boolean))];
-  const { data: places, error: pErr } = await client.from("cafe_places").select("*").in("id", ids);
-  if (pErr) console.error("[BITE] cafe_places:", pErr.message);
-  const pmap = Object.fromEntries((places || []).map((p) => [p.id, p]));
-  const withPlaces = visits.map((row) => ({ ...row, place: pmap[row.place_id] || {} }));
-  const withAuthors = await attachAuthorProfiles(client, withPlaces);
+  const { data, error } = await client
+    .from("cafe_visits")
+    .select(CAFE_VISIT_SELECT)
+    .eq("user_id", canonicalUserId)
+    .order("visited_at", { ascending: false });
+
+  console.log("[BITE] cafe_visits { data, error }", { data, error });
+  if (error) {
+    console.error("[BITE] cafe_visits query error:", error.message, error.details ?? "");
+    return [];
+  }
+  if (!data?.length) return [];
+
+  const withAuthors = await attachAuthorProfiles(client, data);
   return withAuthors.map(mapCafeVisitRow);
 }
 
 /** Community leaderboard: all restaurant visits (authenticated), newest first. */
 export async function fetchCommunityRestaurantVisits(client, limit = 120) {
-  const joined = await client
+  const { data, error } = await client
     .from("restaurant_visits")
-    .select(REST_EMBED)
+    .select(RESTAURANT_VISIT_SELECT)
     .order("visited_at", { ascending: false })
     .limit(limit);
-  if (!joined.error && joined.data) {
-    return joined.data.map(mapRestaurantVisitRow);
+
+  console.log("[BITE] community restaurant_visits { data, error }", { data, error });
+  if (error) {
+    console.error("[BITE] community restaurant_visits:", error.message, error.details ?? "");
+    return [];
   }
-  if (joined.error) console.warn("[BITE] community restaurant_visits:", joined.error.message);
+  if (!data?.length) return [];
 
-  const { data: visits, error: vErr } = await client
-    .from("restaurant_visits")
-    .select("*")
-    .order("visited_at", { ascending: false })
-    .limit(limit);
-  if (vErr || !visits?.length) return [];
-
-  const pids = [...new Set(visits.map((v) => v.place_id).filter(Boolean))];
-  const { data: places } = await client.from("restaurant_places").select("*").in("id", pids);
-  const plmap = Object.fromEntries((places || []).map((p) => [p.id, p]));
-  const withPlaces = visits.map((row) => ({ ...row, place: plmap[row.place_id] || {} }));
-  const withAuthors = await attachAuthorProfiles(client, withPlaces);
+  const withAuthors = await attachAuthorProfiles(client, data);
   return withAuthors.map(mapRestaurantVisitRow);
 }
 
 /** Community leaderboard: all café visits (authenticated), newest first. */
 export async function fetchCommunityCafeVisits(client, limit = 120) {
-  const joined = await client
+  const { data, error } = await client
     .from("cafe_visits")
-    .select(CAFE_EMBED)
+    .select(CAFE_VISIT_SELECT)
     .order("visited_at", { ascending: false })
     .limit(limit);
-  if (!joined.error && joined.data) {
-    return joined.data.map(mapCafeVisitRow);
+
+  console.log("[BITE] community cafe_visits { data, error }", { data, error });
+  if (error) {
+    console.error("[BITE] community cafe_visits:", error.message, error.details ?? "");
+    return [];
   }
-  if (joined.error) console.warn("[BITE] community cafe_visits:", joined.error.message);
+  if (!data?.length) return [];
 
-  const { data: visits, error: vErr } = await client
-    .from("cafe_visits")
-    .select("*")
-    .order("visited_at", { ascending: false })
-    .limit(limit);
-  if (vErr || !visits?.length) return [];
-
-  const pids = [...new Set(visits.map((v) => v.place_id).filter(Boolean))];
-  const { data: places } = await client.from("cafe_places").select("*").in("id", pids);
-  const plmap = Object.fromEntries((places || []).map((p) => [p.id, p]));
-  const withPlaces = visits.map((row) => ({ ...row, place: plmap[row.place_id] || {} }));
-  const withAuthors = await attachAuthorProfiles(client, withPlaces);
+  const withAuthors = await attachAuthorProfiles(client, data);
   return withAuthors.map(mapCafeVisitRow);
 }
 

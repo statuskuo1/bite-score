@@ -3,6 +3,7 @@ import { LangContext } from "./contexts/LangContext.jsx";
 import { useAuth } from "./contexts/AuthContext.jsx";
 import { T } from "./translations.js";
 import { supabase } from "./config/supabaseClient.js";
+import { ensureProfile } from "./utils/profileApi.js";
 import { canMutateVisit } from "./utils/rowAccess.js";
 import {
   fetchRestaurantVisitsJoined,
@@ -147,15 +148,32 @@ export default function App() {
           dispatch({ type: "LOAD", entries: [] });
           setCafes([]);
         } else {
+          if (import.meta.env.DEV) {
+            console.log("[BITE] AuthContext user at load()", {
+              id: user.id,
+              email: user.email,
+            });
+          }
           dispatch({ type: "LOAD", entries: [] });
           setCafes([]);
+          await ensureProfile(supabase, user);
           const [entries, cafeRows] = await Promise.all([
             fetchRestaurantVisitsJoined(supabase, user.id),
             fetchCafeVisitsJoined(supabase, user.id),
           ]);
+          if (import.meta.env.DEV) {
+            console.log("[BITE] load() fetched rows", {
+              restaurantEntryCount: entries.length,
+              cafeRowCount: cafeRows.length,
+              cancelled,
+            });
+          }
           if (cancelled) return;
           dispatch({ type: "LOAD", entries });
           setCafes(cafeRows);
+          if (import.meta.env.DEV) {
+            console.log("[BITE] reducer LOAD applied", { entriesLength: entries.length });
+          }
         }
 
         const { data: sData, error: settingsErr } = await supabase.from("settings").select("*");
@@ -193,7 +211,8 @@ export default function App() {
       } catch (err) {
         console.error("Supabase load error:", err);
       } finally {
-        if (!cancelled) setDbLoaded(true);
+        // Always clear loading shell (React StrictMode can cancel an in-flight load; the next run completes).
+        setDbLoaded(true);
       }
     }
     load();
@@ -835,7 +854,11 @@ export default function App() {
                       .select(RESTAURANT_VISIT_SELECT)
                       .single();
                     if (error) console.error("restaurant insert error:", error);
-                    if (data) dispatch({ type: "ADD", e: mapRestaurantVisitRow(data) });
+                    if (data)
+                      dispatch({
+                        type: "ADD",
+                        e: mapRestaurantVisitRow(data),
+                      });
                   } catch (err) {
                     console.error("restaurant insert threw:", err);
                   }
@@ -864,7 +887,9 @@ export default function App() {
                       .insert(rows)
                       .select(CAFE_VISIT_SELECT);
                     if (error) console.error("cafe insert error:", error);
-                    const mapped = (data || []).map(mapCafeVisitRow);
+                    const mapped = (data || []).map((row) =>
+                      mapCafeVisitRow(row)
+                    );
                     setCafes((p) => [...p, ...mapped]);
                   } catch (err) {
                     console.error("cafe insert threw:", err);
