@@ -43,7 +43,7 @@ const RANGE_STYLE = `
 }
 `;
 
-export function WeightSliders({weights, labels, onUpdate, onReset, defaults, manualKeys}) {
+export function WeightSliders({weights, labels, onUpdate, onReset, defaults, manualKeys, careHeadingPx}) {
   const {t} = useLang();
   const COLORS = {"taste":"#F0997B","bpb":"#5B9BD5","wait":"#97C459"};
   const keys = labels.map(([,k])=>k);
@@ -69,7 +69,7 @@ export function WeightSliders({weights, labels, onUpdate, onReset, defaults, man
     <div>
       <style>{RANGE_STYLE}</style>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-        <span style={{fontSize:11,color:"#888780",fontStyle:"italic"}}>{t.howMuchCare}</span>
+        <span style={{fontSize:careHeadingPx||11,color:"#F1EFE8",fontStyle:"italic",fontWeight:500}}>{t.howMuchCare}</span>
         {defaults&&<button type="button" onClick={reset} style={{fontSize:10,color:"#888780",background:"none",border:"none",cursor:"pointer",padding:0,textDecoration:"underline",flexShrink:0}}>Reset</button>}
       </div>
       <div style={gridStyle}>
@@ -80,7 +80,7 @@ export function WeightSliders({weights, labels, onUpdate, onReset, defaults, man
           return (
             <div key={key} style={stack?{width:"100%"}:undefined}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                <span style={{fontSize:11,color:"#888780"}}>{label}</span>
+                <span style={{fontSize:11,color:"#F1EFE8"}}>{label}</span>
                 <span style={{fontSize:11,fontWeight:500,color:color}}>{pct}%</span>
               </div>
               <div style={{minHeight:44,display:"flex",alignItems:"center",padding:"2px 0"}}>
