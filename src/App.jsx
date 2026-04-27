@@ -27,6 +27,7 @@ import { SuggestView } from "./components/SuggestView.jsx";
 import { PaletteView } from "./components/PaletteView.jsx";
 import { FaqView } from "./components/FaqView.jsx";
 import { AuthModal } from "./components/AuthModal.jsx";
+import { WeightSliders } from "./components/WeightSliders.jsx";
 
 export default function App() {
   const { user, isAdmin } = useAuth();
@@ -137,6 +138,7 @@ export default function App() {
     return()=>{document.removeEventListener("mousedown",h);document.removeEventListener("touchstart",h);};
   },[]);
 
+  /** Café weights (2 sliders): redistribute the other key to keep sum 100. */
   function rebalance(current, changedKey, newVal) {
     const nv = Math.min(100, Math.max(0, Math.round(newVal)));
     const others = Object.keys(current).filter(k=>k!==changedKey);
@@ -148,16 +150,31 @@ export default function App() {
       others.forEach((k,i)=>newW[k]=i===others.length-1?remaining-each*(others.length-1):each);
     } else {
       others.forEach(k=>newW[k]=Math.max(0,Math.round(current[k]/otherSum*remaining)));
-      // fix rounding to ensure exact 100
       const diff=100-Object.values(newW).reduce((a,x)=>a+x,0);
       if(diff!==0) newW[others[0]]+=diff;
     }
     return newW;
   }
 
+  /** Restaurant weights: taste and bpb independent (capped); wait = remainder to 100. */
+  function adjustRestaurantWeights(current, changedKey, rawVal) {
+    const r = (x)=>Math.min(100,Math.max(0,Math.round(x)));
+    const {taste,bpb}=current;
+    if(changedKey==="taste"){
+      const capped=Math.min(r(rawVal),100-bpb);
+      return{taste:capped,bpb,wait:100-capped-bpb};
+    }
+    if(changedKey==="bpb"){
+      const capped=Math.min(r(rawVal),100-taste);
+      return{taste,bpb:capped,wait:100-taste-capped};
+    }
+    return current;
+  }
+
   function updW(k,v){
-    const newW=rebalance(weights,k,+v);
-    setWeights(newW);setWErr("");
+    if(k==="wait")return;
+    setWeights(w=>adjustRestaurantWeights(w,k,+v));
+    setWErr("");
   }
 
   function resetWeights(defaults){ setWeights({...defaults});setWErr(""); }
@@ -327,21 +344,7 @@ export default function App() {
                 ):(
                   <div>
                     <div style={{borderTop:"0.5px solid rgba(255,255,255,0.08)",paddingTop:14,marginBottom:14}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                        <span style={{fontSize:11,color:"#888780",fontStyle:"italic"}}>{t.howMuchCare}</span>
-                        <button onClick={()=>resetWeights({taste:50,bpb:40,wait:10})} style={{fontSize:10,color:"#888780",background:"none",border:"none",cursor:"pointer",padding:0,textDecoration:"underline"}}>Reset</button>
-                      </div>
-                      {[[t.taste,"taste","#F0997B"],[t.bangBuck,"bpb","#5B9BD5"],[t.wait,"wait","#97C459"]].map(([label,key,color])=>(
-                        <div key={key} style={{marginBottom:10}}>
-                          <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                            <span style={{fontSize:11,color:"#888780"}}>{label}</span>
-                            <span style={{fontSize:11,fontWeight:500,color:color}}>{weights[key]}%</span>
-                          </div>
-                          <input type="range" min="0" max="100" step="1" value={weights[key]}
-                            onChange={e=>updW(key,+e.target.value)}
-                            style={{width:"100%",accentColor:color}}/>
-                        </div>
-                      ))}
+                      <WeightSliders weights={weights} labels={[[t.taste,"taste"],[t.bangBuck,"bpb"],[t.wait,"wait"]]} onUpdate={updW} onReset={resetWeights} defaults={{taste:50,bpb:40,wait:10}} derivedKeys={["wait"]}/>
                     </div>
                     {(welcomeOverride[lang+"_body"]||t.welcome2).split("\n\n").slice(1).map((para,i)=>(
                       <p key={i} style={{fontSize:13,color:"#888780",margin:"0 0 12px",lineHeight:1.7,textAlign:"center",whiteSpace:"pre-line"}}>{para}</p>

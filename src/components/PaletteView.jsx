@@ -58,7 +58,7 @@ export function PaletteView({entries,cafes,weights,updateWeight,resetWeights,tot
           {!total?<p style={{color:"#888780",fontSize:14}}>{t.noEntriesYet}</p>:<>
           <div style={{...S.card}}>
             <div style={{...S.lbl,marginBottom:10}}>Weights</div>
-            <WeightSliders weights={weights} labels={[[t.taste,"taste"],[t.bangBuck,"bpb"],[t.wait,"wait"]]} onUpdate={updateWeight} onReset={resetWeights} defaults={{taste:50,bpb:40,wait:10}}/>
+            <WeightSliders weights={weights} labels={[[t.taste,"taste"],[t.bangBuck,"bpb"],[t.wait,"wait"]]} onUpdate={updateWeight} onReset={resetWeights} defaults={{taste:50,bpb:40,wait:10}} derivedKeys={["wait"]}/>
             <div style={{fontSize:10,color:"#888780",marginTop:8,textAlign:"right"}}>Max score at these weights: <span style={{color:"#F0997B",fontWeight:500}}>{calcMaxBite(weights).toFixed(1)}</span></div>
           </div>
           <div style={{...S.card}}>
