@@ -51,8 +51,10 @@ export default function App() {
   const [welcomeOverride, setWelcomeOverride] = useState({});
   const [lang, setLang] = useState(()=>localStorage.getItem("bite_lang")||"en");
   const t = T[lang]||T.en;
-  /** In dev, ignore Supabase `welcome_*` so localhost reflects `translations.js`; production still uses DB copy. */
-  const welcomeUseDbCopy = import.meta.env.PROD;
+  /** Dev: bundled copy only. Prod: Supabase `welcome_*` unless `VITE_WELCOME_USE_SUPABASE=false` (use on PR preview when DB copy lags `translations.js`). */
+  const welcomeUseDbCopy =
+    import.meta.env.PROD &&
+    import.meta.env.VITE_WELCOME_USE_SUPABASE !== 'false';
   const welcomeTitleDisplay = (welcomeUseDbCopy && welcomeOverride[lang+"_title"]) || t.welcome1;
   const welcomeBodyDisplay = omitPlayWelcomeAside((welcomeUseDbCopy && welcomeOverride[lang+"_body"]) || t.welcome2);
   function toggleLang(){const nl=lang==="en"?"zh":"en";setLang(nl);localStorage.setItem("bite_lang",nl);}

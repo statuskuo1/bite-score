@@ -19,4 +19,13 @@ Welcome `welcome2` had grown into a long normalization explainer; the modal alre
 
 ## Follow-up
 
-- **`src/App.jsx`:** `welcomeTitleDisplay` / `welcomeBodyDisplay` take `welcome_*` from Supabase only when `import.meta.env.PROD` is true.
+- **`src/App.jsx`:** `welcomeTitleDisplay` / `welcomeBodyDisplay` use Supabase `welcome_*` when **production build** (`import.meta.env.PROD`) **and** `VITE_WELCOME_USE_SUPABASE !== 'false'`. **`npm run dev`** always uses bundled strings.
+
+### PR preview vs localhost
+
+GitHub has the same committed files as local; **deploy previews** still run `vite build` (`PROD`), so they load Supabase overrides like production unless you either:
+
+1. Set **`VITE_WELCOME_USE_SUPABASE=false`** on the preview environment (Netlify/Vercel “Preview” env vars), **or**
+2. Update/delete **`welcome_en_body` / `welcome_zh_body`** in Supabase `settings` so they match `translations.js`.
+
+Localhost stayed “correct” because dev mode never applied DB welcome copy.
