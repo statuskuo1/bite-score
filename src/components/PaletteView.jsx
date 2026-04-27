@@ -8,7 +8,8 @@ import { DrinksPalette } from "./DrinksPalette.jsx";
 import { SweetsPalette } from "./SweetsPalette.jsx";
 import { WeightSliders } from "./WeightSliders.jsx";
 import { StatCard } from "./StatCard.jsx";
-import { QuestsPaletteSection } from "./QuestsPaletteSection.jsx";
+import { CuisineQuestModal } from "./CuisineQuestModal.jsx";
+import { getQuestMetrics } from "../utils/questMetrics.js";
 
 const WEIGHT_DEFAULTS = { taste: 50, bpb: 40, wait: 10 };
 
@@ -31,6 +32,7 @@ export function PaletteView({
   const [editingW,setEditingW] = useState(false);
   const [draftW,setDraftW] = useState(()=>({...weights}));
   const [roastMode,setRoastMode] = useState(false);
+  const [questSheetOpen,setQuestSheetOpen] = useState(false);
 
   useEffect(()=>{
     if(!editingW)setDraftW({...weights});
@@ -81,6 +83,12 @@ export function PaletteView({
   const btnGhost = {fontSize:11,color:"#5B9BD5",background:"none",border:"1px solid rgba(91,155,213,0.45)",borderRadius:8,padding:"5px 12px",cursor:"pointer",fontWeight:500};
   /** Hide personality / breakdown / stats only when there are no entries or committed weights don’t sum to 100 — not while editing draft (so the page doesn’t “disappear”). */
   const showRestaurantBody = total>0&&weightsOk;
+  const questMetrics = getQuestMetrics(entries, questL);
+  const summaryRight = t.questSummaryRight
+    .replace("{done}", String(questMetrics.doneCount))
+    .replace("{total}", String(questMetrics.totalCuisines))
+    .replace("{letters}", String(questMetrics.letterQuestSize));
+  const summaryBarPct = Math.min(100, Math.round(questMetrics.combinedProgress * 100));
 
   return (
     <div>
@@ -154,10 +162,40 @@ export function PaletteView({
                 );})}
               </div>
             </div>
+            <button
+              type="button"
+              onClick={()=>setQuestSheetOpen(true)}
+              style={{
+                width:"100%",
+                marginTop:14,
+                padding:"12px 0 0",
+                border:"none",
+                borderTop:"0.5px solid rgba(255,255,255,0.1)",
+                background:"transparent",
+                cursor:"pointer",
+                textAlign:"left",
+              }}
+            >
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+                <span style={{fontSize:13,color:"#F1EFE8",fontWeight:500,flexShrink:0}}>{t.cuisineQuestsSection}</span>
+                <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0,flex:1,justifyContent:"flex-end"}}>
+                  <span style={{fontSize:12,color:"#97C459",fontWeight:500,textAlign:"right",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{summaryRight}</span>
+                  <span style={{fontSize:15,color:"#97C459",lineHeight:1,flexShrink:0}} aria-hidden>›</span>
+                </div>
+              </div>
+              <div style={{height:3,background:"#252523",borderRadius:2,marginTop:10,overflow:"hidden"}}>
+                <div style={{height:"100%",width:summaryBarPct+"%",background:"#97C459",borderRadius:2,transition:"width 0.35s ease"}}/>
+              </div>
+            </button>
           </div>
-          <div style={{ borderTop: "0.5px solid rgba(255,255,255,0.12)", margin: "20px 0 16px" }} />
-          <div style={{ ...S.lbl, marginBottom: 10 }}>{t.cuisineQuestsSection}</div>
-          <QuestsPaletteSection entries={entries} questL={questL} toggleQ={toggleQ} onOpenSuggest={onOpenSuggest} />
+          <CuisineQuestModal
+            open={questSheetOpen}
+            onClose={()=>setQuestSheetOpen(false)}
+            entries={entries}
+            questL={questL}
+            toggleQ={toggleQ}
+            onOpenSuggest={onOpenSuggest}
+          />
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 8 }}>
             {(() => {
               const avgBiteMean = total ? meanRestaurantBiteOutOf10(entries, weights) : null;
