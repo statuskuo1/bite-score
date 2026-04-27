@@ -6,8 +6,10 @@ export function reducer(s, a) {
       return { ...s, entries: s.entries.filter((e) => e.id !== a.id) };
     case "UPD":
       return { ...s, entries: s.entries.map((e) => (e.id === a.e.id ? a.e : e)), view: "log" };
-    case "VIEW":
-      return { ...s, view: a.view };
+    case "VIEW": {
+      const v = a.view === "quests" ? "palette" : a.view;
+      return { ...s, view: v };
+    }
     case "LOAD":
       return { ...s, entries: a.entries };
     default:

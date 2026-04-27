@@ -456,7 +456,7 @@ export default function App() {
       {user && (
       <>
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:640,background:"#1A1A18",borderTop:"0.5px solid rgba(255,255,255,0.1)",display:"flex",justifyContent:"space-around",alignItems:"center",padding:"8px 0 max(8px,env(safe-area-inset-bottom))",zIndex:100}}>
-        {[["log","📋",t.myLog],["palette","😋",t.myTaste],["add","➕",t.add],["community","🌐",t.communityTab],["faq","❓",t.faq]].map(([v,icon,label])=>(
+        {[["log","📋",t.myLog],["palette","😋",t.myTaste],["community","🌐",t.communityTab],["add","➕",t.add],["faq","❓",t.faq]].map(([v,icon,label])=>(
           <button key={v} onClick={()=>{dispatch({type:"VIEW",view:v});setEditR(null);setEditC(null);window.scrollTo({top:0,behavior:"instant"});}} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",padding:"4px 8px",minWidth:56}}>
             {v==="add"?(
               <div style={{width:44,height:44,borderRadius:"50%",background:"#F0997B",border:"2px solid #F0997B",display:"flex",alignItems:"center",justifyContent:"center",marginTop:-8,marginBottom:2}}>
