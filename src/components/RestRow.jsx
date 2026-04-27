@@ -4,13 +4,15 @@ import { FLAGS } from "../constants/cuisineConstants.js";
 import { calcBite, scoreColor, scoreLabel, tasteLabel } from "../utils/scoring.js";
 import { S } from "../styles/sharedStyles.js";
 import { SwipeRow } from "./SwipeRow.jsx";
+import { canMutateVisit, canSwipeGroup } from "../utils/rowAccess.js";
 
-export function RestRow({e,i,display,onEdit,onDelete,isAdmin,visits=1,group,weights}) {
+export function RestRow({e,i,display,onEdit,onDelete,isAdmin,user,visits=1,group,weights}) {
   const {t} = useLang();
   const [exp,setExp] = useState(false);
   const [showVisits,setShowVisits] = useState(false);
   const flag = FLAGS[e.cuisine]||(e.letter||e.cuisine?.[0])?.toUpperCase()||"?";
   const grp = group||[e];
+  const swipeOk = canSwipeGroup(grp, user, isAdmin);
   return (
     <div>
       {showVisits&&(
@@ -32,8 +34,8 @@ export function RestRow({e,i,display,onEdit,onDelete,isAdmin,visits=1,group,weig
                       <div style={{fontSize:13,fontWeight:500,color:"#F1EFE8"}}>Visit {grp.length-idx}</div>
                       <div style={{display:"flex",alignItems:"center",gap:8}}>
                         <div style={{fontSize:16,fontWeight:500,color:scoreColor(sc)}}>{sc!=null?sc.toFixed(2):"—"}</div>
-                        <button onClick={()=>{setShowVisits(false);onEdit(v);window.scrollTo({top:0,behavior:"smooth"});}} style={{fontSize:11,color:"#5B9BD5",background:"none",border:"0.5px solid #5B9BD5",borderRadius:4,padding:"3px 10px",cursor:"pointer"}}>Edit</button>
-                        {isAdmin&&<button onClick={()=>{onDelete(v.id);}} style={{fontSize:11,color:"#A32D2D",background:"none",border:"0.5px solid #A32D2D",borderRadius:4,padding:"3px 10px",cursor:"pointer"}}>Delete</button>}
+                        {canMutateVisit(v,user,isAdmin)&&<button onClick={()=>{setShowVisits(false);onEdit(v);window.scrollTo({top:0,behavior:"smooth"});}} style={{fontSize:11,color:"#5B9BD5",background:"none",border:"0.5px solid #5B9BD5",borderRadius:4,padding:"3px 10px",cursor:"pointer"}}>Edit</button>}
+                        {canMutateVisit(v,user,isAdmin)&&<button onClick={()=>{onDelete(v.id);}} style={{fontSize:11,color:"#A32D2D",background:"none",border:"0.5px solid #A32D2D",borderRadius:4,padding:"3px 10px",cursor:"pointer"}}>Delete</button>}
                       </div>
                     </div>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
@@ -49,7 +51,7 @@ export function RestRow({e,i,display,onEdit,onDelete,isAdmin,visits=1,group,weig
           </div>
         </div>
       )}
-      <SwipeRow onEdit={()=>{ if(visits>1){setShowVisits(true);}else{onEdit(e);window.scrollTo({top:0,behavior:"smooth"});}}} onDelete={()=>onDelete(e.id)} isAdmin={isAdmin}>
+      <SwipeRow mutable={swipeOk} onEdit={()=>{ if(visits>1){setShowVisits(true);}else{onEdit(e);window.scrollTo({top:0,behavior:"smooth"});}}} onDelete={()=>onDelete(e.id)}>
         <div style={{background:"#1E1E1C",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:10}}>
           <div onClick={()=>setExp(x=>!x)} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",cursor:"pointer"}}>
             <span style={{fontSize:12,color:"#888780",minWidth:18,textAlign:"right"}}>{"#"+(i+1)}</span>

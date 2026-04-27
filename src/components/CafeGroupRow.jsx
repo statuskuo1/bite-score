@@ -4,8 +4,9 @@ import { getCafeIcon } from "../constants/cafeCatalog.js";
 import { calcCafe, scoreColor, tasteLabel, cafeScoreColor, cafeScoreLabel } from "../utils/scoring.js";
 import { S } from "../styles/sharedStyles.js";
 import { SwipeRow } from "./SwipeRow.jsx";
+import { canMutateVisit, canSwipeGroup } from "../utils/rowAccess.js";
 
-export function CafeGroupRow({group, cafeSortBy, onEdit, onDelete, isAdmin}) {
+export function CafeGroupRow({group, cafeSortBy, onEdit, onDelete, isAdmin, user}) {
   const {t,lang} = useLang();
   const [exp, setExp] = useState(false);
   const [showVisits, setShowVisits] = useState(false);
@@ -28,6 +29,7 @@ export function CafeGroupRow({group, cafeSortBy, onEdit, onDelete, isAdmin}) {
   }
   const display = getDisplay();
   const orders = [...new Set(group.map(e=>e.order).filter(Boolean))].join(", ");
+  const swipeOk = canSwipeGroup(group, user, isAdmin);
 
   return (
     <>
@@ -51,8 +53,8 @@ export function CafeGroupRow({group, cafeSortBy, onEdit, onDelete, isAdmin}) {
                       <div style={{fontSize:13,fontWeight:500,color:"#F1EFE8"}}>{lang==="zh"?t.visitLabel+(visits-i)+t.visitsLabel:"Visit "+(visits-i)}{e.order?" · "+e.order:""}</div>
                       <div style={{display:"flex",alignItems:"center",gap:8}}>
                         <div style={{fontSize:16,fontWeight:500,color:scoreColor(sc)}}>{sc!=null?sc.toFixed(2):"—"}</div>
-                        <button onClick={()=>{setShowVisits(false);onEdit(e);}} style={{fontSize:11,color:"#5B9BD5",background:"none",border:"0.5px solid #5B9BD5",borderRadius:4,padding:"3px 10px",cursor:"pointer"}}>{t.editWeights}</button>
-                        <button onClick={()=>onDelete(e.id)} style={{fontSize:11,color:"#A32D2D",background:"none",border:"0.5px solid #A32D2D",borderRadius:4,padding:"3px 10px",cursor:"pointer"}}>{t.deleteLabel}</button>
+                        {canMutateVisit(e,user,isAdmin)&&<button onClick={()=>{setShowVisits(false);onEdit(e);}} style={{fontSize:11,color:"#5B9BD5",background:"none",border:"0.5px solid #5B9BD5",borderRadius:4,padding:"3px 10px",cursor:"pointer"}}>{t.editWeights}</button>}
+                        {canMutateVisit(e,user,isAdmin)&&<button onClick={()=>onDelete(e.id)} style={{fontSize:11,color:"#A32D2D",background:"none",border:"0.5px solid #A32D2D",borderRadius:4,padding:"3px 10px",cursor:"pointer"}}>{t.deleteLabel}</button>}
                       </div>
                     </div>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
@@ -69,7 +71,7 @@ export function CafeGroupRow({group, cafeSortBy, onEdit, onDelete, isAdmin}) {
         </div>
       )}
 
-      <SwipeRow onEdit={()=>onEdit(group[group.length-1])} onDelete={()=>onDelete(group[group.length-1].id)} isAdmin={isAdmin}>
+      <SwipeRow mutable={swipeOk} onEdit={()=>onEdit(group[group.length-1])} onDelete={()=>onDelete(group[group.length-1].id)}>
         <div style={{background:"#1E1E1C",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:10}}>
           <div onClick={()=>setExp(x=>!x)} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",cursor:"pointer"}}>
             <span style={{fontSize:12,color:"#888780",minWidth:18,textAlign:"right"}}></span>
