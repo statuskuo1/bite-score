@@ -42,7 +42,7 @@ function omitPlayWelcomeAside(body) {
 }
 
 export default function App() {
-  const { user, isAdmin, authReady } = useAuth();
+  const { user, authReady } = useAuth();
   const [st, dispatch] = useReducer(reducer, { entries: [], view: "log" });
   const [cafes, setCafes] = useState([]);
   const [dbLoaded, setDbLoaded] = useState(false);
@@ -164,8 +164,22 @@ export default function App() {
         const { data: sData } = await supabase.from("settings").select("*");
         if (cancelled) return;
         if (sData) {
-          const ql = sData.find((s) => s.key === "questLetters");
-          if (ql) setQuestL(new Set(JSON.parse(ql.value)));
+          let questHandled = false;
+          if (user) {
+            try {
+              const raw = localStorage.getItem(`bite_questLetters_${user.id}`);
+              if (raw) {
+                setQuestL(new Set(JSON.parse(raw)));
+                questHandled = true;
+              }
+            } catch (e) {
+              console.error("quest letters localStorage:", e);
+            }
+          }
+          if (!questHandled) {
+            const ql = sData.find((s) => s.key === "questLetters");
+            if (ql) setQuestL(new Set(JSON.parse(ql.value)));
+          }
           const faqOverrides = {};
           sData.filter((s) => s.key.startsWith("faq_override_")).forEach((s) => {
             const idx = parseInt(s.key.replace("faq_override_", ""), 10);
@@ -234,12 +248,16 @@ export default function App() {
   function resetCafeWeights(defaults){ setCafeWeights({...defaults});setCafeWErr(""); }
 
   const covered = new Set(st.entries.map(e=>(e.letter||e.cuisine?.[0])?.toUpperCase()));
-  async function toggleQ(l){
-    if(!covered.has(l)||!isAdmin)return;
-    const next=new Set(questL);
-    next.has(l)?next.delete(l):next.add(l);
+  function toggleQ(l) {
+    if (!covered.has(l) || !user) return;
+    const next = new Set(questL);
+    next.has(l) ? next.delete(l) : next.add(l);
     setQuestL(next);
-    try { await supabase.from("settings").upsert({key:"questLetters",value:JSON.stringify([...next])},{onConflict:"key"}); } catch(err){ console.error("quest save threw:",err); }
+    try {
+      localStorage.setItem(`bite_questLetters_${user.id}`, JSON.stringify([...next]));
+    } catch (err) {
+      console.error("quest letters save:", err);
+    }
   }
 
   const loggedC = new Set(st.entries.map(e=>e.cuisine&&e.cuisine.trim()));
@@ -321,9 +339,9 @@ export default function App() {
 
       <div style={{marginBottom:"1.5rem",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <LogoWithTripleTap onTripleTap={()=>setShowAuthModal(true)} isAdmin={isAdmin}/>
+          <LogoWithTripleTap onTripleTap={()=>setShowAuthModal(true)} />
           <div>
-            <h1 style={{fontSize:28,fontWeight:600,color:isAdmin?"#97C459":"#F0997B",margin:0,fontFamily:"'Fredoka',sans-serif",transition:"color 0.3s"}}>{lang==="zh"?"BITE Score 吃貨榜":"BITE Score"}</h1>
+            <h1 style={{fontSize:28,fontWeight:600,color:"#F0997B",margin:0,fontFamily:"'Fredoka',sans-serif"}}>{lang==="zh"?"BITE Score 吃貨榜":"BITE Score"}</h1>
           </div>
         </div>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
@@ -393,12 +411,12 @@ export default function App() {
       {st.view==="log"&&!editR&&!editC&&dbLoaded&&(
         <div>
           <div style={{marginBottom:12}}>
-            <div style={{display:"flex",background:"#252523",borderRadius:10,padding:3,gap:2,marginBottom:isAdmin?8:0}}>
+            <div style={{display:"flex",background:"#252523",borderRadius:10,padding:3,gap:2,marginBottom:8}}>
               {[["restaurants","🍽 "+t.restaurants],["drinks","☕ "+t.drinks],["sweets","🥐 "+t.sweets]].map(([v,l])=>(
                 <button key={v} onClick={()=>setLogTab(v)} style={{flex:1,padding:"6px 0",textAlign:"center",borderRadius:8,border:"none",background:logTab===v?"#3C1F13":"transparent",color:logTab===v?"#F0997B":"#888780",fontSize:11,fontWeight:logTab===v?700:500,cursor:"pointer",transition:"all 0.15s"}}>{l}</button>
               ))}
             </div>
-            {(isAdmin||user)&&<p style={{fontSize:12,color:"#888780",margin:0}}>{t.swipeHint}</p>}
+            {user&&<p style={{fontSize:12,color:"#888780",margin:0}}>{t.swipeHint}</p>}
           </div>
           <div style={{borderBottom:"0.5px solid rgba(255,255,255,0.08)",marginBottom:12}}/>
 
@@ -479,12 +497,12 @@ export default function App() {
                   const visits=grp.length;
                   const display=getDisplay(e);
                   return (
-                    <RestRow key={e.id} e={e} i={i} display={display} isAdmin={isAdmin} user={user} visits={visits} group={grp} weights={weights}
+                    <RestRow key={e.id} e={e} i={i} display={display} user={user} visits={visits} group={grp} weights={weights}
                       onEdit={v=>{setEditR(v||e);window.scrollTo({top:0,behavior:"smooth"});}}
                       onDelete={async id=>{
                         const did=id||e.id;
                         const row=st.entries.find(x=>x.id===did);
-                        if(!canMutateVisit(row,user,isAdmin))return;
+                        if(!canMutateVisit(row,user))return;
                         try{await supabase.from("restaurants").delete().eq("id",did);}catch(err){console.error("restaurant delete threw:",err);}
                         dispatch({type:"DEL",id:did});
                       }}/>
@@ -569,9 +587,9 @@ export default function App() {
                   return avg(e=>calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability)??0);
                 };
                 return Object.entries(groups).sort((a,b)=>cafeSortAsc?getSortVal(a[1])-getSortVal(b[1]):getSortVal(b[1])-getSortVal(a[1])).map(([name,grp])=>(
-                  <CafeGroupRow key={name} group={grp} cafeSortBy={cafeSortBy} isAdmin={isAdmin} user={user} onEdit={e=>{setEditC(e);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={async id=>{
+                  <CafeGroupRow key={name} group={grp} cafeSortBy={cafeSortBy} user={user} onEdit={e=>{setEditC(e);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={async id=>{
                         const row=cafes.find(x=>x.id===id);
-                        if(!canMutateVisit(row,user,isAdmin))return;
+                        if(!canMutateVisit(row,user))return;
                         try{await supabase.from("cafes").delete().eq("id",id);}catch(err){console.error("cafe delete threw:",err);}
                         setCafes(p=>p.filter(x=>x.id!==id));
                       }}/>
@@ -626,9 +644,9 @@ export default function App() {
                   return avg(e=>calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability)??0);
                 };
                 return Object.entries(groups).sort((a,b)=>sweetsSortAsc?getSortValS(a[1])-getSortValS(b[1]):getSortValS(b[1])-getSortValS(a[1])).map(([name,grp])=>(
-                  <CafeGroupRow key={name} group={grp} cafeSortBy={sweetsSortBy} isAdmin={isAdmin} user={user} onEdit={e=>{setEditC(e);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={async id=>{
+                  <CafeGroupRow key={name} group={grp} cafeSortBy={sweetsSortBy} user={user} onEdit={e=>{setEditC(e);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={async id=>{
                         const row=cafes.find(x=>x.id===id);
-                        if(!canMutateVisit(row,user,isAdmin))return;
+                        if(!canMutateVisit(row,user))return;
                         try{await supabase.from("cafes").delete().eq("id",id);}catch(err){console.error("cafe delete threw:",err);}
                         setCafes(p=>p.filter(x=>x.id!==id));
                       }}/>
@@ -650,7 +668,7 @@ export default function App() {
       )}
 
       {st.view==="log"&&editR&&<RestForm initial={editR} weights={weights} existingNames={st.entries.map(e=>e.name)} existingEntries={st.entries} onSave={async e=>{
-        if(canMutateVisit(e,user,isAdmin)) {
+        if(canMutateVisit(e,user)) {
           try {
             const {error} = await supabase.from("restaurants").update({
               name:e.name, cuisine:e.cuisine, cuisine2:e.cuisine2||"",
@@ -665,7 +683,7 @@ export default function App() {
       }} onCancel={()=>{setEditR(null);window.scrollTo({top:0,behavior:"smooth"});}}/>}
       {st.view==="log"&&editC&&<CafeForm initial={editC} onSave={async entries=>{
         const e=Array.isArray(entries)?entries[0]:entries;
-        if(canMutateVisit(e,user,isAdmin)) {
+        if(canMutateVisit(e,user)) {
           try {
             const {error} = await supabase.from("cafes").update({
               name:e.name, category:e.category, order_item:e.order||"",
@@ -819,7 +837,7 @@ export default function App() {
       {st.view==="palette"&&<PaletteView entries={st.entries} cafes={cafes} weights={weights} replaceRestaurantWeights={replaceRestaurantWeights} cafeWeights={cafeWeights} updateCafeW={updCafeW} resetCafeWeights={resetCafeWeights} cafeTotalW={+(cafeWeights.taste+cafeWeights.bpb).toFixed(0)} cafeWErr={cafeWErr}/>}
 
       {/* ── FAQ ── */}
-      {st.view==="faq"&&<FaqView isAdmin={isAdmin} faqOverrides={faqOverrides} setFaqOverrides={setFaqOverrides}/>}
+      {st.view==="faq"&&<FaqView faqOverrides={faqOverrides}/>}
 
       <AuthModal open={showAuthModal} onClose={()=>setShowAuthModal(false)} />
     </div>

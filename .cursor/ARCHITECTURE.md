@@ -4,7 +4,7 @@ Last reviewed from codebase snapshot (Vite + React 18 SPA). Use this when implem
 
 ## Product intent
 
-Single-page **restaurant and café rating** experience: users record visits (taste, cost, portions, wait, repeatability, notes), see **BITE** scores derived from a formula, filter/sort/group listings, and track **quest** progress (A–Z cuisines, regional cuisine checklist). The product may evolve toward **social** discovery; **signed-in visit logs are private per user** (RLS + client filter). Aggregates across users are not implemented in-app yet. **Supabase Auth** (magic link + optional Google) backs sign-in; **RLS** enforces row ownership (`user_id`) and **admin-only** `settings` writes. See [`docs/SUPABASE_AUTH_SETUP.md`](../docs/SUPABASE_AUTH_SETUP.md) and [`supabase/migrations/20260426_auth_rls.sql`](../supabase/migrations/20260426_auth_rls.sql).
+Single-page **restaurant and café rating** experience: users record visits (taste, cost, portions, wait, repeatability, notes), see **BITE** scores derived from a formula, filter/sort/group listings, and track **quest** progress (A–Z cuisines, regional cuisine checklist). The product may evolve toward **social** discovery; **signed-in visit logs are private per user** (RLS + client filter). Aggregates across users are not implemented in-app yet. **Supabase Auth** (magic link + optional Google) backs sign-in; **RLS** enforces **own-row** access on `restaurants` / `cafes`; the anon client **does not write** global `settings` (curators use SQL / service role). See [`docs/SUPABASE_AUTH_SETUP.md`](../docs/SUPABASE_AUTH_SETUP.md) and migrations under [`supabase/migrations/`](../supabase/migrations/).
 
 ## Tech stack
 
@@ -14,16 +14,16 @@ Single-page **restaurant and café rating** experience: users record visits (tas
 | Build | Vite 6 (`vite.config.js`, `@vitejs/plugin-react`) |
 | Data / backend | Supabase (`@supabase/supabase-js`), anon client in `src/config/supabaseClient.js` via `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` |
 | i18n | `LangContext` + `translations.js`; language persisted in `localStorage` (`bite_lang`) |
-| State | `useReducer` + `logReducer.js` for restaurant “entries”; `useState` for cafés, UI, filters; **`AuthContext`** exposes `user`, `session`, `isAdmin` (from `profiles.is_admin`), **`authReady`** |
+| State | `useReducer` + `logReducer.js` for restaurant “entries”; `useState` for cafés, UI, filters; **`AuthContext`** exposes `user`, `session`, **`authReady`** |
 
 No React Router — **views** are a string on reducer state (`log`, `add`, `palette`, `quests`, `suggest`, `faq`) plus local edit modes (`editR`, `editC`).
 
 ## Runtime data flow
 
 1. **Boot**: `App` mounts with **empty** restaurant/café state until **`authReady`**. If the user is **signed out**, seed data from `src/data/initialData.js` (`RESTAURANTS` / `CAFES_INIT`) is applied **without** loading other users’ rows from Supabase. If **signed in**, only that user’s `restaurants` / `cafes` rows are fetched (`user_id` filter + RLS).
-2. **Supabase load** (`useEffect`, depends on `authReady` + `user.id`): fetches **`settings`** every time; fetches visit tables only when signed in, scoped to the current user. Hydrates quest letters, FAQ overrides, welcome copy from `settings` where applicable.
+2. **Supabase load** (`useEffect`, depends on `authReady` + `user.id`): fetches **`settings`** (read-only from the client’s perspective); fetches visit tables only when signed in, scoped to the current user. Hydrates FAQ overrides and welcome copy from `settings` where applicable. **A–Z quest letter toggles** for signed-in users override from **`localStorage`** (`bite_questLetters_<userId>`) when present; otherwise defaults / `settings.questLetters` bootstrap.
 3. **Scores**: never stored as a single “BITE” column in app code for restaurants; **computed on the fly** in the UI via `src/utils/scoring.js` (`calcBiteOutOf10`, `calcCafeOutOf10`, built on raw `calcBite` / `calcCafe`, weights, repeatability).
-4. **Mutations**: restaurant/café/settings writes go through **`App.jsx`**; FAQ answer overrides are written from **`FaqView.jsx`**. Components receive callbacks.
+4. **Mutations**: restaurant/café rows go through **`App.jsx`**. Global **`settings`** are not written from the browser client.
 
 ## Supabase schema (as implied by the client)
 
@@ -39,17 +39,17 @@ Fields: `name`, `category`, `order_item` ↔ UI `order`, `taste`, `cost`, `porti
 
 ### `profiles`
 
-`id` (FK to `auth.users`), `is_admin` (boolean). Row created by trigger on signup. Curators set `is_admin` in SQL (see auth setup doc).
+`id` (FK to `auth.users`). Optional legacy column `is_admin` may exist from older migrations; **the app does not read it**. Row created by trigger on signup.
 
 ### `settings`
 
 Key-value table: rows have `key` and `value` (string). Known keys:
 
-- `questLetters` — JSON stringified array of letters for the A–Z quest toggle state  
-- `faq_override_{index}` — FAQ answer overrides (admin)  
+- `questLetters` — optional bootstrap for A–Z quest UI when no per-user `localStorage`  
+- `faq_override_{index}` — FAQ answer overrides (maintain via SQL / service role)  
 - `welcome_{en|zh}_title`, `welcome_{en|zh}_body` — welcome modal copy  
 
-Upserts use `onConflict: "key"` (unique constraint on `key` assumed).
+Client writes to `settings` are **disabled** under current RLS (see [`20260428_flat_user_rls_no_admin.sql`](../supabase/migrations/20260428_flat_user_rls_no_admin.sql)).
 
 ## Scoring module (`src/utils/scoring.js`)
 
@@ -63,19 +63,19 @@ Upserts use `onConflict: "key"` (unique constraint on `key` assumed).
 - Drinks/sweets **café rows** group by venue `name` similarly via `CafeGroupRow`.
 - There is **no** separate table for “votes” or “reviews from user X”; each row is effectively one **visit log line** at the same granularity as stored in `restaurants` / `cafes`.
 
-## Admin / authorization (current)
+## Authorization (current)
 
-- **Supabase Auth** — `AuthProvider` (`src/contexts/AuthContext.jsx`): `getSession` + `onAuthStateChange`; profile row for `is_admin`. Sign-in UI: `AuthModal` (header / triple-tap logo).
-- **Persistence** — Logged-in users **insert/update/delete** their own `restaurants`/`cafes` rows (`user_id` on insert). Legacy rows with `user_id` null: **admins only** for DB mutate (matches RLS). Logged-out users: adds/edits are **local-only** (synthetic ids) unless they sign in.
-- **Settings** — `questLetters` and FAQ overrides: **admin** in UI (`FaqView`) where applicable; **`welcome_*` keys** in Supabase override bundled welcome copy **only** when **`VITE_WELCOME_USE_SUPABASE=true`** at build time (otherwise `translations.js`). No in-app welcome editor; update DB via Supabase if using overrides. RLS as in migrations.
-- **RLS** — Base policies in [`supabase/migrations/20260426_auth_rls.sql`](../supabase/migrations/20260426_auth_rls.sql); **SELECT** on `restaurants` / `cafes` is restricted per user (and admin read-all) in [`supabase/migrations/20260427_restaurants_cafes_select_own.sql`](../supabase/migrations/20260427_restaurants_cafes_select_own.sql). Apply both in Supabase SQL Editor for the project.
+- **Supabase Auth** — `AuthProvider` (`src/contexts/AuthContext.jsx`): `getSession` + `onAuthStateChange`; **`authReady`** when the initial session check finishes. Sign-in UI: `AuthModal` (header / triple-tap logo).
+- **Persistence** — Logged-in users **insert/update/delete** only rows where **`user_id = auth.uid()`**. Legacy rows with `user_id` null are **not** mutable from the app. Logged-out users: adds/edits are **local-only** (synthetic ids) until sign-in.
+- **Settings** — Read in-app for FAQ overrides / welcome copy / quest bootstrap. **`welcome_*`** applies when **`VITE_WELCOME_USE_SUPABASE=true`**. FAQ in **`FaqView`** is read-only; edits are done in the DB with elevated credentials.
+- **RLS** — Apply migrations in order through [`20260428_flat_user_rls_no_admin.sql`](../supabase/migrations/20260428_flat_user_rls_no_admin.sql): own-row **SELECT/UPDATE/DELETE** on `restaurants` / `cafes`; no client **`settings`** writes.
 
 ## File map (high signal)
 
 | Path | Role |
 |------|------|
 | `src/App.jsx` | Shell: data load, auth-aware CRUD, navigation, sorting/filtering, grouping |
-| `src/contexts/AuthContext.jsx` | Session + `profiles.is_admin` |
+| `src/contexts/AuthContext.jsx` | Session + `authReady` |
 | `src/components/AuthModal.jsx` | Magic link + Google + sign out |
 | `src/config/supabaseClient.js` | Singleton Supabase client |
 | `src/state/logReducer.js` | `ADD` / `DEL` / `UPD` / `VIEW` / `LOAD` for restaurant entries |
@@ -83,11 +83,11 @@ Upserts use `onConflict: "key"` (unique constraint on `key` assumed).
 | `src/data/initialData.js` | Offline seed + form defaults |
 | `src/contexts/LangContext.jsx` | `t`, `lang`, `toggleLang` |
 | `src/components/RestForm.jsx`, `CafeForm.jsx` | Create/edit flows |
-| `src/components/FaqView.jsx` | Reads/writes `settings` for FAQ overrides |
+| `src/components/FaqView.jsx` | Reads FAQ + optional DB overrides (read-only) |
 
 ## Gaps vs. stated roadmap (social / scale)
 
-1. **Public vs private read** — `restaurants`/`cafes` SELECT is **private per user** (plus admin); re-open reads only if you add an explicit social/discovery feed and policies.
+1. **Public vs private read** — `restaurants`/`cafes` SELECT is **private per user**; re-open reads only if you add an explicit social/discovery feed and policies.
 2. **Option B data model** — split **venues** from **ratings** if aggregates and discovery need server-side structure.
 3. **Aggregates** — today averages are **client-side** over grouped names; with many users consider **SQL views/materialized aggregates** or Edge Functions.
 4. **`city` (and any other)** fields: align DB columns, RLS, and all insert/update/select paths.

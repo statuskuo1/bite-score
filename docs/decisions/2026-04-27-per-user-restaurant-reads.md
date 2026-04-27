@@ -7,7 +7,7 @@ All clients could `SELECT` every row from `restaurants` and `cafes`, and the app
 ## Decision
 
 - Keep a **single table** per entity with `user_id`; do not create per-user tables.
-- **RLS**: Replace broad `SELECT` policies with **`restaurants_select_own_or_admin`** / **`cafes_select_own_or_admin`** — authenticated users see only rows where `user_id = auth.uid()`, except **admins** may read all rows (same pattern as legacy null-`user_id` mutations).
+- **RLS**: Replace broad `SELECT` policies with scoped policies (**superseded** by [`20260428_flat_user_rls_no_admin.sql`](../supabase/migrations/20260428_flat_user_rls_no_admin.sql): **own rows only**, no admin read-all — see [`2026-04-27-no-admin-equal-users.md`](2026-04-27-no-admin-equal-users.md)).
 - **Client**: After `authReady`, load **`settings`** as before; load **restaurants/cafés** only with `.eq('user_id', user.id)`. If signed out, use bundled **seed** only (no bulk Supabase reads for visits). Initial state is **empty** until `authReady`, then hydrate (avoids flashing another user’s data for signed-in users).
 
 ## Alternatives considered
@@ -19,7 +19,7 @@ All clients could `SELECT` every row from `restaurants` and `cafes`, and the app
 ## Consequences
 
 - Apply [`supabase/migrations/20260427_restaurants_cafes_select_own.sql`](../supabase/migrations/20260427_restaurants_cafes_select_own.sql) in Supabase alongside existing auth migration.
-- Main UI shows **only the current user’s** visits even for admins (client filter); admins retain full **SQL/Dashboard** access via policy.
+- Main UI scopes visits to the current user; server policies match (see follow-up ADR removing admin bypass).
 - **Quest letters** (`settings.questLetters`) remain global until a future per-user preferences model.
 
 Primary files: `supabase/migrations/20260427_restaurants_cafes_select_own.sql`, `src/App.jsx`.
