@@ -10,7 +10,6 @@ import { reducer } from "./state/logReducer.js";
 import {
   calcBite,
   calcCafe,
-  calcMaxBite,
   scoreColor,
   scoreLabel,
   tasteLabel,
@@ -27,6 +26,13 @@ import { SuggestView } from "./components/SuggestView.jsx";
 import { PaletteView } from "./components/PaletteView.jsx";
 import { FaqView } from "./components/FaqView.jsx";
 import { AuthModal } from "./components/AuthModal.jsx";
+import { WeightSliders } from "./components/WeightSliders.jsx";
+
+/** Strips optional “play mode” line from settings/default welcome copy (DB or legacy bundles). */
+function omitPlayWelcomeAside(body) {
+  if (!body) return body;
+  return body.split("\n\n").filter((p) => !p.includes("Play around! Nothing saves permanently")).join("\n\n");
+}
 
 export default function App() {
   const { user, isAdmin } = useAuth();
@@ -37,10 +43,9 @@ export default function App() {
   const [showWelcome, setShowWelcome] = useState(true);
   const [faqOverrides, setFaqOverrides] = useState({});
   const [welcomeOverride, setWelcomeOverride] = useState({});
-  const [editingWelcome, setEditingWelcome] = useState(false);
-  const [welcomeEditVal, setWelcomeEditVal] = useState("");
   const [lang, setLang] = useState(()=>localStorage.getItem("bite_lang")||"en");
   const t = T[lang]||T.en;
+  const welcomeBodyDisplay = omitPlayWelcomeAside(welcomeOverride[lang+"_body"]||t.welcome2);
   function toggleLang(){const nl=lang==="en"?"zh":"en";setLang(nl);localStorage.setItem("bite_lang",nl);}
 
   useEffect(()=>{
@@ -88,7 +93,7 @@ export default function App() {
     load();
   },[]);
 
-  function dismissWelcome(){
+  function dismissWelcome() {
     setShowWelcome(false);
   }
   const [editR, setEditR] = useState(null);
@@ -104,9 +109,10 @@ export default function App() {
   const [showSearch, setShowSearch] = useState(false);
   const [search, setSearch] = useState("");
   const [weights, setWeights] = useState({taste:50,bpb:40,wait:10});
+  const welcomeTotal = weights.taste + weights.bpb + weights.wait;
+  const canProceedWelcome = welcomeTotal === 100;
   const [cafeWeights, setCafeWeights] = useState({taste:70,bpb:30});
   const [cafeWErr, setCafeWErr] = useState("");
-  const [wErr, setWErr] = useState("");
   const [questL, setQuestL] = useState(new Set(["T","M","S","U","C","D","Y","K"]));
   const [cafeSortBy, setCafeSortBy] = useState("bite");
   const [cafeSortAsc, setCafeSortAsc] = useState(false);
@@ -137,6 +143,7 @@ export default function App() {
     return()=>{document.removeEventListener("mousedown",h);document.removeEventListener("touchstart",h);};
   },[]);
 
+  /** Café weights (2 sliders): redistribute the other key to keep sum 100. */
   function rebalance(current, changedKey, newVal) {
     const nv = Math.min(100, Math.max(0, Math.round(newVal)));
     const others = Object.keys(current).filter(k=>k!==changedKey);
@@ -148,19 +155,21 @@ export default function App() {
       others.forEach((k,i)=>newW[k]=i===others.length-1?remaining-each*(others.length-1):each);
     } else {
       others.forEach(k=>newW[k]=Math.max(0,Math.round(current[k]/otherSum*remaining)));
-      // fix rounding to ensure exact 100
       const diff=100-Object.values(newW).reduce((a,x)=>a+x,0);
       if(diff!==0) newW[others[0]]+=diff;
     }
     return newW;
   }
 
+  /** Restaurant weights: all sliders are independent (0-100 each). */
   function updW(k,v){
-    const newW=rebalance(weights,k,+v);
-    setWeights(newW);setWErr("");
+    const nv = Math.round(Math.min(100,Math.max(0,+v)));
+    setWeights(w=>({...w,[k]:nv}));
   }
 
-  function resetWeights(defaults){ setWeights({...defaults});setWErr(""); }
+  function resetWeights(defaults){
+    setWeights({...defaults});
+  }
 
   function updCafeW(k,v){
     const newW=rebalance(cafeWeights,k,+v);
@@ -181,8 +190,6 @@ export default function App() {
   const loggedC = new Set(st.entries.map(e=>e.cuisine&&e.cuisine.trim()));
   const totalCuisines = Object.values(CUISINE_REGIONS).flat().length;
   const doneCount = Object.values(CUISINE_REGIONS).flat().filter(x=>loggedC.has(x)).length;
-  const totalW = +(weights.taste+weights.bpb+weights.wait).toFixed(0);
-
   const sortedR = [...st.entries].sort((a,b)=>{
     let d=0;
     // For each field, d>0 means a should come FIRST in descending (default ↓) order
@@ -265,93 +272,41 @@ export default function App() {
           </div>
         </div>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          {isAdmin&&<button onClick={()=>{setWelcomeEditVal({title:welcomeOverride[lang+"_title"]||t.welcome1,body:welcomeOverride[lang+"_body"]||t.welcome2});setEditingWelcome(true);}} style={{fontSize:10,color:"#888780",background:"none",border:"0.5px solid rgba(255,255,255,0.2)",borderRadius:4,padding:"3px 8px",cursor:"pointer"}}>Edit welcome</button>}
           <button type="button" onClick={()=>setShowAuthModal(true)} style={{fontSize:11,fontWeight:500,padding:"5px 12px",borderRadius:20,border:"1.5px solid rgba(255,255,255,0.2)",background:user?"#3C1F13":"transparent",color:user?"#F0997B":"#888780",cursor:"pointer",letterSpacing:"0.03em",flexShrink:0,maxWidth:120,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={user?.email||t.signIn}>{user?(user.email?.split("@")[0]||t.account):t.signIn}</button>
           <button onClick={toggleLang} style={{fontSize:11,fontWeight:500,padding:"5px 12px",borderRadius:20,border:"1.5px solid rgba(255,255,255,0.2)",background:"transparent",color:"#888780",cursor:"pointer",letterSpacing:"0.03em",flexShrink:0}}>{lang==="en"?"繁中":"EN"}</button>
         </div>
       </div>
 
-      {((showWelcome&&!isAdmin&&dbLoaded)||isAdmin&&editingWelcome)&&(
-        <div onClick={()=>{if(!isAdmin)dismissWelcome();}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:"1.5rem"}}>
+      {showWelcome&&dbLoaded&&(
+        <div onClick={()=>dismissWelcome()} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:"1.5rem"}}>
           <div onClick={e=>e.stopPropagation()} style={{background:"#1E1E1C",borderRadius:16,padding:"1.5rem",maxWidth:360,width:"100%",border:"0.5px solid rgba(255,255,255,0.15)"}}>
             <div style={{fontSize:24,marginBottom:12,textAlign:"center",cursor:"default",userSelect:"none"}}>👋</div>
             <div style={{display:"flex",justifyContent:"center",gap:8,marginBottom:16}}>
               {["en","zh"].map(l=>(
-                <button key={l} onClick={()=>{
-                  setLang(l);localStorage.setItem("bite_lang",l);
-                  if(editingWelcome){
-                    const T_other = l === "en" ? T.en : T.zh;
-                    setWelcomeEditVal({title:welcomeOverride[l+"_title"]||T_other.welcome1,body:welcomeOverride[l+"_body"]||T_other.welcome2});
-                  }
-                }} style={{padding:"5px 16px",borderRadius:20,border:"1.5px solid "+(lang===l?"#F0997B":"rgba(255,255,255,0.2)"),background:lang===l?"#3C1F13":"transparent",color:lang===l?"#F0997B":"#888780",fontSize:12,fontWeight:lang===l?500:400,cursor:"pointer"}}>
+                <button key={l} onClick={()=>{setLang(l);localStorage.setItem("bite_lang",l);}} style={{padding:"5px 16px",borderRadius:20,border:"1.5px solid "+(lang===l?"#F0997B":"rgba(255,255,255,0.2)"),background:lang===l?"#3C1F13":"transparent",color:lang===l?"#F0997B":"#888780",fontSize:12,fontWeight:lang===l?500:400,cursor:"pointer"}}>
                   {l==="en"?"English":"繁體中文"}
                 </button>
               ))}
             </div>
-            {isAdmin&&editingWelcome?(
-              <div>
-                <div style={{fontSize:11,color:"#888780",marginBottom:6}}>Title ({lang})</div>
-                <input value={welcomeEditVal.title||""} onChange={e=>setWelcomeEditVal(p=>({...p,title:e.target.value}))} style={{width:"100%",boxSizing:"border-box",marginBottom:10,fontSize:13}}/>
-                <div style={{fontSize:11,color:"#888780",marginBottom:6}}>Body ({lang})</div>
-                <textarea value={welcomeEditVal.body||""} onChange={e=>setWelcomeEditVal(p=>({...p,body:e.target.value}))} rows={6} style={{width:"100%",boxSizing:"border-box",fontSize:13,lineHeight:1.6,resize:"vertical",marginBottom:12}}/>
-                <div style={{display:"flex",gap:8}}>
-                  <button onClick={async()=>{
-                    const next={...welcomeOverride,[lang+"_title"]:welcomeEditVal.title,[lang+"_body"]:welcomeEditVal.body};
-                    setWelcomeOverride(next);
-                    setEditingWelcome(false);
-                    try {
-                      await supabase.from("settings").upsert({key:"welcome_"+lang+"_title",value:welcomeEditVal.title},{onConflict:"key"});
-                      await supabase.from("settings").upsert({key:"welcome_"+lang+"_body",value:welcomeEditVal.body},{onConflict:"key"});
-                    } catch(err){console.error("welcome save threw:",err);}
-                  }} style={{flex:2,padding:"10px",background:"#F0997B",color:"#141413",border:"none",borderRadius:8,fontSize:14,fontWeight:500,cursor:"pointer"}}>Save</button>
-                  <button onClick={async()=>{
-                    const next={...welcomeOverride};delete next[lang+"_title"];delete next[lang+"_body"];
-                    setWelcomeOverride(next);setEditingWelcome(false);
-                    try{await supabase.from("settings").delete().in("key",["welcome_"+lang+"_title","welcome_"+lang+"_body"]);}catch(err){}
-                  }} style={{flex:1,padding:"10px",background:"transparent",color:"#A32D2D",border:"0.5px solid #A32D2D",borderRadius:8,fontSize:12,cursor:"pointer"}}>Reset</button>
-                  <button onClick={()=>setEditingWelcome(false)} style={{flex:1,padding:"10px",background:"transparent",color:"#888780",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:8,fontSize:14,cursor:"pointer"}}>Cancel</button>
-                </div>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:16}}>
+              <p style={{fontSize:16,fontWeight:600,color:"#F1EFE8",margin:0,lineHeight:1.5,textAlign:"center"}}>{welcomeOverride[lang+"_title"]||t.welcome1}</p>
+              <InfoBubble content={welcomeBodyDisplay.split("\n\n")[0]||""}/>
+            </div>
+            <div style={{borderTop:"0.5px solid rgba(255,255,255,0.08)",paddingTop:14,marginBottom:14}}>
+              <WeightSliders weights={weights} labels={[[t.taste,"taste"],[t.bangBuck,"bpb"],[t.wait,"wait"]]} onUpdate={updW} onReset={resetWeights} defaults={{taste:50,bpb:40,wait:10}} careHeadingPx={15}/>
+              <div style={{fontSize:12,color:canProceedWelcome?"#97C459":"#EF9F27",textAlign:"center",marginTop:8}}>
+                {t.weightsTotal}: {welcomeTotal}/100
               </div>
-            ):(
-              <div>
-                <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:16}}>
-                  <p style={{fontSize:16,fontWeight:600,color:"#F1EFE8",margin:0,lineHeight:1.5,textAlign:"center"}}>{welcomeOverride[lang+"_title"]||t.welcome1}</p>
-                  <InfoBubble content={welcomeOverride[lang+"_body"]?.split("\n\n")[0]||t.welcome2.split("\n\n")[0]}/>
+              {!canProceedWelcome&&(
+                <div style={{fontSize:11,color:"#F1EFE8",textAlign:"center",marginTop:4}}>
+                  {t.weightsMustEqual100}
                 </div>
-
-                {isAdmin?(
-                  <div style={{display:"flex",gap:8,marginTop:4}}>
-                    <button onClick={()=>{setWelcomeEditVal({title:welcomeOverride[lang+"_title"]||t.welcome1,body:welcomeOverride[lang+"_body"]||t.welcome2});setEditingWelcome(true);}} style={{flex:1,padding:"10px",background:"transparent",color:"#888780",border:"0.5px solid rgba(255,255,255,0.2)",borderRadius:8,fontSize:13,cursor:"pointer"}}>Edit</button>
-                    <button onClick={()=>setEditingWelcome(false)} style={{flex:1,padding:"10px",background:"#F0997B",color:"#141413",border:"none",borderRadius:8,fontSize:13,fontWeight:500,cursor:"pointer"}}>Done</button>
-                  </div>
-                ):(
-                  <div>
-                    <div style={{borderTop:"0.5px solid rgba(255,255,255,0.08)",paddingTop:14,marginBottom:14}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                        <span style={{fontSize:11,color:"#888780",fontStyle:"italic"}}>{t.howMuchCare}</span>
-                        <button onClick={()=>resetWeights({taste:50,bpb:40,wait:10})} style={{fontSize:10,color:"#888780",background:"none",border:"none",cursor:"pointer",padding:0,textDecoration:"underline"}}>Reset</button>
-                      </div>
-                      {[[t.taste,"taste","#F0997B"],[t.bangBuck,"bpb","#5B9BD5"],[t.wait,"wait","#97C459"]].map(([label,key,color])=>(
-                        <div key={key} style={{marginBottom:10}}>
-                          <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                            <span style={{fontSize:11,color:"#888780"}}>{label}</span>
-                            <span style={{fontSize:11,fontWeight:500,color:color}}>{weights[key]}%</span>
-                          </div>
-                          <input type="range" min="0" max="100" step="1" value={weights[key]}
-                            onChange={e=>updW(key,+e.target.value)}
-                            style={{width:"100%",accentColor:color}}/>
-                        </div>
-                      ))}
-                    </div>
-                    {(welcomeOverride[lang+"_body"]||t.welcome2).split("\n\n").slice(1).map((para,i)=>(
-                      <p key={i} style={{fontSize:13,color:"#888780",margin:"0 0 12px",lineHeight:1.7,textAlign:"center",whiteSpace:"pre-line"}}>{para}</p>
-                    ))}
-                    <div style={{fontSize:10,color:"#888780",textAlign:"right",marginBottom:10}}>Max score at these weights: <span style={{color:"#F0997B",fontWeight:500}}>{calcMaxBite(weights).toFixed(1)}</span></div>
-                    <button onClick={dismissWelcome} style={{width:"100%",padding:"12px",background:"#F0997B",color:"#141413",border:"none",borderRadius:10,fontSize:14,fontWeight:500,cursor:"pointer"}}>{t.welcomeBtn}</button>
-                  </div>
-                )}
-              </div>
-            )}
+              )}
+            </div>
+            {welcomeBodyDisplay.split("\n\n").slice(1).map((para,i)=>(
+              <p key={i} style={{fontSize:13,color:"#F1EFE8",margin:"0 0 12px",lineHeight:1.7,textAlign:"center",whiteSpace:"pre-line"}}>{para}</p>
+            ))}
+            <button disabled={!canProceedWelcome} onClick={dismissWelcome} style={{width:"100%",padding:"12px",background:canProceedWelcome?"#F0997B":"#5A4A43",color:canProceedWelcome?"#141413":"#AFA8A3",border:"none",borderRadius:10,fontSize:14,fontWeight:500,cursor:canProceedWelcome?"pointer":"not-allowed",opacity:canProceedWelcome?1:0.85}}>{t.welcomeBtn}</button>
           </div>
         </div>
       )}
@@ -805,7 +760,7 @@ export default function App() {
       )}
 
       {st.view==="suggest"&&<SuggestView entries={st.entries} onBack={()=>dispatch({type:"VIEW",view:"quests"})}/>}
-      {st.view==="palette"&&<PaletteView entries={st.entries} cafes={cafes} weights={weights} updateWeight={updW} resetWeights={resetWeights} totalW={totalW} weightError={wErr} cafeWeights={cafeWeights} updateCafeW={updCafeW} resetCafeWeights={resetCafeWeights} cafeTotalW={+(cafeWeights.taste+cafeWeights.bpb).toFixed(0)} cafeWErr={cafeWErr}/>}
+      {st.view==="palette"&&<PaletteView entries={st.entries} cafes={cafes} weights={weights} updateWeight={updW} resetWeights={resetWeights} cafeWeights={cafeWeights} updateCafeW={updCafeW} resetCafeWeights={resetCafeWeights} cafeTotalW={+(cafeWeights.taste+cafeWeights.bpb).toFixed(0)} cafeWErr={cafeWErr}/>}
 
       {/* ── FAQ ── */}
       {st.view==="faq"&&<FaqView isAdmin={isAdmin} faqOverrides={faqOverrides} setFaqOverrides={setFaqOverrides}/>}

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLang } from "../contexts/LangContext.jsx";
 import { WeightSliders } from "./WeightSliders.jsx";
-import { calcMaxBite, calcCafe, scoreColor, tasteLabel } from "../utils/scoring.js";
+import { calcCafe, scoreColor, tasteLabel } from "../utils/scoring.js";
 import { S } from "../styles/sharedStyles.js";
 
 export function DrinksPalette({cafes,cafeWeights,updateCafeW,resetCafeWeights,cafeTotalW,cafeWErr}) {
@@ -58,7 +58,6 @@ export function DrinksPalette({cafes,cafeWeights,updateCafeW,resetCafeWeights,ca
       <div style={{...S.card}}>
         <div style={{...S.lbl,marginBottom:10}}>Weights</div>
         <WeightSliders weights={cafeWeights} labels={[[t.taste,"taste"],[t.bangBuck,"bpb"]]} onUpdate={updateCafeW} onReset={resetCafeWeights} defaults={{taste:70,bpb:30}}/>
-        <div style={{fontSize:10,color:"#888780",marginTop:8,textAlign:"right"}}>Max score at these weights: <span style={{color:"#F0997B",fontWeight:500}}>{calcMaxBite(cafeWeights).toFixed(1)}</span></div>
       </div>
       <div style={{...S.card}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
