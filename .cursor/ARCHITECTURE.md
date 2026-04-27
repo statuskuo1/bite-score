@@ -16,7 +16,7 @@ Single-page **restaurant and café rating** experience: users record visits (tas
 | i18n | `LangContext` + `translations.js`; language persisted in `localStorage` (`bite_lang`) |
 | State | `useReducer` + `logReducer.js` for restaurant “entries”; `useState` for cafés, UI, filters; **`AuthContext`** exposes `user`, `session`, **`authReady`** |
 
-No React Router — **views** are a string on reducer state (`log`, `add`, `palette`, `community`, `suggest`, `faq`) plus local edit modes (`editR`, `editC`). Quest UI lives inline under **My Taste → Restaurants** (`QuestsPaletteSection`), not as its own root view.
+No React Router — **views** are a string on reducer state (`log`, `add`, `palette`, `community`, `suggest`, `faq`) plus local edit modes (`editR`, `editC`). Quest UI opens from **My Taste → Restaurants** via a tappable row under the Cuisine breakdown donut (`CuisineQuestModal` + `QuestSheetBody` in `QuestsPaletteSection.jsx`), not as its own root view.
 
 ## Runtime data flow
 
