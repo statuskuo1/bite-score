@@ -9,7 +9,7 @@ import { SweetsPalette } from "./SweetsPalette.jsx";
 import { WeightSliders } from "./WeightSliders.jsx";
 import { StatCard } from "./StatCard.jsx";
 
-export function PaletteView({entries,cafes,weights,updateWeight,resetWeights,totalW,weightError,restaurantSliderPair,cafeWeights,updateCafeW,resetCafeWeights,cafeTotalW,cafeWErr}) {
+export function PaletteView({entries,cafes,weights,updateWeight,resetWeights,cafeWeights,updateCafeW,resetCafeWeights,cafeTotalW,cafeWErr}) {
   const {t,lang:lang_} = useLang();
   const [paletteTab,setPaletteTab] = useState("restaurants");
   const [editingW,setEditingW] = useState(false);
@@ -58,7 +58,7 @@ export function PaletteView({entries,cafes,weights,updateWeight,resetWeights,tot
           {!total?<p style={{color:"#888780",fontSize:14}}>{t.noEntriesYet}</p>:<>
           <div style={{...S.card}}>
             <div style={{...S.lbl,marginBottom:10}}>Weights</div>
-            <WeightSliders weights={weights} labels={[[t.taste,"taste"],[t.bangBuck,"bpb"],[t.wait,"wait"]]} onUpdate={updateWeight} onReset={resetWeights} defaults={{taste:50,bpb:40,wait:10}} manualKeys={restaurantSliderPair}/>
+            <WeightSliders weights={weights} labels={[[t.taste,"taste"],[t.bangBuck,"bpb"],[t.wait,"wait"]]} onUpdate={updateWeight} onReset={resetWeights} defaults={{taste:50,bpb:40,wait:10}}/>
             <div style={{fontSize:10,color:"#888780",marginTop:8,textAlign:"right"}}>Max score at these weights: <span style={{color:"#F0997B",fontWeight:500}}>{calcMaxBite(weights).toFixed(1)}</span></div>
           </div>
           <div style={{...S.card}}>

@@ -47,6 +47,8 @@ export default function App() {
   const [lang, setLang] = useState(()=>localStorage.getItem("bite_lang")||"en");
   const t = T[lang]||T.en;
   const welcomeBodyDisplay = omitPlayWelcomeAside(welcomeOverride[lang+"_body"]||t.welcome2);
+  const welcomeTotal = weights.taste + weights.bpb + weights.wait;
+  const canProceedWelcome = welcomeTotal === 100;
   function toggleLang(){const nl=lang==="en"?"zh":"en";setLang(nl);localStorage.setItem("bite_lang",nl);}
 
   useEffect(()=>{
@@ -110,12 +112,8 @@ export default function App() {
   const [showSearch, setShowSearch] = useState(false);
   const [search, setSearch] = useState("");
   const [weights, setWeights] = useState({taste:50,bpb:40,wait:10});
-  const [restaurantSliderPair, setRestaurantSliderPair] = useState(["taste","bpb"]);
-  const restaurantSliderPairRef = useRef(["taste","bpb"]);
-  const lastRestaurantSliderKeyRef = useRef("taste");
   const [cafeWeights, setCafeWeights] = useState({taste:70,bpb:30});
   const [cafeWErr, setCafeWErr] = useState("");
-  const [wErr, setWErr] = useState("");
   const [questL, setQuestL] = useState(new Set(["T","M","S","U","C","D","Y","K"]));
   const [cafeSortBy, setCafeSortBy] = useState("bite");
   const [cafeSortAsc, setCafeSortAsc] = useState(false);
@@ -146,10 +144,6 @@ export default function App() {
     return()=>{document.removeEventListener("mousedown",h);document.removeEventListener("touchstart",h);};
   },[]);
 
-  useEffect(()=>{
-    restaurantSliderPairRef.current = restaurantSliderPair;
-  },[restaurantSliderPair]);
-
   /** Café weights (2 sliders): redistribute the other key to keep sum 100. */
   function rebalance(current, changedKey, newVal) {
     const nv = Math.min(100, Math.max(0, Math.round(newVal)));
@@ -168,48 +162,14 @@ export default function App() {
     return newW;
   }
 
-  /** Restaurant weights: two keys in `restaurantSliderPair` are sliders; the third fills to 100%. Adjusting the third swaps it into the pair (partner = last touched free slider). */
+  /** Restaurant weights: all sliders are independent (0-100 each). */
   function updW(k,v){
     const nv = Math.round(Math.min(100,Math.max(0,+v)));
-    const pair = restaurantSliderPairRef.current;
-    const all = ["taste","bpb","wait"];
-    if(pair.includes(k)){
-      const other = pair.find(x=>x!==k);
-      const dep = all.find(x=>!pair.includes(x));
-      setWeights(w=>{
-        const wOther = w[other];
-        const maxK = 100 - wOther;
-        const newK = Math.min(nv,maxK);
-        const newDep = Math.max(0,100-newK-wOther);
-        return {...w,[k]:newK,[dep]:newDep};
-      });
-      lastRestaurantSliderKeyRef.current = k;
-      setWErr("");
-      return;
-    }
-    const partner = pair.includes(lastRestaurantSliderKeyRef.current) ? lastRestaurantSliderKeyRef.current : pair[0];
-    const dropped = pair.find(x=>x!==partner);
-    const newPair = [k,partner];
-    setWeights(w=>{
-      const wPartner = w[partner];
-      let newK = Math.min(nv,100-wPartner);
-      let newDropped = 100-newK-wPartner;
-      if(newDropped<0){newDropped=0;newK=100-wPartner;}
-      return {...w,[k]:newK,[dropped]:newDropped};
-    });
-    restaurantSliderPairRef.current = newPair;
-    setRestaurantSliderPair(newPair);
-    lastRestaurantSliderKeyRef.current = k;
-    setWErr("");
+    setWeights(w=>({...w,[k]:nv}));
   }
 
   function resetWeights(defaults){
     setWeights({...defaults});
-    const p = ["taste","bpb"];
-    setRestaurantSliderPair(p);
-    restaurantSliderPairRef.current = p;
-    lastRestaurantSliderKeyRef.current = "taste";
-    setWErr("");
   }
 
   function updCafeW(k,v){
@@ -231,8 +191,6 @@ export default function App() {
   const loggedC = new Set(st.entries.map(e=>e.cuisine&&e.cuisine.trim()));
   const totalCuisines = Object.values(CUISINE_REGIONS).flat().length;
   const doneCount = Object.values(CUISINE_REGIONS).flat().filter(x=>loggedC.has(x)).length;
-  const totalW = +(weights.taste+weights.bpb+weights.wait).toFixed(0);
-
   const sortedR = [...st.entries].sort((a,b)=>{
     let d=0;
     // For each field, d>0 means a should come FIRST in descending (default ↓) order
@@ -336,13 +294,21 @@ export default function App() {
               <InfoBubble content={welcomeBodyDisplay.split("\n\n")[0]||""}/>
             </div>
             <div style={{borderTop:"0.5px solid rgba(255,255,255,0.08)",paddingTop:14,marginBottom:14}}>
-              <WeightSliders weights={weights} labels={[[t.taste,"taste"],[t.bangBuck,"bpb"],[t.wait,"wait"]]} onUpdate={updW} onReset={resetWeights} defaults={{taste:50,bpb:40,wait:10}} manualKeys={restaurantSliderPair} careHeadingPx={15}/>
+              <WeightSliders weights={weights} labels={[[t.taste,"taste"],[t.bangBuck,"bpb"],[t.wait,"wait"]]} onUpdate={updW} onReset={resetWeights} defaults={{taste:50,bpb:40,wait:10}} careHeadingPx={15}/>
+              <div style={{fontSize:12,color:canProceedWelcome?"#97C459":"#EF9F27",textAlign:"center",marginTop:8}}>
+                {t.weightsTotal}: {welcomeTotal}/100
+              </div>
+              {!canProceedWelcome&&(
+                <div style={{fontSize:11,color:"#F1EFE8",textAlign:"center",marginTop:4}}>
+                  {t.weightsMustEqual100}
+                </div>
+              )}
             </div>
             {welcomeBodyDisplay.split("\n\n").slice(1).map((para,i)=>(
               <p key={i} style={{fontSize:13,color:"#F1EFE8",margin:"0 0 12px",lineHeight:1.7,textAlign:"center",whiteSpace:"pre-line"}}>{para}</p>
             ))}
             <div style={{fontSize:10,color:"#F1EFE8",textAlign:"right",marginBottom:10}}>Max score at these weights: <span style={{color:"#F0997B",fontWeight:500}}>{calcMaxBite(weights).toFixed(1)}</span></div>
-            <button onClick={dismissWelcome} style={{width:"100%",padding:"12px",background:"#F0997B",color:"#141413",border:"none",borderRadius:10,fontSize:14,fontWeight:500,cursor:"pointer"}}>{t.welcomeBtn}</button>
+            <button disabled={!canProceedWelcome} onClick={dismissWelcome} style={{width:"100%",padding:"12px",background:canProceedWelcome?"#F0997B":"#5A4A43",color:canProceedWelcome?"#141413":"#AFA8A3",border:"none",borderRadius:10,fontSize:14,fontWeight:500,cursor:canProceedWelcome?"pointer":"not-allowed",opacity:canProceedWelcome?1:0.85}}>{t.welcomeBtn}</button>
           </div>
         </div>
       )}
@@ -796,7 +762,7 @@ export default function App() {
       )}
 
       {st.view==="suggest"&&<SuggestView entries={st.entries} onBack={()=>dispatch({type:"VIEW",view:"quests"})}/>}
-      {st.view==="palette"&&<PaletteView entries={st.entries} cafes={cafes} weights={weights} updateWeight={updW} resetWeights={resetWeights} totalW={totalW} weightError={wErr} restaurantSliderPair={restaurantSliderPair} cafeWeights={cafeWeights} updateCafeW={updCafeW} resetCafeWeights={resetCafeWeights} cafeTotalW={+(cafeWeights.taste+cafeWeights.bpb).toFixed(0)} cafeWErr={cafeWErr}/>}
+      {st.view==="palette"&&<PaletteView entries={st.entries} cafes={cafes} weights={weights} updateWeight={updW} resetWeights={resetWeights} cafeWeights={cafeWeights} updateCafeW={updCafeW} resetCafeWeights={resetCafeWeights} cafeTotalW={+(cafeWeights.taste+cafeWeights.bpb).toFixed(0)} cafeWErr={cafeWErr}/>}
 
       {/* ── FAQ ── */}
       {st.view==="faq"&&<FaqView isAdmin={isAdmin} faqOverrides={faqOverrides} setFaqOverrides={setFaqOverrides}/>}

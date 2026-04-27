@@ -43,12 +43,10 @@ const RANGE_STYLE = `
 }
 `;
 
-export function WeightSliders({weights, labels, onUpdate, onReset, defaults, manualKeys, careHeadingPx}) {
+export function WeightSliders({weights, labels, onUpdate, onReset, defaults, careHeadingPx}) {
   const {t} = useLang();
   const COLORS = {"taste":"#F0997B","bpb":"#5B9BD5","wait":"#97C459"};
   const keys = labels.map(([,k])=>k);
-  const pair = manualKeys && manualKeys.length === 2 ? manualKeys : null;
-  const usePair = pair && keys.length === 3;
   const stack = keys.length >= 3;
   const gridStyle = stack
     ? {display:"flex",flexDirection:"column",gap:12}
@@ -56,14 +54,6 @@ export function WeightSliders({weights, labels, onUpdate, onReset, defaults, man
   function reset() {
     if(!defaults || !onReset) return;
     onReset(defaults);
-  }
-  function maxForKey(key) {
-    if(!usePair || !pair) return 100;
-    if(pair.includes(key)){
-      const other = pair.find(k=>k!==key);
-      return 100 - weights[other];
-    }
-    return 100;
   }
   return (
     <div>
@@ -76,7 +66,6 @@ export function WeightSliders({weights, labels, onUpdate, onReset, defaults, man
         {labels.map(([label,key])=>{
           const color = COLORS[key]||"#F0997B";
           const pct = weights[key];
-          const maxVal = maxForKey(key);
           return (
             <div key={key} style={stack?{width:"100%"}:undefined}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
@@ -88,9 +77,9 @@ export function WeightSliders({weights, labels, onUpdate, onReset, defaults, man
                   type="range"
                   className="bite-weight-range"
                   min={0}
-                  max={maxVal}
+                  max={100}
                   step={1}
-                  value={Math.min(pct,maxVal)}
+                  value={pct}
                   onChange={e=>onUpdate(key,+e.target.value)}
                   style={{width:"100%",accentColor:color,"--thumb-color":color}}
                 />

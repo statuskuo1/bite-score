@@ -6,7 +6,8 @@ Welcome may still load `welcome_*` copy from **settings** (read-only hydration).
 
 ## Decision
 
-- **Weights:** Welcome uses the same **three sliders**, **`updW`**, and **`manualKeys={restaurantSliderPair}`** as My Taste so taste / bpb / wait are all adjustable in any order.
+- **Weights:** Welcome and My Taste both use the same **three sliders** and a simplified **`updW`** where each key updates independently (`0-100`) with no automatic rebalancing or pair logic.
+- **Welcome guardrail:** In the welcome modal, users can proceed only when `taste + bpb + wait === 100`. UI shows a live total (`Total: x/100`) and a short guidance message until valid.
 - **Copy display:** **`omitPlayWelcomeAside`** still strips paragraphs containing `Play around! Nothing saves permanently` from the displayed body; **`welcomeOverride`** continues to be **loaded** from settings for display only.
 - **Admin UI:** Remove welcome **Edit** / **Save** / **Reset** / **Cancel** flows and the header **Edit welcome** control; no client writes to `welcome_*` keys from this app.
 - **WeightSliders:** Keep optional **`careHeadingPx`**; light label text and **Reset** styling as implemented for readability.
@@ -15,6 +16,7 @@ Welcome may still load `welcome_*` copy from **settings** (read-only hydration).
 
 - Keep two-slider welcome only: rejected — users need wait adjustable without following a fixed order.
 - Remove `welcome_*` hydration entirely: rejected — server-driven copy for deployments is still useful without an in-app editor.
+- Soft warning only while allowing continue: rejected — strict gate prevents accidental non-normalized weight sets before first use.
 
 ## Consequences
 
