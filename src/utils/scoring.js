@@ -13,13 +13,27 @@ export function applyR(base, r) {
   return Math.round((base + Math.abs(base) * rMult(r)) * 100) / 100;
 }
 
+/**
+ * Taste / Bang-Buck / Wait as fractions that sum to 1.
+ * Sliders are independent 0–100; ratios follow relative sizes (same as /100 when sum is 100).
+ */
+export function restaurantWeightRatios(wts) {
+  const wt = wts || { taste: 50, bpb: 40, wait: 10 };
+  const a = Math.max(0, Number(wt.taste) || 0);
+  const b = Math.max(0, Number(wt.bpb) || 0);
+  const c = Math.max(0, Number(wt.wait) || 0);
+  const s = a + b + c;
+  if (s <= 0) return { rt: 0.5, rb: 0.4, rw: 0.1 };
+  return { rt: a / s, rb: b / s, rw: c / s };
+}
+
 /** Raw BITE utility (weight-dependent magnitude). */
 export function calcBite(t, cost, portions, w, useR, r, wts) {
   if (!portions) return null;
-  const wt = wts || { taste: 50, bpb: 40, wait: 10 };
   const bpb = (cost / portions) / 20;
   const wp = Math.min(10, (Math.log(w + 1) / Math.log(121)) * 10);
-  const base = (wt.taste / 100) * t - (wt.bpb / 100) * bpb - (wt.wait / 100) * wp;
+  const { rt, rb, rw } = restaurantWeightRatios(wts);
+  const base = rt * t - rb * bpb - rw * wp;
   return useR ? applyR(base, r) : Math.round(base * 100) / 100;
 }
 
@@ -54,6 +68,20 @@ export function calcBiteUtilityRatio(t, cost, portions, w, useR, r, wts) {
 /** BITE on 0–10: normalized utility ratio × 10 (see `biteUtilityRatio`). */
 export function calcBiteOutOf10(t, cost, portions, w, useR, r, wts) {
   return utilityRatioToOutOf10(calcBiteUtilityRatio(t, cost, portions, w, useR, r, wts));
+}
+
+/** Mean BITE (0–10) over visits that have a score; skips null (e.g. missing portions). */
+export function meanRestaurantBiteOutOf10(entries, wts) {
+  let sum = 0;
+  let n = 0;
+  for (const e of entries) {
+    const v = calcBiteOutOf10(e.taste, e.cost, e.portions, e.wait, e.useR, e.repeatability, wts);
+    if (v != null && !Number.isNaN(v)) {
+      sum += v;
+      n++;
+    }
+  }
+  return n === 0 ? null : sum / n;
 }
 
 /** Raw café score (fixed blend in formula, then /1.593). */

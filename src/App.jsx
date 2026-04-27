@@ -9,6 +9,7 @@ import { RESTAURANTS, CAFES_INIT, INIT_REST, INIT_CAFE } from "./data/initialDat
 import { reducer } from "./state/logReducer.js";
 import {
   calcBiteOutOf10,
+  meanRestaurantBiteOutOf10,
   calcCafeOutOf10,
   scoreColor,
   scoreLabel,
@@ -118,8 +119,8 @@ export default function App() {
   const [showSearch, setShowSearch] = useState(false);
   const [search, setSearch] = useState("");
   const [weights, setWeights] = useState({taste:50,bpb:40,wait:10});
-  const welcomeTotal = weights.taste + weights.bpb + weights.wait;
-  const canProceedWelcome = welcomeTotal === 100;
+  const restaurantWeightsSum = weights.taste + weights.bpb + weights.wait;
+  const canProceedWelcome = restaurantWeightsSum === 100;
   const [cafeWeights, setCafeWeights] = useState({taste:70,bpb:30});
   const [cafeWErr, setCafeWErr] = useState("");
   const [questL, setQuestL] = useState(new Set(["T","M","S","U","C","D","Y","K"]));
@@ -170,14 +171,22 @@ export default function App() {
     return newW;
   }
 
-  /** Restaurant weights: all sliders are independent (0-100 each). */
-  function updW(k,v){
-    const nv = Math.round(Math.min(100,Math.max(0,+v)));
-    setWeights(w=>({...w,[k]:nv}));
+  /** Each slider 0–100; BITE uses relative mix (see `restaurantWeightRatios` in scoring). */
+  function updW(k, v) {
+    const nv = Math.round(Math.min(100, Math.max(0, +v)));
+    setWeights((w) => ({ ...w, [k]: nv }));
   }
 
-  function resetWeights(defaults){
-    setWeights({...defaults});
+  function resetWeights(defaults) {
+    setWeights({ ...defaults });
+  }
+
+  function replaceRestaurantWeights(next) {
+    setWeights({
+      taste: Math.round(Math.min(100, Math.max(0, Number(next.taste) || 0))),
+      bpb: Math.round(Math.min(100, Math.max(0, Number(next.bpb) || 0))),
+      wait: Math.round(Math.min(100, Math.max(0, Number(next.wait) || 0))),
+    });
   }
 
   function updCafeW(k,v){
@@ -304,18 +313,18 @@ export default function App() {
             <div style={{borderTop:"0.5px solid rgba(255,255,255,0.08)",paddingTop:14,marginBottom:14}}>
               <WeightSliders weights={weights} labels={[[t.taste,"taste"],[t.bangBuck,"bpb"],[t.wait,"wait"]]} onUpdate={updW} onReset={resetWeights} defaults={{taste:50,bpb:40,wait:10}} careHeadingPx={15}/>
               <div style={{fontSize:12,color:canProceedWelcome?"#97C459":"#EF9F27",textAlign:"center",marginTop:8}}>
-                {t.weightsTotal}: {welcomeTotal}/100
+                {t.weightsTotal}: {restaurantWeightsSum}/100
               </div>
               {!canProceedWelcome&&(
                 <div style={{fontSize:11,color:"#F1EFE8",textAlign:"center",marginTop:4}}>
-                  {t.weightsMustEqual100}
+                  {t.weightsSumTo100}
                 </div>
               )}
             </div>
             {welcomeBodyDisplay.split("\n\n").slice(1).map((para,i)=>(
               <p key={i} style={{fontSize:13,color:"#F1EFE8",margin:"0 0 12px",lineHeight:1.7,textAlign:"center",whiteSpace:"pre-line"}}>{para}</p>
             ))}
-            <button disabled={!canProceedWelcome} onClick={dismissWelcome} style={{width:"100%",padding:"12px",background:canProceedWelcome?"#F0997B":"#5A4A43",color:canProceedWelcome?"#141413":"#AFA8A3",border:"none",borderRadius:10,fontSize:14,fontWeight:500,cursor:canProceedWelcome?"pointer":"not-allowed",opacity:canProceedWelcome?1:0.85}}>{t.welcomeBtn}</button>
+            <button type="button" disabled={!canProceedWelcome} onClick={dismissWelcome} style={{width:"100%",padding:"12px",background:canProceedWelcome?"#F0997B":"#5A4A43",color:canProceedWelcome?"#141413":"#AFA8A3",border:"none",borderRadius:10,fontSize:14,fontWeight:500,cursor:canProceedWelcome?"pointer":"not-allowed",opacity:canProceedWelcome?1:0.85}}>{t.welcomeBtn}</button>
           </div>
         </div>
       )}
@@ -418,7 +427,8 @@ export default function App() {
                 filtered.forEach(e=>{const k=e.name;if(!groups[k])groups[k]=[];groups[k].push(e);});
                 const groupArr=Object.values(groups).map(grp=>{
                   const e=grp[grp.length-1];
-                  const avgBite=grp.reduce((a,e)=>a+(calcBiteOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights)??0),0)/grp.length;
+                  const biteVals=grp.map(e=>calcBiteOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights)).filter(v=>v!=null);
+                  const avgBite=biteVals.length?biteVals.reduce((a,b)=>a+b,0)/biteVals.length:0;
                   const avgTaste=grp.reduce((a,e)=>a+e.taste,0)/grp.length;
                   const avgBpb=grp.reduce((a,e)=>a+(e.cost/e.portions),0)/grp.length;
                   const avgWait=grp.reduce((a,e)=>a+e.wait,0)/grp.length;
@@ -446,7 +456,7 @@ export default function App() {
               })()}
               {sortedR.length>0&&(
                 <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginTop:16}}>
-                  {[[t.entries,String(sortedR.length)],[t.avgBite,(sortedR.reduce((a,e)=>a+(calcBiteOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights)??0),0)/sortedR.length).toFixed(2)]].map(([l,v])=>(
+                  {[[t.entries,String(sortedR.length)],[t.avgBite,(()=>{const m=meanRestaurantBiteOutOf10(sortedR,weights);return m!=null?`${m.toFixed(2)}/10`:"—";})()]].map(([l,v])=>(
                     <div key={l} style={{background:"#1E1E1C",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:8,padding:"10px 12px"}}>
                       <div style={S.sm}>{l}</div>
                       <div style={{fontSize:20,fontWeight:500,color:"#F1EFE8"}}>{v}</div>
@@ -769,7 +779,7 @@ export default function App() {
       )}
 
       {st.view==="suggest"&&<SuggestView entries={st.entries} weights={weights} onBack={()=>dispatch({type:"VIEW",view:"quests"})}/>}
-      {st.view==="palette"&&<PaletteView entries={st.entries} cafes={cafes} weights={weights} updateWeight={updW} resetWeights={resetWeights} cafeWeights={cafeWeights} updateCafeW={updCafeW} resetCafeWeights={resetCafeWeights} cafeTotalW={+(cafeWeights.taste+cafeWeights.bpb).toFixed(0)} cafeWErr={cafeWErr}/>}
+      {st.view==="palette"&&<PaletteView entries={st.entries} cafes={cafes} weights={weights} replaceRestaurantWeights={replaceRestaurantWeights} cafeWeights={cafeWeights} updateCafeW={updCafeW} resetCafeWeights={resetCafeWeights} cafeTotalW={+(cafeWeights.taste+cafeWeights.bpb).toFixed(0)} cafeWErr={cafeWErr}/>}
 
       {/* ── FAQ ── */}
       {st.view==="faq"&&<FaqView isAdmin={isAdmin} faqOverrides={faqOverrides} setFaqOverrides={setFaqOverrides}/>}

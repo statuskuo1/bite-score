@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLang } from "../contexts/LangContext.jsx";
 import { FLAGS, REGION_MAP, CUISINE_REGIONS, REGION_COLORS } from "../constants/cuisineConstants.js";
-import { calcBiteOutOf10 } from "../utils/scoring.js";
+import { calcBiteOutOf10, meanRestaurantBiteOutOf10 } from "../utils/scoring.js";
 import { S } from "../styles/sharedStyles.js";
 import { DonutChart } from "./DonutChart.jsx";
 import { DrinksPalette } from "./DrinksPalette.jsx";
@@ -9,11 +9,18 @@ import { SweetsPalette } from "./SweetsPalette.jsx";
 import { WeightSliders } from "./WeightSliders.jsx";
 import { StatCard } from "./StatCard.jsx";
 
-export function PaletteView({entries,cafes,weights,updateWeight,resetWeights,cafeWeights,updateCafeW,resetCafeWeights,cafeTotalW,cafeWErr}) {
+const WEIGHT_DEFAULTS = { taste: 50, bpb: 40, wait: 10 };
+
+export function PaletteView({entries,cafes,weights,replaceRestaurantWeights,cafeWeights,updateCafeW,resetCafeWeights,cafeTotalW,cafeWErr}) {
   const {t,lang:lang_} = useLang();
   const [paletteTab,setPaletteTab] = useState("restaurants");
   const [editingW,setEditingW] = useState(false);
+  const [draftW,setDraftW] = useState(()=>({...weights}));
   const [roastMode,setRoastMode] = useState(false);
+
+  useEffect(()=>{
+    if(!editingW)setDraftW({...weights});
+  },[weights,editingW]);
   const total = entries.length;
 
   const rg={};
@@ -25,6 +32,20 @@ export function PaletteView({entries,cafes,weights,updateWeight,resetWeights,caf
   const topR=sorted[0]?.[0]||"Other",rCount=sorted.length;
   const cc={};entries.forEach(e=>{cc[e.cuisine]=(cc[e.cuisine]||0)+1;});
   const topC=Object.entries(cc).sort((a,b)=>b[1]-a[1])[0]?.[0]||"—";
+  const restaurantWeightsSum = weights.taste + weights.bpb + weights.wait;
+  const weightsOk = restaurantWeightsSum === 100;
+  const draftSum = draftW.taste + draftW.bpb + draftW.wait;
+  const draftOk = draftSum === 100;
+
+  function draftUpd(k,v){
+    const nv = Math.round(Math.min(100,Math.max(0,+v)));
+    setDraftW(w=>({...w,[k]:nv}));
+  }
+  function saveRestaurantWeights(){
+    if(!draftOk)return;
+    replaceRestaurantWeights(draftW);
+    setEditingW(false);
+  }
   const avgT=total?(entries.reduce((a,e)=>a+e.taste,0)/total).toFixed(1):"0";
   const avgC=total?(entries.reduce((a,e)=>a+e.cost,0)/total).toFixed(0):"0";
   const groupedEntries = Object.values(entries.reduce((acc,e)=>{if(!acc[e.name])acc[e.name]=[];acc[e.name].push(e);return acc;},{}));
@@ -44,6 +65,9 @@ export function PaletteView({entries,cafes,weights,updateWeight,resetWeights,caf
   const l0=pr0, l1=pr1, l2=pr2, l3=pr3;
 
   const pillSt = (on) => ({padding:"6px 14px",borderRadius:20,border:"1.5px solid "+(on?"#F0997B":"rgba(255,255,255,0.1)"),background:on?"#3C1F13":"transparent",color:on?"#F0997B":"#888780",fontSize:12,fontWeight:on?500:400,cursor:"pointer"});
+  const btnGhost = {fontSize:11,color:"#5B9BD5",background:"none",border:"1px solid rgba(91,155,213,0.45)",borderRadius:8,padding:"5px 12px",cursor:"pointer",fontWeight:500};
+  /** Hide personality / breakdown / stats only when there are no entries or committed weights don’t sum to 100 — not while editing draft (so the page doesn’t “disappear”). */
+  const showRestaurantBody = total>0&&weightsOk;
 
   return (
     <div>
@@ -55,11 +79,40 @@ export function PaletteView({entries,cafes,weights,updateWeight,resetWeights,caf
 
       {paletteTab==="restaurants"&&(
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
-          {!total?<p style={{color:"#888780",fontSize:14}}>{t.noEntriesYet}</p>:<>
           <div style={{...S.card}}>
-            <div style={{...S.lbl,marginBottom:10}}>Weights</div>
-            <WeightSliders weights={weights} labels={[[t.taste,"taste"],[t.bangBuck,"bpb"],[t.wait,"wait"]]} onUpdate={updateWeight} onReset={resetWeights} defaults={{taste:50,bpb:40,wait:10}}/>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+              <div style={{...S.lbl,marginBottom:0}}>{t.weights}</div>
+              {!editingW?(
+                <button type="button" onClick={()=>{setDraftW({...weights});setEditingW(true);}} style={btnGhost}>{t.editWeights}</button>
+              ):(
+                <button type="button" onClick={()=>setEditingW(false)} style={{...btnGhost,color:"#888780",borderColor:"rgba(255,255,255,0.15)"}}>{t.cancel}</button>
+              )}
+            </div>
+            {editingW?(
+              <>
+                <WeightSliders weights={draftW} labels={[[t.taste,"taste"],[t.bangBuck,"bpb"],[t.wait,"wait"]]} onUpdate={draftUpd} onReset={()=>setDraftW({...WEIGHT_DEFAULTS})} defaults={WEIGHT_DEFAULTS}/>
+                <div style={{fontSize:11,color:draftOk?"#97C459":"#EF9F27",textAlign:"center",marginTop:8}}>
+                  {t.weightsTotal}: {draftSum}/100
+                </div>
+                {!draftOk&&(
+                  <div style={{fontSize:10,color:"#F1EFE8",textAlign:"center",marginTop:4}}>{t.weightsSumTo100}</div>
+                )}
+                <button type="button" disabled={!draftOk} onClick={saveRestaurantWeights} style={{width:"100%",marginTop:10,padding:"10px",borderRadius:8,border:"none",fontSize:14,fontWeight:500,cursor:draftOk?"pointer":"not-allowed",background:draftOk?"#F0997B":"#5A4A43",color:draftOk?"#141413":"#AFA8A3",opacity:draftOk?1:0.85}}>{t.weightsSave}</button>
+              </>
+            ):(
+              <>
+                <p style={{fontSize:13,color:"#F1EFE8",margin:0,lineHeight:1.5}}>
+                  {t.taste} <span style={{fontWeight:600,color:"#F0997B"}}>{weights.taste}%</span>
+                  {" · "}{t.bangBuck} <span style={{fontWeight:600,color:"#5B9BD5"}}>{weights.bpb}%</span>
+                  {" · "}{t.wait} <span style={{fontWeight:600,color:"#97C459"}}>{weights.wait}%</span>
+                </p>
+                {!weightsOk&&(
+                  <div style={{fontSize:10,color:"#F1EFE8",textAlign:"center",marginTop:8}}>{t.weightsSumTo100}</div>
+                )}
+              </>
+            )}
           </div>
+          {!total?<p style={{color:"#888780",fontSize:14}}>{t.noEntriesYet}</p>:showRestaurantBody&&<>
           <div style={{...S.card}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
               <div style={{...S.lbl,marginBottom:0}}>{t.tastePalette}</div>
@@ -93,9 +146,11 @@ export function PaletteView({entries,cafes,weights,updateWeight,resetWeights,caf
             {(()=>{
               const noteTopRated="Irene's judgement may have been clouded by bias and how underwhelming her home food has been, so this is not actually objectively #1. But let her live. She misses home 🥹";
               const noteRegions="Tap the Quests tab to explore by cuisine region!";
-              const statRows=[[t.topCuisine,(FLAGS[topC]||"")+" "+topC],[t.topRated,topB?topB.name:"—","topRated"],[t.avgBite,(total?([...entries].reduce((a,e)=>a+(calcBiteOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights)??0),0)/total).toFixed(2):"—")],[t.avgTaste,avgT+"/10"],[t.avgSpend,"$"+avgC+" / meal"],[t.regionsExplored,rCount+" / "+Object.keys(CUISINE_REGIONS).length,"regions"]];
+              const avgBiteMean = total ? meanRestaurantBiteOutOf10(entries, weights) : null;
+              const avgBiteStr = avgBiteMean != null ? `${avgBiteMean.toFixed(2)}/10` : "—";
+              const statRows=[[t.topCuisine,(FLAGS[topC]||"")+" "+topC],[t.topRated,topB?topB.name:"—","topRated"],[t.avgBite,avgBiteStr,"avgBite"],[t.avgTaste,avgT+"/10"],[t.avgSpend,"$"+avgC+" / meal"],[t.regionsExplored,rCount+" / "+Object.keys(CUISINE_REGIONS).length,"regions"]];
               return statRows.map(([label,val,key])=>(
-                <StatCard key={label} label={label} val={val} note={key==="topRated"?noteTopRated:key==="regions"?noteRegions:undefined}/>
+                <StatCard key={label} label={label} val={val} note={key==="topRated"?noteTopRated:key==="regions"?noteRegions:key==="avgBite"?t.avgBitePaletteNote:undefined}/>
               ));
             })()}
           </div>
