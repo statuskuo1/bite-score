@@ -45,7 +45,11 @@ export function AuthModal({ open, onClose }) {
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo: `${redirectBase()}/` },
+        options: {
+          redirectTo: `${redirectBase()}/`,
+          /** Ask Google to show the account picker so users can switch after logout. */
+          queryParams: { prompt: "select_account" },
+        },
       });
       if (error) throw error;
     } catch (e) {
