@@ -8,7 +8,7 @@ const redirectBase = () =>
 
 export function AuthModal({ open, onClose }) {
   const { t } = useLang();
-  const { user, session } = useAuth();
+  const { user, session, displayName } = useAuth();
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -124,7 +124,11 @@ export function AuthModal({ open, onClose }) {
         {session && user ? (
           <div>
             <p style={{ fontSize: 13, color: "#888780", margin: "0 0 16px", lineHeight: 1.5 }}>
-              {t.authSignedInAs} <span style={{ color: "#F0997B", wordBreak: "break-all" }}>{user.email || user.id}</span>
+              {t.authSignedInAs}{" "}
+              <span style={{ color: "#F0997B", fontWeight: 600 }}>{displayName || user.email?.split("@")[0] || user.id}</span>
+              {user.email && (
+                <span style={{ display: "block", fontSize: 11, color: "#888780", marginTop: 8, wordBreak: "break-all" }}>{user.email}</span>
+              )}
             </p>
             <button type="button" disabled={busy} onClick={signOut} style={{ ...btn, background: "transparent", color: "#A32D2D", border: "0.5px solid #A32D2D" }}>
               {t.signOut}

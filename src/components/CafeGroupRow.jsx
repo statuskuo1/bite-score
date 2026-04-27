@@ -6,7 +6,7 @@ import { S } from "../styles/sharedStyles.js";
 import { SwipeRow } from "./SwipeRow.jsx";
 import { canMutateVisit, canSwipeGroup } from "../utils/rowAccess.js";
 
-export function CafeGroupRow({ group, cafeSortBy, onEdit, onDelete, user }) {
+export function CafeGroupRow({ group, cafeSortBy, onEdit, onDelete, user, showAuthor = false }) {
   const {t,lang} = useLang();
   const [exp, setExp] = useState(false);
   const [showVisits, setShowVisits] = useState(false);
@@ -84,6 +84,9 @@ export function CafeGroupRow({ group, cafeSortBy, onEdit, onDelete, user }) {
                 )}
               </div>
               <div style={{fontSize:12,color:"#888780",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{orders||group[0].category}</div>
+              {showAuthor && group[0].authorDisplayName && (
+                <div style={{fontSize:11,color:"#97C459",marginTop:2}}>{t.loggedBy} {group[0].authorDisplayName}</div>
+              )}
             </div>
             <div style={{textAlign:"right"}}>
               <div style={{fontSize:20,fontWeight:500,color:display.color}}>{display.val}</div>
