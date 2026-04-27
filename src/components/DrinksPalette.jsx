@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLang } from "../contexts/LangContext.jsx";
 import { WeightSliders } from "./WeightSliders.jsx";
-import { calcCafe, scoreColor, tasteLabel } from "../utils/scoring.js";
+import { calcCafeOutOf10, tasteLabel } from "../utils/scoring.js";
 import { S } from "../styles/sharedStyles.js";
 
 export function DrinksPalette({cafes,cafeWeights,updateCafeW,resetCafeWeights,cafeTotalW,cafeWErr}) {
@@ -26,7 +26,7 @@ export function DrinksPalette({cafes,cafeWeights,updateCafeW,resetCafeWeights,ca
   const beanCounts={};drinks.forEach(e=>{if(e.beanRegion)beanCounts[e.beanRegion]=(beanCounts[e.beanRegion]||0)+1;});
   const beanEntries=Object.entries(beanCounts).sort((a,b)=>b[1]-a[1]);
   const topBean=beanEntries[0];
-  const scored=drinks.map(e=>({...e,sc:calcCafe(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability)})).sort((a,b)=>(b.sc??0)-(a.sc??0));
+  const scored=drinks.map(e=>({...e,sc:calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability)})).sort((a,b)=>(b.sc??0)-(a.sc??0));
   const best=scored[0];
 
   const hasEnoughData = total >= 3;
@@ -81,7 +81,7 @@ export function DrinksPalette({cafes,cafeWeights,updateCafeW,resetCafeWeights,ca
           const coffeeOnly=drinks.filter(e=>e.category==="Coffee"&&e.beanRegion);
           const coffeeTotal=coffeeOnly.length;
           const bc={};coffeeOnly.forEach(e=>{bc[e.beanRegion]=(bc[e.beanRegion]||0)+1;});
-          const scored2=coffeeOnly.map(e=>({...e,sc:calcCafe(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability)}));
+          const scored2=coffeeOnly.map(e=>({...e,sc:calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability)}));
           const topBeanRegion=Object.entries(bc).sort((a,b)=>b[1]-a[1])[0];
           const bestByBean=topBeanRegion?scored2.filter(e=>e.beanRegion===topBeanRegion[0]).sort((a,b)=>(b.sc??0)-(a.sc??0))[0]:null;
           const avgBiteBean=coffeeTotal?(scored2.reduce((a,e)=>a+(e.sc??0),0)/coffeeTotal).toFixed(2):"—";
@@ -141,7 +141,7 @@ export function DrinksPalette({cafes,cafeWeights,updateCafeW,resetCafeWeights,ca
         {[
           [t.bestDrink, best?best.name+(best.order?" ("+best.order+")":""):"—"],
           ["Top rated", best?best.name:"—"],
-          ["Avg BITE", (drinks.reduce((a,e)=>a+(calcCafe(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability)??0),0)/total).toFixed(2)],
+          ["Avg BITE", (drinks.reduce((a,e)=>a+(calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability)??0),0)/total).toFixed(2)],
           [t.avgTaste, avgT+"/10"],
           [t.avgCost, "$"+avgC],
           [t.totalDrinks, String(total)],

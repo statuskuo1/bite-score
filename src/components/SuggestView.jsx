@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useLang } from "../contexts/LangContext.jsx";
 import { ALL_CUISINES, FLAGS, REGION_MAP } from "../constants/cuisineConstants.js";
-import { calcBite } from "../utils/scoring.js";
+import { calcBiteOutOf10 } from "../utils/scoring.js";
 import { S } from "../styles/sharedStyles.js";
 
-export function SuggestView({entries,onBack}) {
+export function SuggestView({entries,weights,onBack}) {
   const {t,lang} = useLang();
   const logged = new Set(entries.map(e=>e.cuisine&&e.cuisine.trim()));
   const untried = ALL_CUISINES.filter(x=>!logged.has(x));
@@ -57,7 +57,7 @@ export function SuggestView({entries,onBack}) {
               {myEntries.map(e=>(
                 <div key={e.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"6px 10px",background:"#141413",borderRadius:8,marginBottom:6}}>
                   <span style={{fontSize:13,color:"#F1EFE8",fontWeight:500}}>{e.name}</span>
-                  <span style={{fontSize:12,color:"#888780"}}>{"⭐".repeat(e.repeatability)||"✕"} · BITE {(()=>{const s=calcBite(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,null);return s!=null?s.toFixed(2):"—";})()}</span>
+                  <span style={{fontSize:12,color:"#888780"}}>{"⭐".repeat(e.repeatability)||"✕"} · BITE {(()=>{const s=calcBiteOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights);return s!=null?s.toFixed(2):"—";})()}</span>
                 </div>
               ))}
             </div>

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLang } from "../contexts/LangContext.jsx";
-import { calcCafe, scoreColor, cafeScoreColor, cafeScoreLabel } from "../utils/scoring.js";
+import { calcCafeOutOf10, cafeScoreColor, cafeScoreLabel } from "../utils/scoring.js";
 import { S } from "../styles/sharedStyles.js";
 import { Pill } from "./Pill.jsx";
 import { CafeNameInput } from "./CafeNameInput.jsx";
@@ -49,11 +49,11 @@ export function CafeForm({initial,onSave,onCancel,addType,setAddType,existingNam
           </div>
         ):<div/>}
         {(()=>{
-          const sc=items[0]?calcCafe(+items[0].taste,+items[0].cost,+items[0].portions,0,false,0):null;
+          const sc=items[0]?calcCafeOutOf10(+items[0].taste,+items[0].cost,+items[0].portions,0,false,0):null;
           return(
             <div style={{textAlign:"right"}}>
-              <div style={{fontSize:22,fontWeight:600,color:scoreColor(sc),lineHeight:1}}>{sc!=null?sc.toFixed(2):"—"}</div>
-              <div style={{fontSize:11,color:cafeScoreColor(sc)}}>{cafeScoreLabel(sc)}</div>
+              <div style={{fontSize:22,fontWeight:600,color:cafeScoreColor(sc),lineHeight:1}}>{sc!=null?sc.toFixed(2):"—"}</div>
+              <div style={{fontSize:11,color:cafeScoreColor(sc)}}>{cafeScoreLabel(sc,t)}</div>
             </div>
           );
         })()}

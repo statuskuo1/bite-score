@@ -1,6 +1,6 @@
 import { useLang } from "../contexts/LangContext.jsx";
 import { CAFE_ORDERS, CAFE_ICONS } from "../constants/cafeCatalog.js";
-import { calcCafe, scoreColor, tasteLabel } from "../utils/scoring.js";
+import { calcCafeOutOf10, scoreColor, tasteLabel } from "../utils/scoring.js";
 import { S } from "../styles/sharedStyles.js";
 import { FieldLabel } from "./FieldLabel.jsx";
 import { OrderPills } from "./OrderPills.jsx";
@@ -9,7 +9,7 @@ import { OrderAutocomplete } from "./OrderAutocomplete.jsx";
 export function CafeItemBlock({item, idx, onUpdate, onRemove, canRemove, pastOrders}) {
   const {t} = useLang();
   const orderOptions = CAFE_ORDERS[item.category];
-  const score = calcCafe(+item.taste,+item.cost,+item.portions,0,false,0);
+  const score = calcCafeOutOf10(+item.taste,+item.cost,+item.portions,0,false,0);
   return (
     <div style={{marginBottom:12}}>
       {idx>0&&<div style={{borderTop:"0.5px solid rgba(255,255,255,0.1)",marginBottom:12}}/>}

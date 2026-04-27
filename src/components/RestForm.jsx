@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLang } from "../contexts/LangContext.jsx";
 import { FLAGS } from "../constants/cuisineConstants.js";
-import { calcBite, scoreColor, scoreLabel, tasteLabel } from "../utils/scoring.js";
+import { calcBiteOutOf10, scoreColor, scoreLabel, tasteLabel } from "../utils/scoring.js";
 import { S } from "../styles/sharedStyles.js";
 import { Pill } from "./Pill.jsx";
 import { CafeNameInput } from "./CafeNameInput.jsx";
@@ -16,8 +16,8 @@ export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,exi
   const [f,setF] = useState(initial);
   const [sub,setSub] = useState(false);
   const inp = (k,v) => setF(p=>({...p,[k]:v}));
-  const score = calcBite(+f.taste,+f.cost,+f.portions,+f.wait,f.useR,+f.repeatability,weights);
-  const bg = score===null?"#2C2C2A":score>=3?"#1A2E0A":score>=2?"#0C2A3A":score>=1?"#2A1E05":"#3C1F13";
+  const score = calcBiteOutOf10(+f.taste,+f.cost,+f.portions,+f.wait,f.useR,+f.repeatability,weights);
+  const bg = score===null?"#2C2C2A":score>=9.5?"#1A2E0A":score>=8.5?"#1A2E0A":score>=7?"#0C2A3A":score>=4?"#2A1E05":score>=2?"#2C2C2A":"#3C1F13";
   function save() {
     if(!f.name||!f.cost){setSub(true);return;}
     onSave({...f,taste:+f.taste,cost:+f.cost,portions:+f.portions,wait:+f.wait,repeatability:+f.repeatability});

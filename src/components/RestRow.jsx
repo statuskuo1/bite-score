@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLang } from "../contexts/LangContext.jsx";
 import { FLAGS } from "../constants/cuisineConstants.js";
-import { calcBite, scoreColor, scoreLabel, tasteLabel } from "../utils/scoring.js";
+import { calcBiteOutOf10, scoreColor, scoreLabel, tasteLabel } from "../utils/scoring.js";
 import { S } from "../styles/sharedStyles.js";
 import { SwipeRow } from "./SwipeRow.jsx";
 import { canMutateVisit, canSwipeGroup } from "../utils/rowAccess.js";
@@ -27,7 +27,7 @@ export function RestRow({e,i,display,onEdit,onDelete,isAdmin,user,visits=1,group
             </div>
             <div style={{overflowY:"auto",padding:"1rem 1.25rem",flex:1}}>
               {[...grp].reverse().map((v,idx)=>{
-                const sc=calcBite(v.taste,v.cost,v.portions,v.wait,v.useR,v.repeatability,weights);
+                const sc=calcBiteOutOf10(v.taste,v.cost,v.portions,v.wait,v.useR,v.repeatability,weights);
                 return(
                   <div key={v.id} style={{background:"#141413",borderRadius:10,padding:"12px 14px",marginBottom:10}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>

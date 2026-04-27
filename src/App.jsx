@@ -8,12 +8,14 @@ import { ALPHABET, CUISINE_REGIONS, FLAGS } from "./constants/cuisineConstants.j
 import { RESTAURANTS, CAFES_INIT, INIT_REST, INIT_CAFE } from "./data/initialData.js";
 import { reducer } from "./state/logReducer.js";
 import {
-  calcBite,
-  calcCafe,
+  calcBiteOutOf10,
+  calcCafeOutOf10,
   scoreColor,
   scoreLabel,
+  tasteColor,
   tasteLabel,
 } from "./utils/scoring.js";
+import { rating010FilterRows } from "./constants/ratingTiers0to10.js";
 import { S } from "./styles/sharedStyles.js";
 import { LogoWithTripleTap } from "./components/LogoWithTripleTap.jsx";
 import { InfoBubble } from "./components/InfoBubble.jsx";
@@ -49,7 +51,10 @@ export default function App() {
   const [welcomeOverride, setWelcomeOverride] = useState({});
   const [lang, setLang] = useState(()=>localStorage.getItem("bite_lang")||"en");
   const t = T[lang]||T.en;
-  const welcomeBodyDisplay = omitPlayWelcomeAside(welcomeOverride[lang+"_body"]||t.welcome2);
+  /** Bundled `translations.js` by default. Supabase `welcome_*` only when hosting sets `VITE_WELCOME_USE_SUPABASE=true` (opt-in). */
+  const welcomeUseDbCopy = import.meta.env.VITE_WELCOME_USE_SUPABASE === 'true';
+  const welcomeTitleDisplay = (welcomeUseDbCopy && welcomeOverride[lang+"_title"]) || t.welcome1;
+  const welcomeBodyDisplay = omitPlayWelcomeAside((welcomeUseDbCopy && welcomeOverride[lang+"_body"]) || t.welcome2);
   function toggleLang(){const nl=lang==="en"?"zh":"en";setLang(nl);localStorage.setItem("bite_lang",nl);}
 
   useEffect(()=>{
@@ -198,7 +203,7 @@ export default function App() {
     let d=0;
     // For each field, d>0 means a should come FIRST in descending (default ↓) order
     // i.e. d = "a is better than b"
-    if(sortBy==="bite") d=(calcBite(a.taste,a.cost,a.portions,a.wait,a.useR,a.repeatability,weights)??0)-(calcBite(b.taste,b.cost,b.portions,b.wait,b.useR,b.repeatability,weights)??0);
+    if(sortBy==="bite") d=(calcBiteOutOf10(a.taste,a.cost,a.portions,a.wait,a.useR,a.repeatability,weights)??0)-(calcBiteOutOf10(b.taste,b.cost,b.portions,b.wait,b.useR,b.repeatability,weights)??0);
     else if(sortBy==="taste") d=a.taste-b.taste;
     else if(sortBy==="bpb") d=(b.cost/b.portions)-(a.cost/a.portions); // lower cost = better
     else if(sortBy==="wait") d=b.wait-a.wait; // lower wait = better
@@ -209,7 +214,7 @@ export default function App() {
 
   const allCities = [...new Set(sortedR.map(e=>e.city||"NYC"))].sort();
   const filtered = sortedR.filter(e=>{
-    if(tiers.size>0&&!tiers.has(scoreLabel(calcBite(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights),T.en)))return false;
+    if(tiers.size>0&&!tiers.has(scoreLabel(calcBiteOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights),t)))return false;
     if(cityFilter&&(e.city||"NYC")!==cityFilter)return false;
     if(search.trim()){const q=search.trim().toLowerCase();return e.name.toLowerCase().includes(q)||e.cuisine.toLowerCase().includes(q)||(e.city||'NYC').toLowerCase().includes(q)||(e.notes&&e.notes.toLowerCase().includes(q));}
     return true;
@@ -218,7 +223,7 @@ export default function App() {
   const DRINK_CATS = ["Coffee","Tea","Other"];
   const sortedDrinks = [...cafes].filter(e=>DRINK_CATS.includes(e.category)).sort((a,b)=>{
     let d=0;
-    if(cafeSortBy==="bite") d=(calcCafe(b.taste,b.cost,b.portions,b.wait,b.useR,b.repeatability)??0)-(calcCafe(a.taste,a.cost,a.portions,a.wait,a.useR,a.repeatability)??0);
+    if(cafeSortBy==="bite") d=(calcCafeOutOf10(b.taste,b.cost,b.portions,b.wait,b.useR,b.repeatability)??0)-(calcCafeOutOf10(a.taste,a.cost,a.portions,a.wait,a.useR,a.repeatability)??0);
     else if(cafeSortBy==="taste") d=b.taste-a.taste;
     else if(cafeSortBy==="bpb") d=(a.cost/a.portions)-(b.cost/b.portions);
     else if(cafeSortBy==="wait") d=a.wait-b.wait;
@@ -233,7 +238,7 @@ export default function App() {
 
   const sortedSweets = [...cafes].filter(e=>e.category==="Sweets").sort((a,b)=>{
     let d=0;
-    if(sweetsSortBy==="bite") d=(calcCafe(b.taste,b.cost,b.portions,b.wait,b.useR,b.repeatability)??0)-(calcCafe(a.taste,a.cost,a.portions,a.wait,a.useR,a.repeatability)??0);
+    if(sweetsSortBy==="bite") d=(calcCafeOutOf10(b.taste,b.cost,b.portions,b.wait,b.useR,b.repeatability)??0)-(calcCafeOutOf10(a.taste,a.cost,a.portions,a.wait,a.useR,a.repeatability)??0);
     else if(sweetsSortBy==="taste") d=b.taste-a.taste;
     else if(sweetsSortBy==="bpb") d=(a.cost/a.portions)-(b.cost/b.portions);
     else if(sweetsSortBy==="wait") d=a.wait-b.wait;
@@ -244,15 +249,15 @@ export default function App() {
     return true;
   });
 
-  const TIERS=[["Elite","#97C459"],["Great","#97C459"],["Good","#5B9BD5"],["Decent","#EF9F27"],["Don't bother","#A32D2D"]];
+  const tierFilterRows = rating010FilterRows(t);
   const tabSt = (on) => ({padding:"7px 18px",borderRadius:20,border:"1.5px solid "+(on?"#F0997B":"rgba(255,255,255,0.1)"),background:on?"#3C1F13":"transparent",color:on?"#F0997B":"#888780",fontSize:13,fontWeight:on?500:400,cursor:"pointer"});
 
   function getDisplay(e) {
-    if(sortBy==="taste"){const tv=e.taste,lbl=tasteLabel(tv,t),col=tv<=2?"#A32D2D":tv<=4?"#888780":tv<=7?"#EF9F27":tv<=8.5?"#5B9BD5":"#97C459";return{val:tv.toFixed(1),label:lbl,color:col};}
+    if(sortBy==="taste"){const tv=e.taste,lbl=tasteLabel(tv,t),col=tasteColor(tv);return{val:tv.toFixed(1),label:lbl,color:col};}
     if(sortBy==="bpb") return{val:"$"+(e.cost/e.portions).toFixed(2),label:t.perPortion,color:"#5B9BD5"};
     if(sortBy==="wait") return{val:e.wait+" min",label:t.waitLabel,color:"#888780"};
     if(sortBy==="repeat") return{val:e.useR?("⭐".repeat(e.repeatability)||"✕"):t.off,label:e.useR?(e.repeatability===3?t.mustReturnLabel:e.repeatability===2?t.wouldSeekOutLabel:e.repeatability===1?t.ifOccasionCallsLabel:t.wouldntReturnLabel):"off",color:"#EF9F27"};
-    const sc=calcBite(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights);
+    const sc=calcBiteOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights);
     return{val:sc!=null?sc.toFixed(2):"—",label:scoreLabel(sc,t),color:scoreColor(sc)};
   }
 
@@ -293,7 +298,7 @@ export default function App() {
               ))}
             </div>
             <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:16}}>
-              <p style={{fontSize:16,fontWeight:600,color:"#F1EFE8",margin:0,lineHeight:1.5,textAlign:"center"}}>{welcomeOverride[lang+"_title"]||t.welcome1}</p>
+              <p style={{fontSize:16,fontWeight:600,color:"#F1EFE8",margin:0,lineHeight:1.5,textAlign:"center"}}>{welcomeTitleDisplay}</p>
               <InfoBubble content={welcomeBodyDisplay.split("\n\n")[0]||""}/>
             </div>
             <div style={{borderTop:"0.5px solid rgba(255,255,255,0.08)",paddingTop:14,marginBottom:14}}>
@@ -390,9 +395,9 @@ export default function App() {
                           <span style={S.sm}>{t.filterByTier}</span>
                           {tiers.size>0&&<button onClick={()=>setTiers(new Set())} style={{fontSize:11,color:"#F0997B",background:"none",border:"none",cursor:"pointer",padding:0}}>{t.clear}</button>}
                         </div>
-                        {TIERS.map(([tier,col])=>{
+                        {tierFilterRows.map(([tier,col])=>{
                           const on=tiers.has(tier);
-                          const cnt=sortedR.filter(e=>scoreLabel(calcBite(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights),T.en)===tier).length;
+                          const cnt=sortedR.filter(e=>scoreLabel(calcBiteOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights),t)===tier).length;
                           return(
                             <div key={tier} onClick={()=>setTiers(p=>{const n=new Set(p);on?n.delete(tier):n.add(tier);return n;})} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderBottom:"0.5px solid rgba(255,255,255,0.1)",cursor:"pointer",background:on?"rgba(255,255,255,0.03)":"transparent"}}>
                               <div style={{width:13,height:13,borderRadius:3,border:"1.5px solid "+(on?col:"rgba(255,255,255,0.1)"),background:on?col:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{on&&<span style={{color:"#141413",fontSize:9,fontWeight:700,lineHeight:1}}>✓</span>}</div>
@@ -413,7 +418,7 @@ export default function App() {
                 filtered.forEach(e=>{const k=e.name;if(!groups[k])groups[k]=[];groups[k].push(e);});
                 const groupArr=Object.values(groups).map(grp=>{
                   const e=grp[grp.length-1];
-                  const avgBite=grp.reduce((a,e)=>a+(calcBite(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights)??0),0)/grp.length;
+                  const avgBite=grp.reduce((a,e)=>a+(calcBiteOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights)??0),0)/grp.length;
                   const avgTaste=grp.reduce((a,e)=>a+e.taste,0)/grp.length;
                   const avgBpb=grp.reduce((a,e)=>a+(e.cost/e.portions),0)/grp.length;
                   const avgWait=grp.reduce((a,e)=>a+e.wait,0)/grp.length;
@@ -441,7 +446,7 @@ export default function App() {
               })()}
               {sortedR.length>0&&(
                 <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginTop:16}}>
-                  {[[t.entries,String(sortedR.length)],[t.avgBite,(sortedR.reduce((a,e)=>a+(calcBite(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights)??0),0)/sortedR.length).toFixed(2)]].map(([l,v])=>(
+                  {[[t.entries,String(sortedR.length)],[t.avgBite,(sortedR.reduce((a,e)=>a+(calcBiteOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights)??0),0)/sortedR.length).toFixed(2)]].map(([l,v])=>(
                     <div key={l} style={{background:"#1E1E1C",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:8,padding:"10px 12px"}}>
                       <div style={S.sm}>{l}</div>
                       <div style={{fontSize:20,fontWeight:500,color:"#F1EFE8"}}>{v}</div>
@@ -514,7 +519,7 @@ export default function App() {
                   if(cafeSortBy==="bpb") return -avg(e=>e.cost/e.portions);
                   if(cafeSortBy==="wait") return -avg(e=>e.wait);
                   if(cafeSortBy==="repeat") return avg(e=>e.repeatability)+(grp.length*0.001);
-                  return avg(e=>calcCafe(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability)??0);
+                  return avg(e=>calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability)??0);
                 };
                 return Object.entries(groups).sort((a,b)=>cafeSortAsc?getSortVal(a[1])-getSortVal(b[1]):getSortVal(b[1])-getSortVal(a[1])).map(([name,grp])=>(
                   <CafeGroupRow key={name} group={grp} cafeSortBy={cafeSortBy} isAdmin={isAdmin} user={user} onEdit={e=>{setEditC(e);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={async id=>{
@@ -527,7 +532,7 @@ export default function App() {
               })()}
               {sortedDrinks.length>0&&(
                 <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginTop:16}}>
-                  {[[t.entries,String(sortedDrinks.length)],[t.avgBite,(sortedDrinks.reduce((a,e)=>a+(calcCafe(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability)??0),0)/sortedDrinks.length).toFixed(2)]].map(([l,v])=>(
+                  {[[t.entries,String(sortedDrinks.length)],[t.avgBite,(sortedDrinks.reduce((a,e)=>a+(calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability)??0),0)/sortedDrinks.length).toFixed(2)]].map(([l,v])=>(
                     <div key={l} style={{background:"#1E1E1C",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:8,padding:"10px 12px"}}>
                       <div style={S.sm}>{l}</div>
                       <div style={{fontSize:20,fontWeight:500,color:"#F1EFE8"}}>{v}</div>
@@ -571,7 +576,7 @@ export default function App() {
                   if(sweetsSortBy==="bpb") return -avg(e=>e.cost/e.portions);
                   if(sweetsSortBy==="wait") return -avg(e=>e.wait);
                   if(sweetsSortBy==="repeat") return avg(e=>e.repeatability)+(grp.length*0.001);
-                  return avg(e=>calcCafe(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability)??0);
+                  return avg(e=>calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability)??0);
                 };
                 return Object.entries(groups).sort((a,b)=>sweetsSortAsc?getSortValS(a[1])-getSortValS(b[1]):getSortValS(b[1])-getSortValS(a[1])).map(([name,grp])=>(
                   <CafeGroupRow key={name} group={grp} cafeSortBy={sweetsSortBy} isAdmin={isAdmin} user={user} onEdit={e=>{setEditC(e);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={async id=>{
@@ -584,7 +589,7 @@ export default function App() {
               })()}
               {sortedSweets.length>0&&(
                 <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginTop:16}}>
-                  {[[t.entries,String(sortedSweets.length)],[t.avgBite,(sortedSweets.reduce((a,e)=>a+(calcCafe(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability)??0),0)/sortedSweets.length).toFixed(2)]].map(([l,v])=>(
+                  {[[t.entries,String(sortedSweets.length)],[t.avgBite,(sortedSweets.reduce((a,e)=>a+(calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability)??0),0)/sortedSweets.length).toFixed(2)]].map(([l,v])=>(
                     <div key={l} style={{background:"#1E1E1C",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:8,padding:"10px 12px"}}>
                       <div style={S.sm}>{l}</div>
                       <div style={{fontSize:20,fontWeight:500,color:"#F1EFE8"}}>{v}</div>
@@ -763,7 +768,7 @@ export default function App() {
         </div>
       )}
 
-      {st.view==="suggest"&&<SuggestView entries={st.entries} onBack={()=>dispatch({type:"VIEW",view:"quests"})}/>}
+      {st.view==="suggest"&&<SuggestView entries={st.entries} weights={weights} onBack={()=>dispatch({type:"VIEW",view:"quests"})}/>}
       {st.view==="palette"&&<PaletteView entries={st.entries} cafes={cafes} weights={weights} updateWeight={updW} resetWeights={resetWeights} cafeWeights={cafeWeights} updateCafeW={updCafeW} resetCafeWeights={resetCafeWeights} cafeTotalW={+(cafeWeights.taste+cafeWeights.bpb).toFixed(0)} cafeWErr={cafeWErr}/>}
 
       {/* ── FAQ ── */}
