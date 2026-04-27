@@ -27,6 +27,10 @@ Run the SQL in these migrations in **SQL Editor** (or use the Supabase CLI if yo
 
 The `profiles.is_admin` column may still exist from step 1; the **app no longer uses it**. Global `settings` rows (FAQ/welcome defaults, etc.) are edited with the **service role** or SQL Editor, not the browser client.
 
+### Optional: assign all legacy visit rows to one owner
+
+If you imported or created rows before ownership was consistent, run [**`20260429_assign_existing_visits_to_bitescore1.sql`**](../supabase/migrations/20260429_assign_existing_visits_to_bitescore1.sql) once in the SQL Editor (edit the email matching logic inside if your primary account is not `bitescore1`). This sets **`user_id`** on every row in `restaurants` and `cafes` to that user.
+
 ## Verify
 
 1. Sign up / sign in from the app.
