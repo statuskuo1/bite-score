@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { supabase } from "../config/supabaseClient.js";
 import { ensureProfile, fetchProfileById } from "../utils/profileApi.js";
 
@@ -38,6 +38,18 @@ export function AuthProvider({ children }) {
 
   const clearRecovery = () => setRecoveryActive(false);
 
+  /** Re-fetch own profile row. Called by the initial-load effect and by post-edit flows. */
+  const refreshProfile = useCallback(async () => {
+    const u = session?.user;
+    if (!u?.id) {
+      setProfile(null);
+      return null;
+    }
+    const p = await fetchProfileById(supabase, u.id);
+    setProfile(p);
+    return p;
+  }, [session?.user?.id]);
+
   useEffect(() => {
     const u = session?.user;
     if (!u?.id) {
@@ -71,8 +83,9 @@ export function AuthProvider({ children }) {
         "",
       recoveryActive,
       clearRecovery,
+      refreshProfile,
     }),
-    [session, authReady, profile, recoveryActive]
+    [session, authReady, profile, recoveryActive, refreshProfile]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

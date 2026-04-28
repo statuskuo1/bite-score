@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLang } from "../contexts/LangContext.jsx";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { supabase } from "../config/supabaseClient.js";
+import { suggestAvailableUsernames, updateOwnProfile, validateUsername } from "../utils/profileApi.js";
 
 /** Always the tab’s origin so local dev and Vercel previews return here; must be listed in Supabase → Auth → URL configuration → Redirect URLs. */
 const redirectBase = () => window.location.origin.replace(/\/$/, "");
@@ -24,12 +25,59 @@ function formatPasswordSignUpError(e, t) {
 
 export function AuthModal({ open, onClose }) {
   const { t } = useLang();
-  const { user, session, username } = useAuth();
+  const { user, session, username, profile, refreshProfile } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [resetSent, setResetSent] = useState(false);
+
+  /** Profile editor state. Drafts are seeded from the current profile when the modal opens. */
+  const [usernameDraft, setUsernameDraft] = useState("");
+  const [displayNameDraft, setDisplayNameDraft] = useState("");
+  const [saveBusy, setSaveBusy] = useState(false);
+  /** "username_taken" | "invalid_username" | "network" | null */
+  const [saveError, setSaveError] = useState(null);
+  const [saveOk, setSaveOk] = useState(false);
+  /** Available alternatives shown as chips when saveError === "username_taken". */
+  const [suggestions, setSuggestions] = useState([]);
+  const usernameInputRef = useRef(null);
+
+  /** Seed drafts from the live profile every time the modal opens or the profile changes. */
+  useEffect(() => {
+    if (!open || !user) return;
+    setUsernameDraft(profile?.username ?? username ?? "");
+    setDisplayNameDraft(profile?.display_name ?? "");
+    setSaveError(null);
+    setSaveOk(false);
+    setSuggestions([]);
+  }, [open, user?.id, profile?.username, profile?.display_name, username]);
+
+  /** Auto-clear the "Saved" indicator after a short window. */
+  useEffect(() => {
+    if (!saveOk) return;
+    const id = setTimeout(() => setSaveOk(false), 1800);
+    return () => clearTimeout(id);
+  }, [saveOk]);
+
+  const usernameTrim = usernameDraft.trim();
+  const displayNameTrim = displayNameDraft.trim();
+  const usernameLooksValid = useMemo(
+    () => validateUsername(usernameTrim) === null,
+    [usernameTrim]
+  );
+  const isDirty =
+    usernameTrim !== (profile?.username ?? "").trim() ||
+    displayNameTrim !== (profile?.display_name ?? "").trim();
+  const canSave = !!user && usernameLooksValid && isDirty && !saveBusy;
+
+  /** Surface taken/invalid inline on the username field; network errors go to the shared err line. */
+  const usernameInlineErr = (() => {
+    if (saveError === "username_taken") return t.profileUsernameTaken;
+    if (saveError === "invalid_username") return t.profileUsernameInvalid;
+    if (usernameTrim.length > 0 && !usernameLooksValid) return t.profileUsernameInvalid;
+    return null;
+  })();
 
   if (!open) return null;
 
@@ -136,6 +184,38 @@ export function AuthModal({ open, onClose }) {
     }
   }
 
+  async function saveProfile() {
+    if (!user || !canSave) return;
+    setErr("");
+    setSaveError(null);
+    setSaveOk(false);
+    setSaveBusy(true);
+    try {
+      const res = await updateOwnProfile(supabase, user.id, {
+        username: usernameTrim,
+        displayName: displayNameTrim,
+      });
+      if (!res.ok) {
+        if (res.code === "network") setErr(t.profileSavingErr);
+        else setSaveError(res.code);
+        if (res.code === "username_taken") {
+          suggestAvailableUsernames(supabase, usernameTrim)
+            .then((list) => setSuggestions(list))
+            .catch(() => setSuggestions([]));
+        }
+        return;
+      }
+      await refreshProfile();
+      setSaveOk(true);
+      setSuggestions([]);
+    } catch (e) {
+      console.error(e);
+      setErr(t.profileSavingErr);
+    } finally {
+      setSaveBusy(false);
+    }
+  }
+
   async function signOut() {
     setBusy(true);
     setErr("");
@@ -189,7 +269,7 @@ export function AuthModal({ open, onClose }) {
     >
       <div onClick={(e) => e.stopPropagation()} style={panel}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-          <div style={{ fontSize: 17, fontWeight: 600, color: "#F1EFE8" }}>{session ? t.authSignedIn : t.authTitle}</div>
+          <div style={{ fontSize: 17, fontWeight: 600, color: "#F1EFE8" }}>{session ? t.profileTitle : t.authTitle}</div>
           <button
             type="button"
             onClick={onClose}
@@ -201,14 +281,119 @@ export function AuthModal({ open, onClose }) {
 
         {session && user ? (
           <div>
-            <p style={{ fontSize: 13, color: "#888780", margin: "0 0 16px", lineHeight: 1.5 }}>
-              {t.authSignedInAs}{" "}
-              <span style={{ color: "#F0997B", fontWeight: 600 }}>{username || user.email?.split("@")[0] || user.id}</span>
-              {user.email && (
-                <span style={{ display: "block", fontSize: 11, color: "#888780", marginTop: 8, wordBreak: "break-all" }}>{user.email}</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+              {profile?.avatar_url ? (
+                <img
+                  src={profile.avatar_url}
+                  alt=""
+                  referrerPolicy="no-referrer"
+                  style={{
+                    width: 48, height: 48, borderRadius: "50%",
+                    objectFit: "cover", flexShrink: 0,
+                    border: "0.5px solid rgba(255,255,255,0.12)",
+                  }}
+                />
+              ) : (
+                <div style={{
+                  width: 48, height: 48, borderRadius: "50%", flexShrink: 0,
+                  background: "#3C1F13", color: "#F0997B",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 20, fontWeight: 600, lineHeight: 1,
+                }}>
+                  {(usernameTrim || username || user.email || "?").charAt(0).toUpperCase()}
+                </div>
               )}
-            </p>
-            <button type="button" disabled={busy} onClick={signOut} style={{ ...btn, background: "transparent", color: "#A32D2D", border: "0.5px solid #A32D2D" }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "#F1EFE8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {username || user.email?.split("@")[0] || user.id}
+                </div>
+                {user.email && (
+                  <div style={{ fontSize: 11, color: "#888780", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {user.email}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <label style={{ fontSize: 11, color: "#888780", display: "block", marginBottom: 6 }}>{t.profileUsernameLabel}</label>
+            <input
+              ref={usernameInputRef}
+              type="text"
+              autoComplete="off"
+              value={usernameDraft}
+              onChange={(e) => { setUsernameDraft(e.target.value.toLowerCase()); setSaveError(null); setSaveOk(false); setSuggestions([]); }}
+              maxLength={30}
+              style={{
+                width: "100%", boxSizing: "border-box", marginBottom: 4, fontSize: 14,
+                borderColor: usernameInlineErr ? "#A32D2D" : undefined,
+              }}
+            />
+            <div style={{ fontSize: 11, color: usernameInlineErr ? "#A32D2D" : "#666663", marginBottom: saveError === "username_taken" && suggestions.length > 0 ? 6 : 12, lineHeight: 1.4 }}>
+              {usernameInlineErr || t.profileUsernameHelp}
+            </div>
+            {saveError === "username_taken" && suggestions.length > 0 && (
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
+                <span style={{ fontSize: 11, color: "#888780" }}>{t.profileUsernameSuggest}</span>
+                {suggestions.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => {
+                      setUsernameDraft(s);
+                      setSaveError(null);
+                      setSuggestions([]);
+                      usernameInputRef.current?.focus();
+                    }}
+                    style={{
+                      padding: "4px 10px",
+                      borderRadius: 14,
+                      fontSize: 12,
+                      background: "#3C1F13",
+                      color: "#F0997B",
+                      border: "1px solid rgba(240,153,123,0.4)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <label style={{ fontSize: 11, color: "#888780", display: "block", marginBottom: 6 }}>{t.profileDisplayNameLabel}</label>
+            <input
+              type="text"
+              autoComplete="off"
+              value={displayNameDraft}
+              onChange={(e) => { setDisplayNameDraft(e.target.value); setSaveOk(false); }}
+              maxLength={120}
+              style={{ width: "100%", boxSizing: "border-box", marginBottom: 4, fontSize: 14 }}
+            />
+            <div style={{ fontSize: 11, color: "#666663", marginBottom: 14, lineHeight: 1.4 }}>{t.profileDisplayNameHelp}</div>
+
+            <label style={{ fontSize: 11, color: "#888780", display: "block", marginBottom: 6 }}>{t.profileEmailLabel}</label>
+            <div style={{ fontSize: 13, color: "#C4C2BA", marginBottom: 16, wordBreak: "break-all" }}>
+              {user.email || "—"}
+            </div>
+
+            <button
+              type="button"
+              disabled={busy || saveBusy || !canSave}
+              onClick={saveProfile}
+              style={{
+                ...btn,
+                background: canSave ? "#F0997B" : "#5A4A43",
+                color: canSave ? "#141413" : "#AFA8A3",
+                cursor: (busy || saveBusy) ? "wait" : (canSave ? "pointer" : "not-allowed"),
+                opacity: canSave ? 1 : 0.85,
+              }}
+            >
+              {saveBusy ? "…" : t.profileSave}
+            </button>
+            {saveOk && (
+              <p style={{ fontSize: 12, color: "#97C459", margin: "0 0 10px", textAlign: "center" }}>{t.profileSaved}</p>
+            )}
+            <button type="button" disabled={busy || saveBusy} onClick={signOut} style={{ ...btn, background: "transparent", color: "#A32D2D", border: "0.5px solid #A32D2D" }}>
               {t.signOut}
             </button>
           </div>

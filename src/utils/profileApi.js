@@ -2,7 +2,7 @@
  * public.profiles helpers — sync from Supabase Auth user metadata (OAuth / magic link).
  */
 
-/** Build profile fields from auth.user (user_metadata + email). */
+/** Build profile fields from auth.user (user_metadata + email). Username is forced lowercase to match the lowercase-only allowed alphabet. */
 export function profilePayloadFromUser(user) {
   if (!user?.id) return null;
   const meta = user.user_metadata || {};
@@ -20,7 +20,7 @@ export function profilePayloadFromUser(user) {
     prefix;
   const avatarUrl = meta.avatar_url || meta.picture || null;
   return {
-    username: String(username).slice(0, 80),
+    username: String(username).toLowerCase().slice(0, 80),
     display_name: String(displayName).slice(0, 120),
     avatar_url: avatarUrl ? String(avatarUrl).slice(0, 2048) : null,
   };
@@ -78,4 +78,133 @@ export async function ensureProfile(client, user) {
     return fetchProfileById(client, user.id);
   }
   return fetchProfileById(client, user.id);
+}
+
+/** Username format guard. Lowercase-only alphabet so the column matches the case-insensitive unique index without surprises. DB is the final source of truth. */
+export const USERNAME_PATTERN = /^[a-z0-9_.-]{2,30}$/;
+
+export function validateUsername(value) {
+  const v = String(value ?? "").trim();
+  if (!USERNAME_PATTERN.test(v)) return "invalid_format";
+  return null;
+}
+
+/**
+ * Update own profile. Returns { ok, code, data }.
+ *  - code "username_taken"    : another profile already owns this username (case-insensitive),
+ *                               surfaced via a pre-check or a Postgres 23505 backstop.
+ *  - code "invalid_username"  : client-side pattern check failed
+ *  - code "network"           : any other Supabase error
+ *  - code null + ok=true      : success, data is the refreshed row
+ *
+ * Inputs are lowercased before validation so callers don't need to normalize.
+ * `displayName === ""` is sent as null so the column can be cleared cleanly.
+ *
+ * The pre-check (`select … where lower(username) = $u and id <> $userId`) is the
+ * primary "taken" detector; the DB unique index is a backstop for the
+ * pre-check↔update race window. This means the UX still works even on installs
+ * where the partial unique index hasn't been applied yet.
+ */
+export async function updateOwnProfile(client, userId, { username, displayName }) {
+  if (!userId) return { ok: false, code: "network", data: null };
+
+  const u = String(username ?? "").trim().toLowerCase();
+  if (validateUsername(u)) return { ok: false, code: "invalid_username", data: null };
+
+  const { data: clash, error: checkErr } = await client
+    .from("profiles")
+    .select("id")
+    .ilike("username", u)
+    .neq("id", userId)
+    .limit(1)
+    .maybeSingle();
+  if (checkErr) {
+    console.warn("[BITE] updateOwnProfile pre-check:", checkErr.message);
+    return { ok: false, code: "network", data: null };
+  }
+  if (clash) return { ok: false, code: "username_taken", data: null };
+
+  const dn = String(displayName ?? "").trim();
+  const patch = {
+    username: u,
+    display_name: dn === "" ? null : dn.slice(0, 120),
+  };
+
+  const { error } = await client.from("profiles").update(patch).eq("id", userId);
+  if (error) {
+    if (error.code === "23505") return { ok: false, code: "username_taken", data: null };
+    console.warn("[BITE] updateOwnProfile:", error.message);
+    return { ok: false, code: "network", data: null };
+  }
+  const fresh = await fetchProfileById(client, userId);
+  return { ok: true, code: null, data: fresh };
+}
+
+/** Lowercase, strip to allowed alphabet, drop trailing separators, cap at 22 chars (room for suffixes within 30). */
+function deriveUsernameBase(typed) {
+  let b = String(typed ?? "").trim().toLowerCase().replace(/[^a-z0-9_.-]/g, "");
+  b = b.replace(/[_.\-]+$/, "");
+  return b.slice(0, 22);
+}
+
+function randDigits(n) {
+  let s = "";
+  for (let i = 0; i < n; i++) s += Math.floor(Math.random() * 10);
+  return s;
+}
+
+function randAlnum(n) {
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  let s = "";
+  for (let i = 0; i < n; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
+
+/**
+ * Suggest up to `max` available alternatives for a taken username. Single DB round-trip.
+ *
+ * Generates ~8 client-side variants from the typed base (numeric + suffixed mix), drops
+ * malformed / over-length ones, then runs one `select` to filter out the ones already in
+ * `profiles`. Returns a string[] of up to `max` available candidates (best-effort: may be
+ * empty if the base is too short or all variants happen to be taken).
+ *
+ * Note: the `.in()` filter is case-sensitive but candidates are already lowercase
+ * (see deriveUsernameBase / randAlnum), so post-migration this lines up with the
+ * lowercased column. `updateOwnProfile`'s case-insensitive pre-check is the
+ * authoritative "taken" detector on Save; if a clicked suggestion still races
+ * to `username_taken`, fresh suggestions are fetched and shown.
+ */
+export async function suggestAvailableUsernames(client, typed, max = 3) {
+  const base = deriveUsernameBase(typed);
+  if (base.length < 2) return [];
+
+  const raw = [
+    `${base}2`,
+    `${base}3`,
+    `${base}4`,
+    `${base}_${randDigits(2)}`,
+    `${base}.${randDigits(1)}`,
+    `${base}-${randAlnum(3)}`,
+    `${base}${randDigits(2)}`,
+    `${base}_${randAlnum(2)}`,
+  ];
+  const candidates = [...new Set(raw)].filter(
+    (v) => v.length <= 30 && USERNAME_PATTERN.test(v)
+  );
+  if (!candidates.length) return [];
+
+  const lowered = candidates.map((v) => v.toLowerCase());
+  const { data, error } = await client.from("profiles").select("username").in("username", lowered);
+  if (error) {
+    console.warn("[BITE] suggestAvailableUsernames:", error.message);
+    return [];
+  }
+  const taken = new Set((data || []).map((r) => String(r.username || "").toLowerCase()));
+  const available = [];
+  for (const c of candidates) {
+    if (taken.has(c.toLowerCase())) continue;
+    available.push(c);
+    if (available.length >= max) break;
+  }
+  return available;
 }
