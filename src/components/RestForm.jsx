@@ -19,7 +19,7 @@ export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,exi
   const score = calcBiteOutOf10(+f.taste,+f.cost,+f.portions,+f.wait,f.useR,+f.repeatability,weights);
   const bg = score===null?"#2C2C2A":score>=9.5?"#1A2E0A":score>=8.5?"#1A2E0A":score>=7?"#0C2A3A":score>=4?"#2A1E05":score>=2?"#2C2C2A":"#3C1F13";
   function save() {
-    if(!f.name||!f.cost){setSub(true);return;}
+    if(!f.name||!f.cost||!f.city){setSub(true);return;}
     onSave({...f,taste:+f.taste,cost:+f.cost,portions:+f.portions,wait:+f.wait,repeatability:+f.repeatability});
   }
   return (
@@ -56,8 +56,9 @@ export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,exi
       </div>
 
       <div style={{marginBottom:16}}>
-        <FieldLabel>{t.city||"City"} <span style={{color:"#888780",fontWeight:400,fontSize:11}}>({t.optional||"optional"})</span></FieldLabel>
+        <FieldLabel>{t.city||"City"} *</FieldLabel>
         <input value={f.city||""} onChange={e=>inp("city",e.target.value)} placeholder="e.g. NYC, Tokyo, Lisbon" style={S.wb}/>
+        {sub&&!f.city&&<div style={S.err}>Required</div>}
       </div>
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}>
         <Toggle on={f.isFusion} onClick={()=>inp("isFusion",!f.isFusion)}/><span style={{fontSize:13,color:"#888780"}}>{t.fusionDish}</span>

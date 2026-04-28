@@ -37,7 +37,6 @@ export function CafeGroupRow({ group, cafeSortBy, onEdit, onDelete, user, weight
     };
   }
   const display = getDisplay();
-  const orders = [...new Set(group.map((e) => e.order).filter(Boolean))].join(", ");
   const swipeOk = canSwipeGroup(group, user);
 
   const badges = visits > 1 ? [{ label: visits + "×", onClick: () => setShowVisits(true) }] : [];
@@ -66,7 +65,7 @@ export function CafeGroupRow({ group, cafeSortBy, onEdit, onDelete, user, weight
         icon={icon}
         title={group[0].name}
         badges={badges}
-        subtitle={orders || group[0].category}
+        subtitle={group[0].category}
         authorLine={showAuthor && group[0].authorDisplayName ? `${t.loggedBy} ${group[0].authorDisplayName}` : null}
         score={display}
         expandedRows={[

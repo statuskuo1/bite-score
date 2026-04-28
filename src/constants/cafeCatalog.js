@@ -1,8 +1,8 @@
 export const CAFE_ORDERS = {
   "Coffee": ["Espresso","Cortado","Cappuccino","Latte","Flat White","Americano","Cold Brew"],
   "Tea":    ["Matcha","Hojicha","Chai","Brewed Tea","Oolong","Earl Grey"],
-  "Sweets": null,
-  "Other":  null,
+  "Sweets": ["Croissant","Cookie","Cake","Tart","Muffin","Ice cream","Soft serve","Pastry"],
+  "Other":  ["Smoothie","Juice","Hot chocolate","Milkshake","Lemonade","Soda"],
 };
 export const CAFE_ICONS = {"Coffee":"☕","Tea":"🍵","Sweets":"🥐","Other":"🥤"};
 export function getCafeIcon(category, order) {

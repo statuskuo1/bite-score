@@ -3,6 +3,7 @@ import { useLang } from "../contexts/LangContext.jsx";
 import { WeightSliders } from "./WeightSliders.jsx";
 import { calcCafeOutOf10, tasteLabel, CAFE_WEIGHT_DEFAULTS } from "../utils/scoring.js";
 import { S } from "../styles/sharedStyles.js";
+import { BEAN_REGIONS, BEAN_REGION_COLORS, regionOf } from "../constants/coffeeConstants.js";
 
 const btnGhost = {fontSize:11,color:"#5B9BD5",background:"none",border:"1px solid rgba(91,155,213,0.45)",borderRadius:8,padding:"5px 12px",cursor:"pointer",fontWeight:500};
 
@@ -123,18 +124,18 @@ export function DrinksPalette({cafes,drinkWeights,replaceDrinkWeights}) {
       <div style={{...S.card}}>
         <div style={{...S.lbl,marginBottom:14}}>Bean breakdown</div>
         {(()=>{
-          const BEAN_COLORS={"Africa":"#97C459","Central America":"#F0997B","South America":"#EF9F27","Asia-Pacific":"#5B9BD5","Blend":"#AFA9EC","Unknown":"#888780"};
-          const ALL_BEANS=["Africa","Central America","South America","Asia-Pacific","Blend","Unknown"];
+          const BEAN_COLORS=BEAN_REGION_COLORS;
+          const ALL_BEANS=BEAN_REGIONS;
           const coffeeOnly=drinks.filter(e=>e.category==="Coffee"&&e.beanRegion);
           const coffeeTotal=coffeeOnly.length;
-          const bc={};coffeeOnly.forEach(e=>{bc[e.beanRegion]=(bc[e.beanRegion]||0)+1;});
+          const bc={};coffeeOnly.forEach(e=>{const r=regionOf(e.beanRegion);bc[r]=(bc[r]||0)+1;});
           const scored2=coffeeOnly.map(e=>({...e,sc:calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,drinkWeights)}));
           const topBeanRegion=Object.entries(bc).sort((a,b)=>b[1]-a[1])[0];
-          const bestByBean=topBeanRegion?scored2.filter(e=>e.beanRegion===topBeanRegion[0]).sort((a,b)=>(b.sc??0)-(a.sc??0))[0]:null;
+          const bestByBean=topBeanRegion?scored2.filter(e=>regionOf(e.beanRegion)===topBeanRegion[0]).sort((a,b)=>(b.sc??0)-(a.sc??0))[0]:null;
           const avgBiteBean=coffeeTotal?(scored2.reduce((a,e)=>a+(e.sc??0),0)/coffeeTotal).toFixed(2):"—";
           const avgTasteBean=coffeeTotal?(coffeeOnly.reduce((a,e)=>a+e.taste,0)/coffeeTotal).toFixed(1):"—";
           const avgSpendBean=coffeeTotal?"$"+(coffeeOnly.reduce((a,e)=>a+e.cost,0)/coffeeTotal).toFixed(2):"—";
-          const regionsLogged=Object.keys(bc).filter(k=>k!=="Unknown"&&k!=="Blend").length;
+          const regionsLogged=Object.keys(bc).filter(k=>k!=="Other"&&k!=="Blend").length;
 
           // Simple donut
           const S2=160,CX2=80,CY2=80,R2=68,RI2=44;
@@ -165,7 +166,7 @@ export function DrinksPalette({cafes,drinkWeights,replaceDrinkWeights}) {
                   <text x={CX2} y={CY2+12} textAnchor="middle" fill="#888780" fontSize={9}>{coffeeTotal?"coffees":"log origin"}</text>
                 </svg>
                 <div style={{flex:1}}>
-                  {ALL_BEANS.filter(b=>b!=="Blend"&&b!=="Unknown").map(b=>{
+                  {ALL_BEANS.filter(b=>b!=="Blend"&&b!=="Other").map(b=>{
                     const count=bc[b]||0;
                     const hasData=count>0;
                     return (

@@ -65,6 +65,11 @@ export function mapCafeVisitRow(row) {
     wait: +(flat.wait || 0),
     beanRegion: flat.bean_region || "",
     milkLevel: flat.milk_level || "",
+    roast: flat.roast || "",
+    acidity: flat.acidity != null ? +flat.acidity : null,
+    body: flat.body != null ? +flat.body : null,
+    sweetness: flat.sweetness != null ? +flat.sweetness : null,
+    flavorNotes: Array.isArray(flat.flavor_notes) ? flat.flavor_notes : [],
     repeatability: +flat.repeatability,
     useR: flat.use_r !== false,
     notes: flat.notes ?? "",
@@ -285,8 +290,12 @@ export function cafeVisitInsertPayload(placeId, userId, e) {
     cost: e.cost,
     portions: e.portions,
     wait: e.wait || 0,
-    milk_level: e.milkLevel || "",
     bean_region: e.beanRegion || "",
+    roast: e.roast || "",
+    acidity: e.acidity ?? null,
+    body: e.body ?? null,
+    sweetness: e.sweetness ?? null,
+    flavor_notes: Array.isArray(e.flavorNotes) ? e.flavorNotes : [],
     repeatability: e.repeatability,
     use_r: e.useR !== false,
     notes: e.notes || "",
@@ -302,10 +311,33 @@ export function cafeVisitUpdatePayload(placeId, e) {
     cost: e.cost,
     portions: e.portions,
     wait: e.wait || 0,
-    milk_level: e.milkLevel || "",
     bean_region: e.beanRegion || "",
+    roast: e.roast || "",
+    acidity: e.acidity ?? null,
+    body: e.body ?? null,
+    sweetness: e.sweetness ?? null,
+    flavor_notes: Array.isArray(e.flavorNotes) ? e.flavorNotes : [],
     repeatability: e.repeatability,
     use_r: e.useR !== false,
     notes: e.notes || "",
   };
+}
+
+/**
+ * Cross-user popular orders at a cafe place. Calls a SECURITY DEFINER RPC
+ * that aggregates over `cafe_visits` (bypassing per-user RLS for counts only)
+ * and applies a >=2 distinct user privacy floor. Silently returns [] on any
+ * failure - this feature is additive and must never block the form.
+ */
+export async function fetchPopularOrdersForPlace(client, placeId, category) {
+  if (!placeId) return [];
+  const { data, error } = await client.rpc("popular_orders_for_place", {
+    p_place_id: placeId,
+    p_category: category || null,
+  });
+  if (error) {
+    devLog("popular_orders_for_place failed", error);
+    return [];
+  }
+  return (data || []).map((r) => r.order_item).filter(Boolean);
 }

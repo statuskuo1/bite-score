@@ -32,6 +32,7 @@ import {
   tasteLabel,
 } from "./utils/scoring.js";
 import { rating010FilterRows } from "./constants/ratingTiers0to10.js";
+import { BEAN_REGIONS, regionOf } from "./constants/coffeeConstants.js";
 import { S } from "./styles/sharedStyles.js";
 import { MouthLogo } from "./components/MouthLogo.jsx";
 import { InfoBubble } from "./components/InfoBubble.jsx";
@@ -318,7 +319,7 @@ export default function App() {
     return cafeSortAsc?-d:d;
   }).filter(e=>{
     if(cafeFilterMilk&&e.milkLevel!==cafeFilterMilk)return false;
-    if(cafeFilterBean&&e.beanRegion!==cafeFilterBean)return false;
+    if(cafeFilterBean&&regionOf(e.beanRegion)!==cafeFilterBean)return false;
     if(cafeSearch.trim()){const q=cafeSearch.trim().toLowerCase();return e.name.toLowerCase().includes(q)||e.order.toLowerCase().includes(q);}
     return true;
   });
@@ -346,6 +347,25 @@ export default function App() {
     if(sortBy==="repeat") return{val:e.useR?("⭐".repeat(e.repeatability)||"✕"):t.off,label:e.useR?(e.repeatability===3?t.mustReturnLabel:e.repeatability===2?t.wouldSeekOutLabel:e.repeatability===1?t.ifOccasionCallsLabel:t.wouldntReturnLabel):"off",color:"#EF9F27"};
     const sc=calcBiteOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights);
     return{val:sc!=null?sc.toFixed(2):"—",label:scoreLabel(sc,t),color:scoreColor(sc)};
+  }
+
+  async function insertCafeEntry(entry) {
+    if (!user) return;
+    try {
+      const placeId = await ensureCafePlace(supabase, {
+        name: entry.name,
+        city: entry.city || "",
+      });
+      const { data, error } = await supabase
+        .from("cafe_visits")
+        .insert([cafeVisitInsertPayload(placeId, user.id, entry)])
+        .select(CAFE_VISIT_SELECT);
+      if (error) console.error("cafe insert error:", error);
+      const mapped = (data || []).map((row) => mapCafeVisitRow(row));
+      setCafes((p) => [...p, ...mapped]);
+    } catch (err) {
+      console.error("cafe insert threw:", err);
+    }
   }
 
   return (
@@ -620,7 +640,7 @@ export default function App() {
                         <div>
                           <div style={{fontSize:10,color:"#888780",marginBottom:6}}>{t.beanOrigin}</div>
                           <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-                            {["Africa","Central America","South America","Asia-Pacific","Blend"].map(b=>(
+                            {BEAN_REGIONS.filter(b=>b!=="Other").map(b=>(
                               <div key={b} onClick={()=>setCafeFilterBean(cafeFilterBean===b?"":b)} style={{padding:"4px 8px",borderRadius:12,cursor:"pointer",fontSize:11,background:cafeFilterBean===b?"#3C1F13":"#141413",border:"1px solid "+(cafeFilterBean===b?"#F0997B":"rgba(255,255,255,0.1)"),color:cafeFilterBean===b?"#F0997B":"#888780"}}>{b}</div>
                             ))}
                           </div>
@@ -794,8 +814,8 @@ export default function App() {
         dispatch({ type: "UPD", e: { ...e, placeId: resolvedPlaceId, ownerId: e.ownerId ?? user?.id ?? null } });
         setEditR(null);
       }} onCancel={()=>{setEditR(null);window.scrollTo({top:0,behavior:"smooth"});}}/>}
-      {st.view==="log"&&editC&&<CafeForm initial={editC} weights={editC?.category==="Sweets"?sweetWeights:drinkWeights} onSave={async entries=>{
-        const e=Array.isArray(entries)?entries[0]:entries;
+      {st.view==="log"&&editC&&<CafeForm initial={editC} weights={editC?.category==="Sweets"?sweetWeights:drinkWeights} onSave={async e=>{
+        if (e.city) lastCity.current = e.city;
         let resolvedPlaceId = e.placeId;
         if(canMutateVisit(e,user)) {
           try {
@@ -813,7 +833,7 @@ export default function App() {
           }
         }
         setCafes(p=>p.map(x=>x.id===e.id?{...e,id:x.id,placeId:resolvedPlaceId??x.placeId,ownerId:e.ownerId??user?.id??x.ownerId}:x)); setEditC(null);
-      }} onCancel={()=>{setEditC(null);window.scrollTo({top:0,behavior:"smooth"});}} existingNames={cafes.map(e=>e.name)} existingCafes={cafes} pastOrders={cafes.map(e=>e.order).filter(Boolean)}/>}
+      }} onCancel={()=>{setEditC(null);window.scrollTo({top:0,behavior:"smooth"});}} existingNames={cafes.map(e=>e.name)} existingCafes={cafes}/>}
 
       {/* ── Add Rating ── */}
       {st.view==="add"&&(
@@ -849,42 +869,22 @@ export default function App() {
                 onCancel={()=>dispatch({type:"VIEW",view:"log"})}
                 addType={addType} setAddType={setAddType}
               />
-            :<CafeForm initial={INIT_CAFE} weights={drinkWeights}
-                onSave={async entries=>{
-                  const arr=Array.isArray(entries)?entries:[entries];
-                  if (!user) {
-                    dispatch({ type: "VIEW", view: "log" });
-                    setLogTab(arr.some(e=>e.category==="Sweets")?"sweets":"drinks");
-                    return;
-                  }
-                  try {
-                    const placeId = await ensureCafePlace(supabase, {
-                      name: arr[0].name,
-                      city: arr[0].city || "",
-                    });
-                    const rows = arr.map((entry) =>
-                      cafeVisitInsertPayload(placeId, user.id, entry)
-                    );
-                    const { data, error } = await supabase
-                      .from("cafe_visits")
-                      .insert(rows)
-                      .select(CAFE_VISIT_SELECT);
-                    if (error) console.error("cafe insert error:", error);
-                    const mapped = (data || []).map((row) =>
-                      mapCafeVisitRow(row)
-                    );
-                    setCafes((p) => [...p, ...mapped]);
-                  } catch (err) {
-                    console.error("cafe insert threw:", err);
-                  }
+            :<CafeForm initial={{...INIT_CAFE,city:lastCity.current}} weights={drinkWeights}
+                onSave={async e=>{
+                  if (e.city) lastCity.current = e.city;
+                  await insertCafeEntry(e);
                   dispatch({type:"VIEW",view:"log"});
-                  setLogTab(arr.some(e=>e.category==="Sweets")?"sweets":"drinks");
+                  setLogTab(e.category==="Sweets"?"sweets":"drinks");
+                }}
+                onSaveAndContinue={async e=>{
+                  if (e.city) lastCity.current = e.city;
+                  await insertCafeEntry(e);
+                  window.scrollTo({top:0,behavior:"smooth"});
                 }}
                 onCancel={()=>dispatch({type:"VIEW",view:"log"})}
                 addType={addType} setAddType={setAddType}
                 existingNames={cafes.map(e=>e.name)}
                 existingCafes={cafes}
-                pastOrders={cafes.map(e=>e.order).filter(Boolean)}
               />
           }
         </div>
