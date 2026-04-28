@@ -1,0 +1,34 @@
+---
+description: English-only mode for translations until UI is stable
+alwaysApply: true
+---
+
+# English only — no ZH translations until further notice
+
+The English UI is still churning. To avoid burning effort on translations
+that get rewritten anyway, **do not add or update Chinese (ZH) copy in
+[`src/translations.js`](../../src/translations.js)** for new or changed
+keys. We'll do a single sweep ZH translation pass once the English copy is
+stable.
+
+## What this means in practice
+
+- When introducing a new translation key, add it under the English block
+  (`T.en` / first object) only. Do **not** add a matching `T.zh` (or
+  `T['zh-TW']`) entry.
+- When editing an existing key's English copy, leave the ZH value untouched
+  even if it now reads as a stale translation — flagging via lint/diff is
+  fine, but don't rewrite the ZH string.
+- When deleting a key, remove it from both blocks (cleanup is allowed).
+
+## When to revisit
+
+The user will explicitly lift this restriction with something like
+"do the ZH translation pass" or "translations are unfrozen." Until then,
+treat ZH as frozen for additions/edits.
+
+## If a fallback is needed
+
+Components consuming missing keys should fall back to English (existing
+behavior). If a ZH user hits a new key, they'll see English — that's the
+acceptable trade-off for now.

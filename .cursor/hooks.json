@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "hooks": {
+    "stop": [
+      {
+        "command": "node scripts/docs-stale-check.mjs --hook",
+        "timeout": 10,
+        "loop_limit": 1
+      }
+    ]
+  }
+}
