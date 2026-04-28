@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLang } from "../../contexts/LangContext.jsx";
 import { supabase } from "../../config/supabaseClient.js";
-import { listFriendships, deleteFriendship } from "../../utils/friendsApi.js";
+import { listTasteBuds, unfollowUser } from "../../utils/followsApi.js";
 import { fetchRestaurantVisitsForUser } from "../../utils/visitPlacesApi.js";
 import { pairCompatibility, restaurantOverlap } from "../../utils/compatibility.js";
 import { tasteColor } from "../../utils/scoring.js";
@@ -31,18 +31,11 @@ const FLAG_BOX_STYLE = {
   flexShrink: 0,
 };
 
-/** Color-side legend uses fixed accents so users can tell "left = me, right =
- *  them" at a glance even when both row scores happen to land on the same
- *  tier color. The friend accent matches the "good" tier color so it reads
- *  as a stable identifier rather than competing with score colors. */
 const YOU_LEGEND_COLOR = "#F0997B";
 const FRIEND_LEGEND_COLOR = "#5B9BD5";
 
 const TOP_DISCOVER_LIMIT = 3;
 
-/** Pick top shared cuisines for the "You both love …" summary line. We
- *  weight by `min(mine, theirs)` so the list highlights cuisines BOTH
- *  rate highly, not ones where one user drags the average up. */
 function topSharedCuisines(agreements, { limit = 2, threshold = 7 } = {}) {
   return [...(agreements || [])]
     .filter((a) => Math.min(a.mine, a.theirs) >= threshold)
@@ -63,7 +56,6 @@ function fmtTemplate(tpl, vars) {
   );
 }
 
-/** Tier-colored hero card: "78% / Taste compatibility / You both love …". */
 function CompatHeroCard({ score, summaryLine, t }) {
   const col = score == null ? "#888780" : tasteColor(score / 10);
   return (
@@ -93,7 +85,6 @@ function CompatHeroCard({ score, summaryLine, t }) {
   );
 }
 
-/** Score with tier color, used inside Both-visited rows. */
 function Score({ value }) {
   const col = tasteColor(value);
   return (
@@ -161,7 +152,7 @@ const RECOMMEND_TONE = { bg: "rgba(151,196,89,0.14)", color: "#97C459", border: 
 
 export function CompareTab({ user, initialTarget, onClearTarget }) {
   const { t } = useLang();
-  const [friends, setFriends] = useState([]);
+  const [buds, setBuds] = useState([]);
   const [target, setTarget] = useState(initialTarget || null);
   const [myVisits, setMyVisits] = useState([]);
   const [theirVisits, setTheirVisits] = useState([]);
@@ -171,8 +162,8 @@ export function CompareTab({ user, initialTarget, onClearTarget }) {
     if (!user?.id) return;
     let cancelled = false;
     (async () => {
-      const { friends: f } = await listFriendships(supabase, user.id);
-      if (!cancelled) setFriends(f);
+      const b = await listTasteBuds(supabase, user.id);
+      if (!cancelled) setBuds(b);
     })();
     return () => { cancelled = true; };
   }, [user?.id]);
@@ -201,7 +192,6 @@ export function CompareTab({ user, initialTarget, onClearTarget }) {
     return () => { cancelled = true; };
   }, [target?.id]);
 
-  /** When user switches sub-tab in via initialTarget, sync local state once. */
   useEffect(() => {
     if (initialTarget && initialTarget.id !== target?.id) {
       setTarget(initialTarget);
@@ -223,24 +213,26 @@ export function CompareTab({ user, initialTarget, onClearTarget }) {
     onClearTarget?.();
   }
 
-  /** Unfriend lives here (rather than on the flat Friends row) because that
-   *  row is now a single click-target → Compare; we keep the destructive
-   *  action one drill-down away from the casual scan. */
-  async function handleUnfriend() {
-    const row = friends.find((f) => f.otherUserId === target?.id);
-    if (!row?.id) return;
-    await deleteFriendship(supabase, row.id);
+  /** Unfollow from Compare view — breaks the mutual, downgrades out of Taste Buds. */
+  async function handleUnfollow() {
+    if (!user?.id || !target?.id) return;
+    await unfollowUser(supabase, user.id, target.id);
     clearTarget();
   }
 
+  // ── Picker: no target selected yet ──
   if (!target) {
     return (
       <div>
-        <p style={{ fontSize: 12, color: "#888780", margin: "0 0 12px" }}>{t.pickFriendToCompare}</p>
-        {!friends.length && (
-          <p style={{ fontSize: 12, color: "#888780", margin: 0 }}>{t.noFriendsYet}</p>
+        <p style={{ fontSize: 12, color: "#888780", margin: "0 0 12px" }}>
+          {t.pickTasteBudToCompare || "Pick a Taste Bud to compare scores."}
+        </p>
+        {!buds.length && (
+          <p style={{ fontSize: 12, color: "#888780", margin: 0 }}>
+            {t.noTasteBudsYet || "No taste buds yet."}
+          </p>
         )}
-        {friends.map((f) => (
+        {buds.map((f) => (
           <button
             key={f.id}
             type="button"
@@ -260,6 +252,7 @@ export function CompareTab({ user, initialTarget, onClearTarget }) {
     );
   }
 
+  // ── Compare view: target selected ──
   const insufficientMine = (myVisits || []).length === 0;
   const sharedTop = compat ? topSharedCuisines(compat.agreements) : [];
   const summaryLine = sharedTop.length
@@ -269,7 +262,7 @@ export function CompareTab({ user, initialTarget, onClearTarget }) {
     : null;
 
   const friendName = target.display_name || target.username || "—";
-  const isAcceptedFriend = friends.some((f) => f.otherUserId === target?.id);
+  const isTasteBud = buds.some((f) => f.otherUserId === target?.id);
 
   const onlyTheirs = overlap?.onlyTheirs?.slice(0, TOP_DISCOVER_LIMIT) || [];
   const onlyMine = overlap?.onlyMine?.slice(0, TOP_DISCOVER_LIMIT) || [];
@@ -283,7 +276,7 @@ export function CompareTab({ user, initialTarget, onClearTarget }) {
           fontSize: 12, color: "#888780", background: "none", border: "none",
           cursor: "pointer", padding: 0, marginBottom: 12,
         }}
-      >{t.pickFriendToCompare}</button>
+      >{t.pickTasteBudToCompare || "← Pick a Taste Bud"}</button>
 
       <div style={{
         display: "flex", alignItems: "center", gap: 12,
@@ -402,9 +395,9 @@ export function CompareTab({ user, initialTarget, onClearTarget }) {
         </>
       )}
 
-      {isAcceptedFriend && (
+      {isTasteBud && (
         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
-          <Pill onClick={handleUnfriend} tone="danger">{t.unfriend}</Pill>
+          <Pill onClick={handleUnfollow} tone="danger">{t.unfollow || "Unfollow"}</Pill>
         </div>
       )}
     </div>

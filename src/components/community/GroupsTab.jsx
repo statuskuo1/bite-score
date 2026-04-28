@@ -11,7 +11,7 @@ import {
   removeMember,
   SOFT_CAP,
 } from "../../utils/groupsApi.js";
-import { listFriendships } from "../../utils/friendsApi.js";
+import { listTasteBuds } from "../../utils/followsApi.js";
 import {
   fetchAggregatedRestaurantPlaces,
   fetchRestaurantVisitsForUser,
@@ -26,8 +26,8 @@ import { UserIdentity } from "./UserIdentity.jsx";
 function GroupDetail({ user, groupId, onBack, onDeleted }) {
   const { t } = useLang();
   const [data, setData] = useState(null);
-  const [friends, setFriends] = useState([]);
-  const [memberVisits, setMemberVisits] = useState({}); // { userId: visits[] }
+  const [tasteBuds, setTasteBuds] = useState([]);
+  const [memberVisits, setMemberVisits] = useState({});
   const [places, setPlaces] = useState([]);
   const [busy, setBusy] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
@@ -44,13 +44,13 @@ function GroupDetail({ user, groupId, onBack, onDeleted }) {
     if (!user?.id) return;
     let cancelled = false;
     (async () => {
-      const { friends: f } = await listFriendships(supabase, user.id);
-      if (!cancelled) setFriends(f);
+      const buds = await listTasteBuds(supabase, user.id);
+      if (!cancelled) setTasteBuds(buds);
     })();
     return () => { cancelled = true; };
   }, [user?.id]);
 
-  /** Fetch visits for every member in parallel — needed for floor-score ranking. */
+  /** Fetch visits for every member in parallel. */
   useEffect(() => {
     if (!data?.members?.length) { setMemberVisits({}); return; }
     let cancelled = false;
@@ -63,7 +63,6 @@ function GroupDetail({ user, groupId, onBack, onDeleted }) {
     return () => { cancelled = true; };
   }, [data?.members?.map((m) => m.user_id).join(",")]);  // eslint-disable-line react-hooks/exhaustive-deps
 
-  /** Aggregated restaurant places — used to suggest spots fewer than half the group has visited. */
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -76,9 +75,10 @@ function GroupDetail({ user, groupId, onBack, onDeleted }) {
   const isOwner = data?.group?.owner_id === user?.id;
   const memberIds = useMemo(() => new Set((data?.members || []).map((m) => m.user_id)), [data?.members]);
 
-  const friendsInvitable = useMemo(
-    () => friends.filter((f) => !memberIds.has(f.otherUserId)),
-    [friends, memberIds]
+  /** Invite picker: show Taste Buds who aren't already in the group. */
+  const budsInvitable = useMemo(
+    () => tasteBuds.filter((f) => !memberIds.has(f.otherUserId)),
+    [tasteBuds, memberIds]
   );
 
   const ranked = useMemo(() => {
@@ -87,15 +87,12 @@ function GroupDetail({ user, groupId, onBack, onDeleted }) {
       userId: m.user_id,
       visits: memberVisits[m.user_id] || [],
     }));
-    /** Relax to N-1 coverage when group has 4+ members so one outlier doesn't hide everything. */
     const minCov = data.members.length >= 4 ? data.members.length - 1 : "all";
     return rankGroupCuisines(memberVisitsByUser, getRestaurantCuisines, { minCoverage: minCov });
   }, [data?.members, memberVisits]);
 
   const memberHalf = data?.members?.length ? Math.ceil(data.members.length / 2) : 0;
 
-  /** For each top cuisine, surface places where < half the group has visited.
-   *  We use the per-member visits we already loaded to count visited members. */
   const suggestionsByCuisine = useMemo(() => {
     if (!data?.members?.length || !ranked.length) return [];
     const visitedMembersByPlace = new Map();
@@ -205,7 +202,7 @@ function GroupDetail({ user, groupId, onBack, onDeleted }) {
                 border: "1px solid rgba(240,153,123,0.4)", padding: "3px 10px",
                 borderRadius: 12, cursor: "pointer",
               }}
-            >+ {t.inviteFriend}</button>
+            >+ {t.inviteTasteBud || t.inviteFriend}</button>
           )}
         </div>
 
@@ -237,13 +234,17 @@ function GroupDetail({ user, groupId, onBack, onDeleted }) {
 
         {showInvite && isOwner && (
           <div style={{ marginTop: 10, paddingTop: 10, borderTop: "0.5px solid rgba(255,255,255,0.08)" }}>
-            {!friends.length && (
-              <p style={{ fontSize: 12, color: "#888780", margin: 0 }}>{t.groupNeedsFriends}</p>
+            {!tasteBuds.length && (
+              <p style={{ fontSize: 12, color: "#888780", margin: 0 }}>
+                {t.groupNeedsTasteBuds || "You need Taste Buds to invite to a group."}
+              </p>
             )}
-            {friends.length > 0 && !friendsInvitable.length && (
-              <p style={{ fontSize: 12, color: "#888780", margin: 0 }}>{t.noFriendsYet}</p>
+            {tasteBuds.length > 0 && !budsInvitable.length && (
+              <p style={{ fontSize: 12, color: "#888780", margin: 0 }}>
+                {t.allTasteBudsInGroup || "All your Taste Buds are already in this group."}
+              </p>
             )}
-            {friendsInvitable.map((f) => (
+            {budsInvitable.map((f) => (
               <div key={f.id} style={{
                 display: "flex", alignItems: "center", gap: 8, padding: "4px 0",
               }}>
@@ -252,7 +253,7 @@ function GroupDetail({ user, groupId, onBack, onDeleted }) {
                   onClick={() => handleInvite(f.otherUserId)}
                   tone="primary"
                   disabled={busy || data.members.length >= SOFT_CAP}
-                >{t.addFriend}</Pill>
+                >{t.invite || "Invite"}</Pill>
               </div>
             ))}
           </div>

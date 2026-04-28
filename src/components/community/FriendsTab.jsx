@@ -3,11 +3,10 @@ import { useLang } from "../../contexts/LangContext.jsx";
 import { supabase } from "../../config/supabaseClient.js";
 import {
   searchUsersByUsername,
-  sendFriendRequest,
-  acceptFriendRequest,
-  deleteFriendship,
-  listFriendships,
-} from "../../utils/friendsApi.js";
+  followUser,
+  unfollowUser,
+  listFollows,
+} from "../../utils/followsApi.js";
 import { fetchRestaurantVisitsForUser } from "../../utils/visitPlacesApi.js";
 import { pairCompatibility, aggregateFriendsTopPicks } from "../../utils/compatibility.js";
 import { tasteColor } from "../../utils/scoring.js";
@@ -48,21 +47,18 @@ const FLAG_BOX_STYLE = {
   flexShrink: 0,
 };
 
-/** Map sendFriendRequest result codes onto user-visible reasons. */
-function describeAddFriendError(code, t) {
+/** Map followUser result codes onto user-visible reasons. */
+function describeFollowError(code, t) {
   switch (code) {
-    case "already_friends": return t.alreadyFriends || "Already friends";
-    case "already_pending": return t.requestSentLabel || "Request already sent";
-    case "self": return t.cannotAddSelf || "You can't add yourself";
-    case "invalid":
+    case "already_following": return t.alreadyFollowing || "Already following";
+    case "self": return t.cannotFollowSelf || "You can't follow yourself";
     case "network":
     default:
-      return t.addFriendFailed || "Couldn't send request — try again.";
+      return t.followFailed || "Couldn't follow — try again.";
   }
 }
 
-/** Tier-colored pill that reads as "78% match". Same color ramp as the
- *  Compare-tab badge so the two views stay visually consistent. */
+/** Tier-colored pill that reads as "78% match". */
 function MatchPill({ score, suffix }) {
   if (score == null) {
     return (
@@ -108,60 +104,61 @@ function modeOf(rows, field) {
 }
 
 /**
- * Friend a single user. The button label depends on the existing relationship
- * (none / outgoing-pending / incoming-pending / friends).
+ * Follow action button. States:
+ *   - "none"       → Follow button
+ *   - "they_follow" → Follow back button (they follow you, you don't follow them)
+ *   - "i_follow"   → Following (with unfollow)
+ *   - "taste_buds" → Taste Buds label + Compare + Unfollow
  */
-function FriendRowAction({ profile, relation, busy, onAdd, onAccept, onCancel, onDecline, onUnfriend, onCompareWith }) {
-  const { t } = useLang();
+function FollowRowAction({ profile, relation, busy, onFollow, onUnfollow, onCompareWith, t }) {
   if (busy) return <span style={{ fontSize: 11, color: "#888780" }}>…</span>;
-  switch (relation?.kind) {
-    case "friends":
+
+  switch (relation) {
+    case "taste_buds":
       return (
-        <div style={{ display: "flex", gap: 6 }}>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <span style={{
+            fontSize: 10, fontWeight: 600, padding: "4px 10px", borderRadius: 20,
+            background: "#1A2E0A", color: "#97C459",
+            border: "1px solid rgba(151,196,89,0.4)",
+          }}>
+            {t.tasteBuds || "Taste Buds"}
+          </span>
           {onCompareWith && (
             <Pill onClick={() => onCompareWith(profile)} tone="default">
               {t.compareSub}
             </Pill>
           )}
-          <Pill onClick={() => onUnfriend(relation.row.id)} tone="danger">
-            {t.unfriend}
+          <Pill onClick={() => onUnfollow(profile.id)} tone="danger">
+            {t.unfollow || "Unfollow"}
           </Pill>
         </div>
       );
-    case "outgoing":
+    case "i_follow":
       return (
-        <Pill onClick={() => onCancel(relation.row.id)} tone="muted">
-          {t.cancelRequest}
+        <Pill onClick={() => onUnfollow(profile.id)} tone="muted">
+          {t.following || "Following"}
         </Pill>
       );
-    case "incoming":
+    case "they_follow":
       return (
-        <div style={{ display: "flex", gap: 6 }}>
-          <Pill onClick={() => onAccept(relation.row.id)} tone="primary">
-            {t.acceptRequest}
-          </Pill>
-          <Pill onClick={() => onDecline(relation.row.id)} tone="muted">
-            {t.declineRequest}
-          </Pill>
-        </div>
+        <Pill onClick={() => onFollow(profile.id)} tone="primary">
+          {t.followBack || "Follow back"}
+        </Pill>
       );
     default:
       return (
-        <Pill onClick={() => onAdd(profile.id)} tone="primary">
-          {t.addFriend}
+        <Pill onClick={() => onFollow(profile.id)} tone="primary">
+          {t.follow || "Follow"}
         </Pill>
       );
   }
 }
 
-/** One always-visible friend card. Click → jump to Compare with that friend.
- *  The compatibility pill is computed eagerly (`pairCompatibility`) so the
- *  user can scan the list and pick whom to compare against without expanding.
- *  We bypass `UserIdentity` because the sub-line shows ratings + city instead
- *  of `@username`. */
-function FriendListRow({ friendship, stats, onCompareWith }) {
+/** One always-visible Taste Bud card. Click → jump to Compare. */
+function TasteBudRow({ entry, stats, onCompareWith }) {
   const { t } = useLang();
-  const profile = friendship.otherProfile;
+  const profile = entry.otherProfile;
   const subParts = [];
   if (stats?.ratings != null) {
     subParts.push(`${stats.ratings} ${t.ratingsLabel || "ratings"}`);
@@ -203,7 +200,7 @@ function FriendListRow({ friendship, stats, onCompareWith }) {
   );
 }
 
-/** One row in the aggregated "Friends' top picks" section. */
+/** One row in the aggregated "Taste Buds' top picks" section. */
 function TopPickRow({ pick }) {
   const { t } = useLang();
   const col = tasteColor(pick.avg);
@@ -224,9 +221,27 @@ function TopPickRow({ pick }) {
           {pick.avg.toFixed(2)}
         </div>
         <div style={{ fontSize: 10, color: "#888780", marginTop: 2 }}>
-          {pick.friendCount} {t.friendsCountSuffix || "friends"}
+          {pick.friendCount} {t.tasteBudsCountSuffix || "taste buds"}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** One row for a non-mutual follower (they follow me, I don't follow back). */
+function FollowerRow({ entry, onFollow, busy, t }) {
+  const profile = entry.otherProfile;
+  const name = profile?.display_name || profile?.username || "—";
+  return (
+    <div style={ROW_STYLE}>
+      <UserIdentity profile={profile} size={28} />
+      {busy ? (
+        <span style={{ fontSize: 11, color: "#888780" }}>…</span>
+      ) : (
+        <Pill onClick={() => onFollow(profile.id)} tone="primary">
+          {t.followBack || "Follow back"}
+        </Pill>
+      )}
     </div>
   );
 }
@@ -236,25 +251,21 @@ export function FriendsTab({ user, onCompareWith }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [searchBusy, setSearchBusy] = useState(false);
-  const [friends, setFriends] = useState([]);
-  const [incoming, setIncoming] = useState([]);
-  const [outgoing, setOutgoing] = useState([]);
+  const [following, setFollowing] = useState([]);
+  const [followers, setFollowers] = useState([]);
+  const [tasteBuds, setTasteBuds] = useState([]);
   const [busyById, setBusyById] = useState({});
   const [myVisits, setMyVisits] = useState([]);
-  /** `friendVisits` is `Map<friendUserId, visits[]>` — populated lazily after
-   *  the friends list resolves. We fetch in parallel; per-friend rows show
-   *  "—" until their slot fills in, which keeps the UI responsive. */
-  const [friendVisits, setFriendVisits] = useState({});
-  /** `addError`: { targetId, message } | null. Inline so failures don't pop a modal. */
-  const [addError, setAddError] = useState(null);
+  const [budVisits, setBudVisits] = useState({});
+  const [followError, setFollowError] = useState(null);
   const debounceRef = useRef(null);
 
   const reload = useCallback(async () => {
     if (!user?.id) return;
-    const { friends: f, incoming: i, outgoing: o } = await listFriendships(supabase, user.id);
-    setFriends(f);
-    setIncoming(i);
-    setOutgoing(o);
+    const result = await listFollows(supabase, user.id);
+    setFollowing(result.following);
+    setFollowers(result.followers);
+    setTasteBuds(result.tasteBuds);
   }, [user?.id]);
 
   useEffect(() => { reload(); }, [reload]);
@@ -269,14 +280,12 @@ export function FriendsTab({ user, onCompareWith }) {
     return () => { cancelled = true; };
   }, [user?.id]);
 
-  /** Eagerly fetch each accepted friend's restaurant visits in parallel. We
-   *  only re-fetch users we don't already have; a friend who appears, vanishes,
-   *  and re-appears keeps their cached visits without a round-trip. */
+  /** Eagerly fetch each Taste Bud's restaurant visits for compatibility scores. */
   useEffect(() => {
-    if (!friends.length) return;
-    const missing = friends
+    if (!tasteBuds.length) return;
+    const missing = tasteBuds
       .map((f) => f.otherUserId)
-      .filter((uid) => uid && !(uid in friendVisits));
+      .filter((uid) => uid && !(uid in budVisits));
     if (missing.length === 0) return;
     let cancelled = false;
     (async () => {
@@ -284,16 +293,16 @@ export function FriendsTab({ user, onCompareWith }) {
         missing.map(async (uid) => [uid, await fetchRestaurantVisitsForUser(supabase, uid)]),
       );
       if (cancelled) return;
-      setFriendVisits((prev) => {
+      setBudVisits((prev) => {
         const next = { ...prev };
         for (const [uid, v] of pairs) next[uid] = v;
         return next;
       });
     })();
     return () => { cancelled = true; };
-  }, [friends, friendVisits]);
+  }, [tasteBuds, budVisits]);
 
-  /** Debounced username prefix search. Empty string clears results. */
+  /** Debounced username prefix search. */
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     const q = query.trim();
@@ -307,20 +316,25 @@ export function FriendsTab({ user, onCompareWith }) {
     return () => clearTimeout(debounceRef.current);
   }, [query, user?.id]);
 
-  /** Map every other-user-id we know about → their relation kind + row. */
+  /** Map every other-user-id → their relation kind. */
   const relationByUserId = useMemo(() => {
     const m = new Map();
-    for (const r of friends) m.set(r.otherUserId, { kind: "friends", row: r });
-    for (const r of incoming) m.set(r.otherUserId, { kind: "incoming", row: r });
-    for (const r of outgoing) m.set(r.otherUserId, { kind: "outgoing", row: r });
+    // Taste buds first so they override the following/followers entries.
+    for (const r of tasteBuds) m.set(r.otherUserId, "taste_buds");
+    for (const r of following) {
+      if (!m.has(r.otherUserId)) m.set(r.otherUserId, "i_follow");
+    }
+    for (const r of followers) {
+      if (!m.has(r.otherUserId)) m.set(r.otherUserId, "they_follow");
+    }
     return m;
-  }, [friends, incoming, outgoing]);
+  }, [following, followers, tasteBuds]);
 
-  /** Per-friend stats: compatibility %, ratings count, primary city. */
-  const friendStats = useMemo(() => {
+  /** Per-Taste-Bud stats: compatibility %, ratings count, primary city. */
+  const budStats = useMemo(() => {
     const out = {};
-    for (const f of friends) {
-      const v = friendVisits[f.otherUserId];
+    for (const f of tasteBuds) {
+      const v = budVisits[f.otherUserId];
       if (!v) {
         out[f.otherUserId] = { ratings: null, city: "", compatScore: null };
         continue;
@@ -333,71 +347,59 @@ export function FriendsTab({ user, onCompareWith }) {
       };
     }
     return out;
-  }, [friends, friendVisits, myVisits]);
+  }, [tasteBuds, budVisits, myVisits]);
 
-  /** Aggregated Friends' top picks: places visited by ≥2 friends rank above
-   *  same-avg single-friend picks (`aggregateFriendsTopPicks` already
-   *  tiebreaks on friendCount). Capped to the top 10 to keep the section
-   *  scannable; tap-through to the place is a future hook. */
+  /** Aggregated Taste Buds' top picks. */
   const topPicks = useMemo(() => {
-    const fvb = friends
-      .map((f) => ({ userId: f.otherUserId, visits: friendVisits[f.otherUserId] }))
+    const fvb = tasteBuds
+      .map((f) => ({ userId: f.otherUserId, visits: budVisits[f.otherUserId] }))
       .filter((x) => Array.isArray(x.visits));
     if (!fvb.length) return [];
     return aggregateFriendsTopPicks(fvb).slice(0, 10);
-  }, [friends, friendVisits]);
+  }, [tasteBuds, budVisits]);
+
+  /** Non-mutual followers — people who follow me but I don't follow back. */
+  const pendingFollowers = useMemo(
+    () => followers.filter((f) => !f.isMutual),
+    [followers],
+  );
 
   function setBusy(id, on) {
     setBusyById((m) => ({ ...m, [id]: on }));
   }
 
-  /**
-   * Send a request, then reload. We surface failures inline so users see *why*
-   * the button "did nothing" instead of guessing — the most common cases are
-   * already-pending and network/RLS rejection.
-   */
-  async function handleAdd(targetId) {
+  async function handleFollow(targetId) {
     if (!user?.id || !targetId) return;
-    setAddError(null);
+    setFollowError(null);
     setBusy(targetId, true);
     try {
-      const res = await sendFriendRequest(supabase, user.id, targetId);
+      const res = await followUser(supabase, user.id, targetId);
       if (!res?.ok) {
-        setAddError({ targetId, message: describeAddFriendError(res?.code, t) });
+        setFollowError({ targetId, message: describeFollowError(res?.code, t) });
       }
-      // Reload either way: `already_pending` / `already_friends` should still
-      // refresh the relation map so the row's button switches to the right state.
       await reload();
     } catch (err) {
-      console.warn("[BITE] handleAdd threw:", err);
-      setAddError({ targetId, message: describeAddFriendError("network", t) });
+      console.warn("[BITE] handleFollow threw:", err);
+      setFollowError({ targetId, message: describeFollowError("network", t) });
     } finally {
       setBusy(targetId, false);
     }
   }
 
-  async function handleAccept(friendshipId) {
-    setBusy(friendshipId, true);
+  async function handleUnfollow(targetId) {
+    if (!user?.id || !targetId) return;
+    setBusy(targetId, true);
     try {
-      await acceptFriendRequest(supabase, friendshipId);
+      await unfollowUser(supabase, user.id, targetId);
       await reload();
     } finally {
-      setBusy(friendshipId, false);
-    }
-  }
-
-  async function handleRemove(friendshipId) {
-    setBusy(friendshipId, true);
-    try {
-      await deleteFriendship(supabase, friendshipId);
-      await reload();
-    } finally {
-      setBusy(friendshipId, false);
+      setBusy(targetId, false);
     }
   }
 
   return (
     <div>
+      {/* Search */}
       <div style={{ position: "relative", marginBottom: 14 }}>
         <input
           type="text"
@@ -418,23 +420,21 @@ export function FriendsTab({ user, onCompareWith }) {
             <p style={{ fontSize: 12, color: "#888780", margin: 0 }}>{t.noSearchResults}</p>
           )}
           {results.map((p) => {
-            const rel = relationByUserId.get(p.id);
-            const busy = !!busyById[p.id] || !!busyById[rel?.row?.id];
-            const errForRow = addError?.targetId === p.id ? addError.message : null;
+            const rel = relationByUserId.get(p.id) || "none";
+            const busy = !!busyById[p.id];
+            const errForRow = followError?.targetId === p.id ? followError.message : null;
             return (
               <div key={p.id}>
                 <div style={ROW_STYLE}>
                   <UserIdentity profile={p} size={28} />
-                  <FriendRowAction
+                  <FollowRowAction
                     profile={p}
                     relation={rel}
                     busy={busy}
-                    onAdd={handleAdd}
-                    onAccept={handleAccept}
-                    onCancel={handleRemove}
-                    onDecline={handleRemove}
-                    onUnfriend={handleRemove}
+                    onFollow={handleFollow}
+                    onUnfollow={handleUnfollow}
                     onCompareWith={onCompareWith}
+                    t={t}
                   />
                 </div>
                 {errForRow && (
@@ -451,62 +451,49 @@ export function FriendsTab({ user, onCompareWith }) {
         </div>
       )}
 
-      {incoming.length > 0 && (
+      {/* Pending followers (they follow me, I don't follow back) */}
+      {pendingFollowers.length > 0 && (
         <div style={{ marginBottom: 16 }}>
-          <div style={SECTION_LABEL_STYLE}>{t.incomingRequests}</div>
-          {incoming.map((r) => (
-            <div key={r.id} style={ROW_STYLE}>
-              <UserIdentity profile={r.otherProfile} size={28} />
-              <FriendRowAction
-                profile={r.otherProfile}
-                relation={{ kind: "incoming", row: r }}
-                busy={!!busyById[r.id]}
-                onAdd={() => {}}
-                onAccept={handleAccept}
-                onCancel={handleRemove}
-                onDecline={handleRemove}
-                onUnfriend={handleRemove}
-              />
-            </div>
+          <div style={SECTION_LABEL_STYLE}>
+            {t.newFollowers || "New followers"}
+          </div>
+          {pendingFollowers.map((r) => (
+            <FollowerRow
+              key={r.id}
+              entry={r}
+              onFollow={handleFollow}
+              busy={!!busyById[r.otherUserId]}
+              t={t}
+            />
           ))}
         </div>
       )}
 
-      {outgoing.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          <div style={SECTION_LABEL_STYLE}>{t.outgoingRequests}</div>
-          {outgoing.map((r) => (
-            <div key={r.id} style={ROW_STYLE}>
-              <UserIdentity profile={r.otherProfile} size={28} />
-              <Pill onClick={() => handleRemove(r.id)} tone="muted" disabled={!!busyById[r.id]}>
-                {t.cancelRequest}
-              </Pill>
-            </div>
-          ))}
-        </div>
-      )}
-
+      {/* Taste Buds (mutual follows) */}
       <div style={{ ...SECTION_LABEL_STYLE, display: "flex", justifyContent: "space-between" }}>
-        <span>{t.myFriends || t.friendsList}</span>
-        {friends.length > 0 && (
-          <span style={{ color: "#666663" }}>({friends.length})</span>
+        <span>{t.tasteBuds || "Taste Buds"}</span>
+        {tasteBuds.length > 0 && (
+          <span style={{ color: "#666663" }}>({tasteBuds.length})</span>
         )}
       </div>
-      {!friends.length && (
-        <p style={{ fontSize: 12, color: "#888780", margin: 0 }}>{t.noFriendsYet}</p>
+      {!tasteBuds.length && (
+        <p style={{ fontSize: 12, color: "#888780", margin: "0 0 16px" }}>
+          {t.noTasteBudsYet || "No taste buds yet. Follow someone — if they follow you back, you become Taste Buds!"}
+        </p>
       )}
-      {friends.map((f) => (
-        <FriendListRow
+      {tasteBuds.map((f) => (
+        <TasteBudRow
           key={f.id}
-          friendship={f}
-          stats={friendStats[f.otherUserId]}
+          entry={f}
+          stats={budStats[f.otherUserId]}
           onCompareWith={onCompareWith}
         />
       ))}
 
+      {/* Taste Buds' top picks */}
       {topPicks.length > 0 && (
         <div style={{ marginTop: 18 }}>
-          <div style={SECTION_LABEL_STYLE}>{t.friendsTopPicks}</div>
+          <div style={SECTION_LABEL_STYLE}>{t.tasteBudsTopPicks || "Taste Buds' top picks"}</div>
           {topPicks.map((p) => (
             <TopPickRow key={p.placeId} pick={p} />
           ))}
