@@ -138,16 +138,22 @@ function withTimeout(promise, ms, fallback) {
 
 const SEARCH_TIMEOUT_MS = 4000;
 
-/** Returns `{ predictions, capped }`. `predictions` is `[]` on any failure or
- *  when the typed query is too short. `capped` is always `false` here since
- *  we have no client-side budget tracking. */
-export async function searchGooglePlaces(client, { kind, query, sessionToken: _sessionToken, locationBias }) {
+/** Returns `{ predictions, capped, aborted }`. `predictions` is `[]` on any
+ *  failure or when the typed query is too short. `capped` is always `false`
+ *  here since we have no client-side budget tracking. `aborted` is true when
+ *  the caller's `signal` fired — callers should ignore the result rather than
+ *  setting empty state.
+ *
+ *  Pass an `AbortSignal` so PlacePicker can drop in-flight fetches when the
+ *  user keeps typing (otherwise we burn Google quota and risk per-IP 429s
+ *  from rapid bursts of stale requests). */
+export async function searchGooglePlaces(client, { kind, query, sessionToken: _sessionToken, locationBias, signal }) {
   const q = (query || "").trim();
-  if (q.length < 2) return { predictions: [], capped: false };
+  if (q.length < 2) return { predictions: [], capped: false, aborted: false };
   const key = googleApiKey();
   if (!key) {
     console.warn("[BITE] VITE_GOOGLE_PLACES_API_KEY not set; Google Places search disabled.");
-    return { predictions: [], capped: false };
+    return { predictions: [], capped: false, aborted: false };
   }
   try {
     const body = {
@@ -173,16 +179,17 @@ export async function searchGooglePlaces(client, { kind, query, sessionToken: _s
         "X-Goog-FieldMask": FIELD_MASK,
       },
       body: JSON.stringify(body),
+      signal,
     });
     const r = await withTimeout(fetchPromise, SEARCH_TIMEOUT_MS, { __timedOut: true });
     if (r?.__timedOut) {
       console.warn("[BITE] places:searchText timed out");
-      return { predictions: [], capped: false };
+      return { predictions: [], capped: false, aborted: false };
     }
     if (!r.ok) {
       const text = await r.text().catch(() => "");
       console.warn("[BITE] places:searchText error:", r.status, text.slice(0, 300));
-      return { predictions: [], capped: false };
+      return { predictions: [], capped: false, aborted: false };
     }
     const json = await r.json();
     const places = Array.isArray(json?.places) ? json.places : [];
@@ -201,10 +208,13 @@ export async function searchGooglePlaces(client, { kind, query, sessionToken: _s
           lng: p.location?.longitude ?? null,
         },
       }));
-    return { predictions, capped: false };
+    return { predictions, capped: false, aborted: false };
   } catch (err) {
+    if (err?.name === "AbortError") {
+      return { predictions: [], capped: false, aborted: true };
+    }
     console.warn("[BITE] places:searchText threw:", err);
-    return { predictions: [], capped: false };
+    return { predictions: [], capped: false, aborted: false };
   }
 }
 

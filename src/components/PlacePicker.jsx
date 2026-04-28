@@ -77,7 +77,11 @@ export function PlacePicker({
   const [resolvingId, setResolvingId] = useState(null);
 
   /** Suppress Google IDs that already match a row in our catalog (by
-   *  `googlePlaceId`) — those should appear as catalog hits, not Google ones. */
+   *  `googlePlaceId`) — those should appear as catalog hits, not Google ones.
+   *  Filtered at RENDER time, not inside the fetch effect, so this doesn't
+   *  destabilize the effect deps (`dedup` is a fresh array every render, so
+   *  including `knownGoogleIds` in the effect deps would invalidate on every
+   *  parent render and re-fire the debounced fetch — see flicker repro). */
   const knownGoogleIds = useMemo(() => {
     const set = new Set();
     for (const p of dedup) {
@@ -96,26 +100,38 @@ export function PlacePicker({
       setGoogleLoading(false);
       return;
     }
-    let cancelled = false;
+    /** AbortController on every render: if the user keeps typing (q changes),
+     *  the cleanup fires `ac.abort()` and Google drops the in-flight request,
+     *  so stale responses can't overwrite newer ones and we don't burn
+     *  quota on calls we no longer care about. The 300ms debounce still
+     *  gates how often we hit the network in the first place. */
+    const ac = new AbortController();
     setGoogleLoading(true);
     const handle = setTimeout(async () => {
-      const { predictions, capped } = await searchGooglePlaces(supabase, {
+      const { predictions, capped, aborted } = await searchGooglePlaces(supabase, {
         kind,
         query: q,
         sessionToken: sessionTokenRef.current,
+        signal: ac.signal,
       });
-      if (cancelled) return;
+      if (ac.signal.aborted || aborted) return;
       if (capped) cappedRef.current = true;
-      setGooglePredictions(
-        (predictions || []).filter((p) => !knownGoogleIds.has(p.placeId)),
-      );
+      setGooglePredictions(predictions || []);
       setGoogleLoading(false);
-    }, 250);
+    }, 300);
     return () => {
-      cancelled = true;
+      ac.abort();
       clearTimeout(handle);
     };
-  }, [q, kind, exactMatch, knownGoogleIds]);
+  }, [q, kind, exactMatch]);
+
+  /** Apply the catalog-dedup filter at render time so post-resolve catalog
+   *  growth (via `onPlaceCreated` → parent `places` update) hides the just-
+   *  resolved Google row from the predictions list without re-fetching. */
+  const visibleGooglePredictions = useMemo(
+    () => googlePredictions.filter((p) => !knownGoogleIds.has(p.placeId)),
+    [googlePredictions, knownGoogleIds],
+  );
 
   // ---- Outside-click + handlers --------------------------------------------
 
@@ -193,7 +209,7 @@ export function PlacePicker({
    *  loading we wait — otherwise users would see "Add new" flash before the
    *  predictions arrive. If we're capped we show Add-new immediately so the
    *  user is never stuck. */
-  const googleHasResults = googlePredictions.length > 0;
+  const googleHasResults = visibleGooglePredictions.length > 0;
   const showAddNew = q.length > 0
     && !exactMatch
     && !googleLoading
@@ -251,7 +267,7 @@ export function PlacePicker({
               {googleLoading && <span style={{ opacity: 0.5 }}>…</span>}
             </div>
           )}
-          {googlePredictions.map((g) => {
+          {visibleGooglePredictions.map((g) => {
             const isResolving = resolvingId === g.placeId;
             return (
               <div
