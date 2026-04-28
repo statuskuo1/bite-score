@@ -3,7 +3,7 @@ import { useLang } from "../contexts/LangContext.jsx";
 import { FLAGS } from "../constants/cuisineConstants.js";
 import { calcBiteOutOf10, scoreColor, scoreLabel, tasteLabel } from "../utils/scoring.js";
 import { S } from "../styles/sharedStyles.js";
-import { CafeNameInput } from "./CafeNameInput.jsx";
+import { PlacePicker } from "./PlacePicker.jsx";
 import { CuisineInput } from "./CuisineInput.jsx";
 import { Toggle } from "./Toggle.jsx";
 import { RepeatPicker } from "./RepeatPicker.jsx";
@@ -11,7 +11,7 @@ import { SectionLabel } from "./SectionLabel.jsx";
 import { FieldLabel } from "./FieldLabel.jsx";
 import { FormScoreHeader } from "./FormScoreHeader.jsx";
 
-export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,existingNames,existingEntries}) {
+export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,existingEntries,places}) {
   const {t} = useLang();
   const [f,setF] = useState(initial);
   const [sub,setSub] = useState(false);
@@ -20,7 +20,7 @@ export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,exi
   const bg = score===null?"#2C2C2A":score>=9.5?"#1A2E0A":score>=8.5?"#1A2E0A":score>=7?"#0C2A3A":score>=4?"#2A1E05":score>=2?"#2C2C2A":"#3C1F13";
   function save() {
     if(!f.name||!f.cost||!f.city){setSub(true);return;}
-    onSave({...f,taste:+f.taste,cost:+f.cost,portions:+f.portions,wait:+f.wait,repeatability:+f.repeatability});
+    onSave({...f,placeId:f.placeId||null,taste:+f.taste,cost:+f.cost,portions:+f.portions,wait:+f.wait,repeatability:+f.repeatability});
   }
   return (
     <div style={{...S.card,marginBottom:12}}>
@@ -34,20 +34,46 @@ export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,exi
       <SectionLabel>{t.theBasics}</SectionLabel>
       <div style={S.mb16}>
         <FieldLabel>{t.restaurantName}</FieldLabel>
-        <CafeNameInput value={f.name} onChange={v=>{
-          inp("name",v);
-          const match=(existingEntries||[]).find(e=>e.name===v);
-          if(match){
-            inp("cuisine",match.cuisine||"");
-            inp("letter",(match.cuisine?.[0]||"").toUpperCase());
-            inp("cuisine2",match.cuisine2||"");
-            inp("isFusion",match.isFusion||false);
-            inp("portions",match.portions||1);
-            inp("wait",0);
-            inp("useR",match.useR!==false);
-            inp("repeatability",match.repeatability||1);
-          }
-        }} existingNames={existingNames||[]}/>
+        <PlacePicker
+          value={f.name}
+          selectedPlaceId={f.placeId||null}
+          places={places||[]}
+          onChange={({name, placeId, city})=>{
+            if(!placeId){
+              /** Typing or "Add new" — just update name + clear pinned placeId. */
+              setF(p=>({...p, name, placeId: null}));
+              return;
+            }
+            /** The "basics" (cuisine, fusion, city) are place-level fields stored
+             *  on `restaurant_places`, so the canonical place row is the source
+             *  of truth — pull from `places` rather than the user's own log. */
+            const place=(places||[]).find(p=>p.id===placeId);
+            const cuisine=place?.cuisine || "";
+            setF(p=>({
+              ...p,
+              name,
+              placeId,
+              city: place?.city || city || p.city || "",
+              cuisine: cuisine || p.cuisine || "",
+              letter: ((cuisine || p.cuisine || "")[0] || "").toUpperCase(),
+              cuisine2: place?.cuisine2 || "",
+              isFusion: !!place?.isFusion,
+            }));
+            /** Layer the user's own past-visit metadata on top for visit-level
+             *  fields only (portions, wait, repeatability) — keyed by placeId
+             *  so it survives casing/whitespace drift. */
+            const match=(existingEntries||[]).find(e=>e.placeId===placeId);
+            if(match){
+              setF(p=>({
+                ...p,
+                portions: match.portions || 1,
+                wait: 0,
+                useR: match.useR !== false,
+                repeatability: match.repeatability || 1,
+              }));
+            }
+          }}
+        />
         {sub&&!f.name&&<div style={S.err}>Required</div>}
       </div>
       <div style={{display:"flex",gap:10,marginBottom:16}}>

@@ -6,7 +6,7 @@ import { calcCafeOutOf10, cafeScoreColor, cafeScoreLabel, tasteLabel } from "../
 import { S } from "../styles/sharedStyles.js";
 import { supabase } from "../config/supabaseClient.js";
 import { fetchPopularOrdersForPlace } from "../utils/visitPlacesApi.js";
-import { CafeNameInput } from "./CafeNameInput.jsx";
+import { PlacePicker } from "./PlacePicker.jsx";
 import { OrderCombobox } from "./OrderCombobox.jsx";
 import { Toggle } from "./Toggle.jsx";
 import { RepeatPicker } from "./RepeatPicker.jsx";
@@ -32,7 +32,7 @@ const FLAVOR_NOTES = [
   { value: "Smoky", labelKey: "flavorSmoky" },
 ];
 
-export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addType,setAddType,existingNames,existingCafes}) {
+export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addType,setAddType,existingCafes,places}) {
   const {t} = useLang();
   const [f, setF] = useState({...INIT_CAFE, ...initial});
   const [sub, setSub] = useState(false);
@@ -41,10 +41,13 @@ export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addT
   const isEdit = !!initial.id;
 
   const cafesList = existingCafes || [];
-  const matchedPlaceId = cafesList.find(e => e.name === f.name)?.placeId || null;
-  const pastOrdersAtCafe = cafesList
-    .filter(e => e.name === f.name && e.order)
-    .map(e => e.order);
+  /** With PlacePicker, `f.placeId` is the source of truth for which place is
+   *  attached. Past orders/cuisine autofill all key off that id (survives
+   *  casing/whitespace drift in `name`). */
+  const activePlaceId = f.placeId || null;
+  const pastOrdersAtCafe = activePlaceId
+    ? cafesList.filter(e => e.placeId === activePlaceId && e.order).map(e => e.order)
+    : [];
   const pastOrdersForCategory = cafesList
     .filter(e => e.category === f.category && e.order)
     .map(e => e.order);
@@ -53,17 +56,18 @@ export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addT
   // we resolve a different placeId or category. Failures are silent.
   const [popularAtCafe, setPopularAtCafe] = useState([]);
   useEffect(() => {
-    if (!matchedPlaceId) { setPopularAtCafe([]); return; }
+    if (!activePlaceId) { setPopularAtCafe([]); return; }
     let cancelled = false;
-    fetchPopularOrdersForPlace(supabase, matchedPlaceId, f.category).then(items => {
+    fetchPopularOrdersForPlace(supabase, activePlaceId, f.category).then(items => {
       if (!cancelled) setPopularAtCafe(items);
     });
     return () => { cancelled = true; };
-  }, [matchedPlaceId, f.category]);
+  }, [activePlaceId, f.category]);
 
   function buildEntry() {
     return {
       ...(isEdit ? {id: initial.id} : {}),
+      placeId: f.placeId || null,
       name: f.name, city: f.city || "",
       category: f.category, order: f.order,
       taste: +f.taste, cost: +f.cost, portions: +f.portions, wait: +f.wait,
@@ -87,7 +91,7 @@ export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addT
   function saveAndAddAnother() {
     if (!validate()) return;
     if (onSaveAndContinue) onSaveAndContinue(buildEntry());
-    setF({...INIT_CAFE, name: f.name, city: f.city || ""});
+    setF({...INIT_CAFE, name: f.name, city: f.city || "", placeId: f.placeId || null});
     setSub(false);
   }
 
@@ -132,20 +136,34 @@ export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addT
       <SectionLabel>{t.theBasics}</SectionLabel>
       <div style={S.mb16}>
         <FieldLabel>{t.cafeName}</FieldLabel>
-        <CafeNameInput value={f.name} onChange={v=>{
-          inp("name", v);
-          const matches = (existingCafes||[]).filter(e=>e.name===v);
-          if (matches.length > 0) {
-            const last = matches[matches.length-1];
-            setF(p => ({...p,
-              name: v,
-              city: last.city || p.city || "",
-              category: last.category || "Coffee",
-              beanRegion: last.beanRegion || "",
-              portions: last.portions || 1,
+        <PlacePicker
+          value={f.name}
+          selectedPlaceId={f.placeId||null}
+          places={places||[]}
+          onChange={({name, placeId, city})=>{
+            setF(p=>({
+              ...p,
+              name,
+              placeId: placeId||null,
+              ...(city ? {city} : {}),
             }));
-          }
-        }} existingNames={existingNames||[]}/>
+            /** Pull autofill from the user's own past visits at this place
+             *  (keyed by placeId — survives casing/whitespace drift). */
+            if(placeId){
+              const matches=(existingCafes||[]).filter(e=>e.placeId===placeId);
+              if(matches.length>0){
+                const last=matches[matches.length-1];
+                setF(p=>({
+                  ...p,
+                  city: city || last.city || p.city || "",
+                  category: p.category || last.category || "Coffee",
+                  beanRegion: p.beanRegion || last.beanRegion || "",
+                  portions: last.portions || 1,
+                }));
+              }
+            }
+          }}
+        />
         {sub&&!f.name&&<div style={S.err}>Required</div>}
       </div>
       <div style={{marginBottom:16}}>

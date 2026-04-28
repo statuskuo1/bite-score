@@ -167,9 +167,13 @@ export async function fetchCafeVisitsJoined(client, userId) {
 }
 
 /**
- * Find place by case-insensitive name match; if missing, insert.
+ * Find place by case-insensitive name match; if missing, insert. When the
+ * caller already knows the canonical `placeId` (e.g. picked from PlacePicker),
+ * short-circuit and skip the lookup/insert entirely so we don't risk creating
+ * a near-duplicate row when the typed name drifts.
  */
-export async function ensureRestaurantPlace(client, { name, cuisine, cuisine2, isFusion, city }) {
+export async function ensureRestaurantPlace(client, { placeId, name, cuisine, cuisine2, isFusion, city }) {
+  if (placeId) return placeId;
   const n = (name || "").trim();
   if (!n) throw new Error("Restaurant name required");
   const { data: found, error: selErr } = await client
@@ -195,7 +199,8 @@ export async function ensureRestaurantPlace(client, { name, cuisine, cuisine2, i
   return ins.id;
 }
 
-export async function ensureCafePlace(client, { name, city }) {
+export async function ensureCafePlace(client, { placeId, name, city }) {
+  if (placeId) return placeId;
   const n = (name || "").trim();
   if (!n) throw new Error("Café name required");
   const { data: found, error: selErr } = await client
@@ -213,6 +218,44 @@ export async function ensureCafePlace(client, { name, city }) {
     .single();
   if (insErr) throw insErr;
   return ins.id;
+}
+
+/**
+ * Shared catalog read used by PlacePicker. RLS allows any authenticated user
+ * to SELECT all rows in `*_places`, so this is just a flat list — no joins,
+ * no auth filter. Returns `[]` on any error so the picker stays usable.
+ */
+export async function fetchAllRestaurantPlaces(client) {
+  const { data, error } = await client
+    .from("restaurant_places")
+    .select("id, name, cuisine, cuisine2, is_fusion, city");
+  if (error) {
+    console.warn("[BITE] fetchAllRestaurantPlaces:", error.message);
+    return [];
+  }
+  return (data || []).map((p) => ({
+    id: p.id,
+    name: p.name || "",
+    city: p.city || "",
+    cuisine: p.cuisine || "",
+    cuisine2: p.cuisine2 || "",
+    isFusion: !!p.is_fusion,
+  }));
+}
+
+export async function fetchAllCafePlaces(client) {
+  const { data, error } = await client
+    .from("cafe_places")
+    .select("id, name, city");
+  if (error) {
+    console.warn("[BITE] fetchAllCafePlaces:", error.message);
+    return [];
+  }
+  return (data || []).map((p) => ({
+    id: p.id,
+    name: p.name || "",
+    city: p.city || "",
+  }));
 }
 
 export function restaurantVisitInsertPayload(placeId, userId, e) {
@@ -319,9 +362,15 @@ export async function fetchCafeVisitsForUser(client, userId) {
 }
 
 /**
- * Aggregate community taste scores by place. One row per `*_places`,
- * with avg taste, visit count, and up to `topReviewersLimit` author profiles
- * (highest taste first) for chip display.
+ * Aggregate community taste/BITE inputs by place. One row per `*_places`,
+ * with averages of every BITE input (taste, cost, portions, wait, repeat)
+ * plus a useR-majority flag, so consumers can do "mean-then-BITE" with the
+ * viewer's own weights.
+ *
+ * `visitCount` is the total number of visits seen (for display). `validCount`
+ * is the subset with finite BITE inputs and `portions > 0` — only these
+ * contribute to the averages. Places where `validCount === 0` still appear
+ * (they had visits) but their averages are null.
  *
  * Aggregation runs client-side over an unbounded SELECT, which is fine for v1
  * (RLS allows authenticated read of all visits + all profiles). If the corpus
@@ -337,6 +386,12 @@ function aggregatePlaces(rows, getPlaceKey, makePlaceMeta, topReviewersLimit) {
     const bucket = byKey.get(key) || {
       place: makePlaceMeta(r),
       sumTaste: 0,
+      sumCost: 0,
+      sumPortions: 0,
+      sumWait: 0,
+      sumRepeat: 0,
+      useRTrue: 0,
+      validCount: 0,
       visitCount: 0,
       reviewers: [],
     };
@@ -349,6 +404,28 @@ function aggregatePlaces(rows, getPlaceKey, makePlaceMeta, topReviewersLimit) {
       avatarUrl: r.authorAvatarUrl,
       taste: t,
     });
+
+    /** A visit only counts toward BITE averages if it has the inputs BITE
+     *  needs. `portions = 0` would make `cost / portions` blow up, and
+     *  non-finite numbers are rejected upstream. */
+    const cost = +r.cost;
+    const portions = +r.portions;
+    const wait = +r.wait;
+    const repeat = +r.repeatability;
+    if (
+      Number.isFinite(cost) &&
+      Number.isFinite(portions) && portions > 0 &&
+      Number.isFinite(wait) &&
+      Number.isFinite(repeat)
+    ) {
+      bucket.sumCost += cost;
+      bucket.sumPortions += portions;
+      bucket.sumWait += wait;
+      bucket.sumRepeat += repeat;
+      if (r.useR !== false) bucket.useRTrue += 1;
+      bucket.validCount += 1;
+    }
+
     byKey.set(key, bucket);
   }
   const out = [];
@@ -357,10 +434,26 @@ function aggregatePlaces(rows, getPlaceKey, makePlaceMeta, topReviewersLimit) {
     const topReviewers = [...bucket.reviewers]
       .sort((a, b) => b.taste - a.taste)
       .slice(0, topReviewersLimit);
+    const v = bucket.validCount;
+    const hasValid = v > 0;
+    const avgCost = hasValid ? bucket.sumCost / v : null;
+    const avgPortions = hasValid ? bucket.sumPortions / v : null;
+    const avgWait = hasValid ? bucket.sumWait / v : null;
+    const avgRepeat = hasValid ? bucket.sumRepeat / v : null;
+    /** Majority rule: if at least half of the valid visits had `useR = true`,
+     *  treat the aggregate as repeatability-on. Ties (e.g. 1/2) resolve to true
+     *  because turning repeatability off is the deliberate opt-out. */
+    const useRMajority = hasValid ? bucket.useRTrue * 2 >= v : true;
     out.push({
       ...bucket.place,
       avgTaste,
+      avgCost,
+      avgPortions,
+      avgWait,
+      avgRepeat,
+      useRMajority,
       visitCount: bucket.visitCount,
+      validCount: bucket.validCount,
       topReviewers,
     });
   }

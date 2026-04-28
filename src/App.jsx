@@ -7,6 +7,8 @@ import { canMutateVisit } from "./utils/rowAccess.js";
 import {
   fetchRestaurantVisitsJoined,
   fetchCafeVisitsJoined,
+  fetchAllRestaurantPlaces,
+  fetchAllCafePlaces,
   ensureRestaurantPlace,
   ensureCafePlace,
   restaurantVisitInsertPayload,
@@ -60,6 +62,9 @@ export default function App() {
   const { user, authReady, username } = useAuth();
   const [st, dispatch] = useReducer(reducer, { entries: [], view: "log" });
   const [cafes, setCafes] = useState([]);
+  /** Shared cross-user catalog for PlacePicker. Loaded once on auth boot. */
+  const [restaurantPlaces, setRestaurantPlaces] = useState([]);
+  const [cafePlaces, setCafePlaces] = useState([]);
   const [dbLoaded, setDbLoaded] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showWelcome, setShowWelcome] = useState(true);
@@ -144,6 +149,8 @@ export default function App() {
         if (!user) {
           dispatch({ type: "LOAD", entries: [] });
           setCafes([]);
+          setRestaurantPlaces([]);
+          setCafePlaces([]);
         } else {
           if (import.meta.env.DEV) {
             console.log("[BITE] AuthContext user at load()", {
@@ -154,20 +161,28 @@ export default function App() {
           dispatch({ type: "LOAD", entries: [] });
           setCafes([]);
           // Profile sync is owned by AuthContext; we just read visits here.
-          const [entries, cafeRows] = await Promise.all([
+          // Shared `*_places` catalog is read in parallel for the PlacePicker
+          // typeahead — RLS allows authenticated SELECT on all rows.
+          const [entries, cafeRows, rPlaces, cPlaces] = await Promise.all([
             fetchRestaurantVisitsJoined(supabase, user.id),
             fetchCafeVisitsJoined(supabase, user.id),
+            fetchAllRestaurantPlaces(supabase),
+            fetchAllCafePlaces(supabase),
           ]);
           if (import.meta.env.DEV) {
             console.log("[BITE] load() fetched rows", {
               restaurantEntryCount: entries.length,
               cafeRowCount: cafeRows.length,
+              restaurantPlaceCount: rPlaces.length,
+              cafePlaceCount: cPlaces.length,
               cancelled,
             });
           }
           if (cancelled) return;
           dispatch({ type: "LOAD", entries });
           setCafes(cafeRows);
+          setRestaurantPlaces(rPlaces);
+          setCafePlaces(cPlaces);
           if (import.meta.env.DEV) {
             console.log("[BITE] reducer LOAD applied", { entriesLength: entries.length });
           }
@@ -322,10 +337,23 @@ export default function App() {
     return{val:sc!=null?sc.toFixed(2):"—",label:scoreLabel(sc,t),color:scoreColor(sc)};
   }
 
+  /** Keep the local PlacePicker catalog warm: any time `ensure*Place` resolves a
+   *  placeId we don't yet know about (newly inserted, or matched via ilike to a
+   *  row we hadn't loaded), append it so the dropdown reflects reality without
+   *  a full refetch. */
+  function upsertPlace(setter, placeId, fields) {
+    setter((cur) => (cur.some((p) => p.id === placeId) ? cur : [...cur, { id: placeId, ...fields }]));
+  }
+
   async function insertCafeEntry(entry) {
     if (!user) return;
     try {
       const placeId = await ensureCafePlace(supabase, {
+        placeId: entry.placeId || null,
+        name: entry.name,
+        city: entry.city || "",
+      });
+      upsertPlace(setCafePlaces, placeId, {
         name: entry.name,
         city: entry.city || "",
       });
@@ -710,19 +738,32 @@ export default function App() {
       )}
 
       {st.view==="community"&&dbLoaded&&(
-        <CommunityTab user={user} />
+        <CommunityTab
+          user={user}
+          restaurantWeights={weights}
+          drinkWeights={drinkWeights}
+          sweetWeights={sweetWeights}
+        />
       )}
 
-      {st.view==="log"&&editR&&<RestForm initial={editR} weights={weights} existingNames={st.entries.map(e=>e.name)} existingEntries={st.entries} onSave={async e=>{
+      {st.view==="log"&&editR&&<RestForm initial={editR} weights={weights} existingEntries={st.entries} places={restaurantPlaces} onSave={async e=>{
         let resolvedPlaceId = e.placeId;
         if(canMutateVisit(e,user)) {
           try {
             resolvedPlaceId = await ensureRestaurantPlace(supabase, {
+              placeId: e.placeId || null,
               name: e.name,
               cuisine: e.cuisine,
               cuisine2: e.cuisine2 || "",
               isFusion: e.isFusion || false,
               city: e.city || "",
+            });
+            upsertPlace(setRestaurantPlaces, resolvedPlaceId, {
+              name: e.name,
+              city: e.city || "",
+              cuisine: e.cuisine || "",
+              cuisine2: e.cuisine2 || "",
+              isFusion: !!e.isFusion,
             });
             const { error } = await supabase
               .from("restaurant_visits")
@@ -742,6 +783,11 @@ export default function App() {
         if(canMutateVisit(e,user)) {
           try {
             resolvedPlaceId = await ensureCafePlace(supabase, {
+              placeId: e.placeId || null,
+              name: e.name,
+              city: e.city || "",
+            });
+            upsertPlace(setCafePlaces, resolvedPlaceId, {
               name: e.name,
               city: e.city || "",
             });
@@ -755,23 +801,31 @@ export default function App() {
           }
         }
         setCafes(p=>p.map(x=>x.id===e.id?{...e,id:x.id,placeId:resolvedPlaceId??x.placeId,ownerId:e.ownerId??user?.id??x.ownerId}:x)); setEditC(null);
-      }} onCancel={()=>{setEditC(null);window.scrollTo({top:0,behavior:"smooth"});}} existingNames={cafes.map(e=>e.name)} existingCafes={cafes}/>}
+      }} onCancel={()=>{setEditC(null);window.scrollTo({top:0,behavior:"smooth"});}} existingCafes={cafes} places={cafePlaces}/>}
 
       {/* ── Add Rating ── */}
       {st.view==="add"&&(
         <div>
           {addType==="restaurant"
-            ?<RestForm initial={{...INIT_REST,city:lastCity.current}} weights={weights} existingNames={st.entries.map(e=>e.name)} existingEntries={st.entries}
+            ?<RestForm initial={{...INIT_REST,city:lastCity.current}} weights={weights} existingEntries={st.entries} places={restaurantPlaces}
                 onSave={async e=>{
                   if (e.city) lastCity.current = e.city;
                   if (!user) return;
                   try {
                     const placeId = await ensureRestaurantPlace(supabase, {
+                      placeId: e.placeId || null,
                       name: e.name,
                       cuisine: e.cuisine,
                       cuisine2: e.cuisine2 || "",
                       isFusion: e.isFusion || false,
                       city: e.city || "",
+                    });
+                    upsertPlace(setRestaurantPlaces, placeId, {
+                      name: e.name,
+                      city: e.city || "",
+                      cuisine: e.cuisine || "",
+                      cuisine2: e.cuisine2 || "",
+                      isFusion: !!e.isFusion,
                     });
                     const { data, error } = await supabase
                       .from("restaurant_visits")
@@ -805,8 +859,8 @@ export default function App() {
                 }}
                 onCancel={()=>dispatch({type:"VIEW",view:"log"})}
                 addType={addType} setAddType={setAddType}
-                existingNames={cafes.map(e=>e.name)}
                 existingCafes={cafes}
+                places={cafePlaces}
               />
           }
         </div>
