@@ -35,6 +35,7 @@ export const T = {
     questLegendQuest:"Quest",questLegendLogged:"Logged",questLegendNotYet:"Not yet",
     tapToToggle:"Tap a logged letter to toggle it into your quest.",
     tastePalette:"Taste personality",weights:"Weights",cuisineBreakdown:"Cuisine breakdown",
+    tastePersonalityLocked:"Log a few more meals to unlock your taste personality.",
     cuisineQuestsSection:"Cuisine Quests",
     questSummaryRight:"{done} / {total} explored  ·  {letters} / 26 letters",
     questPillCuisines:"{done} / {total} cuisines",

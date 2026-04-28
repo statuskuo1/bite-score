@@ -10,6 +10,7 @@ import { WeightSliders } from "./WeightSliders.jsx";
 import { StatCard } from "./StatCard.jsx";
 import { CuisineQuestModal } from "./CuisineQuestModal.jsx";
 import { getQuestMetrics } from "../utils/questMetrics.js";
+import { getRestaurantPersonality } from "../utils/tastePersonality.js";
 
 const WEIGHT_DEFAULTS = { taste: 50, bpb: 40, wait: 10 };
 
@@ -26,7 +27,7 @@ export function PaletteView({
   toggleQ,
   onOpenSuggest,
 }) {
-  const {t,lang:lang_} = useLang();
+  const {t} = useLang();
   const [paletteTab,setPaletteTab] = useState("restaurants");
   const [editingW,setEditingW] = useState(false);
   const [draftW,setDraftW] = useState(()=>({...weights}));
@@ -44,7 +45,7 @@ export function PaletteView({
   const rows=[...sorted.slice(0,5),["Other",sorted.slice(5).reduce((a,[,n])=>a+n,0)]];
   const slices=rows.map(([region,count])=>({region,count,color:region==="Other"?"#888780":(REGION_COLORS[region]||"#888780")}));
 
-  const topR=sorted[0]?.[0]||"Other",rCount=sorted.length;
+  const rCount=sorted.length;
   const cc={};entries.forEach(e=>{cc[e.cuisine]=(cc[e.cuisine]||0)+1;});
   const topC=Object.entries(cc).sort((a,b)=>b[1]-a[1])[0]?.[0]||"—";
   const restaurantWeightsSum = weights.taste + weights.bpb + weights.wait;
@@ -66,18 +67,7 @@ export function PaletteView({
   const groupedEntries = Object.values(entries.reduce((acc,e)=>{if(!acc[e.name])acc[e.name]=[];acc[e.name].push(e);return acc;},{}));
   const topB = groupedEntries.map(grp=>({name:grp[0].name,avg:grp.reduce((a,e)=>a+(calcBiteOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights)??0),0)/grp.length})).sort((a,b)=>b.avg-a.avg)[0];
 
-  const pr0=lang_==="zh"?(topR==="East Asia"?"你的味蕾對東亞料理有種無法抗拒的吸引力——說真的，品味一流。":topR==="Western Europe"?"西歐的經典料理說到你心坎裡了。經典。":"你對"+topR+"料理有真正的好奇心。"):(topR==="East Asia"?"Your palate has a clear gravitational pull toward East Asia — and honestly, you have great taste.":topR==="Western Europe"?"Classic European dining speaks to your soul. Timeless.":"You have a genuine curiosity for "+topR+" cuisine.");
-  const pr1=lang_==="zh"?(+avgT>=8?"你的標準很高，評分就是證明。你不接受普通。":+avgT>=6.5?"你欣賞品質，但不會太挑剔。一個價格合理的包子就能讓你很滿足。":"你帶著真正的好奇心吃飯。每一次踩雷都是數據。"):(+avgT>=8?"Your standards are high and your reviews reflect it. You don't do mid.":+avgT>=6.5?"You appreciate quality but you're not precious about it. A well-priced bao hits different.":"You eat with genuine curiosity. Every miss is data.");
-  const pr2=lang_==="zh"?(+avgC>70?"你在乎飲食的投資。人生太短，不該浪費在難吃的食物上。":+avgC>40?"你找到了甜蜜點——品質與米其林價格之間的平衡。":"你有發掘價值的天賦。真正的 BITE 分數最大化者。"):(+avgC>70?"You invest in your meals. Life's too short for bad food at any price.":+avgC>40?"You've found the sweet spot — quality without the Michelin price tag.":"You have a gift for finding value. A true BITE Score maximizer.");
-  const pr3=lang_==="zh"?(rCount>=4?"已探索 "+rCount+" 個地區，持續增加中。護照印章拿來。":"你知道自己的路，而且堅持走下去。忠誠、一致、有效率。"):(rCount>=4?""+rCount+" regions explored and counting. The passport stamps are giving.":"You know your lane and you stay in it. Loyal, consistent, efficient.");
-
-  const topRPct=Math.round((rg[topR]||0)/total*100);
-  const r0=lang_==="zh"?(topR==="East Asia"?"你的紀錄裡有 "+topRPct+"% 是東亞料理。我們懂。你想念媽媽的手藝。":topR==="Western Europe"?"有趣啊，「有文化」怎麼突然變成「我只吃法國菜」了？":""+topR+"佔了你紀錄的 "+topRPct+"%。這就是所謂的愛冒險啊。"):(topR==="East Asia"?"Girl, "+topRPct+"% of your log is East Asian food. We get it. You miss your mom's cooking.":topR==="Western Europe"?"Interesting how quickly 'cultured' becomes 'I only eat French food'.":""+topR+" is "+topRPct+"% of your log. Adventurous queen behavior right here.");
-  const r1=lang_==="zh"?(+avgT>=8?"高標準還有金融公式來佐證。你就是那種人。":+avgT>=6.5?"平均口味 "+avgT+"。你給人一種「我有品味，但也能吃任何東西」的感覺。":"平均口味低於 6.5。要麼你在吃難吃的東西，要麼你在騙自己。"):(+avgT>=8?"High standards AND a finance formula to prove it. You are that girl.":+avgT>=6.5?""+avgT+" average taste. You're giving 'I have opinions but also I'll eat anything'.":"Average taste score under 6.5. Either you're eating bad food or you're lying to yourself.");
-  const r2=lang_==="zh"?(+avgC>70?"每餐平均 $"+avgC+"。你看信用卡帳單的時候一定要喝點東西。":+avgC>40?"每餐平均 $"+avgC+"。不窮，但也沒在揮霍。混亂中產階級的體驗。":"每餐平均 $"+avgC+"。要麼你挖到了寶，要麼你的腸胃非常包容。"):(+avgC>70?"$"+avgC+" average per meal. You are not processing these credit card statements sober.":+avgC>40?"$"+avgC+" per meal average. Not broke, not balling. The chaotic middle class experience.":"$"+avgC+" per meal average. Either you have found hidden gems or you have a very forgiving digestive system.");
-  const r3=lang_==="zh"?(rCount>=4?""+rCount+" 個地區，但有 "+topRPct+"% 是"+topR+"。所謂的多元，有點言過其實啦。":"只有 "+rCount+" 個地區。我們蓋了整個任務系統，結果就這樣用啊。"):(rCount>=4?""+rCount+" regions but "+topRPct+"% of that is "+topR+". The range is a bit of a lie bestie.":"Only "+rCount+" regions. We built an entire quest system and this is what we're doing with it.");
-
-  const l0=pr0, l1=pr1, l2=pr2, l3=pr3;
+  const personality = getRestaurantPersonality(entries, weights);
 
   const btnGhost = {fontSize:11,color:"#5B9BD5",background:"none",border:"1px solid rgba(91,155,213,0.45)",borderRadius:8,padding:"5px 12px",cursor:"pointer",fontWeight:500};
   /** Hide personality / breakdown / stats only when there are no entries or committed weights don’t sum to 100 — not while editing draft (so the page doesn’t “disappear”). */
@@ -144,7 +134,23 @@ export function PaletteView({
               </div>
             </div>
 
-            {(roastMode?[r0,r1,r2,r3]:[l0,l1,l2,l3]).map((l,i)=><p key={i} style={{fontSize:13,color:i===0?"#F1EFE8":"#888780",margin:"0 0 6px",lineHeight:1.65,fontWeight:i===0?500:400}}>{l}</p>)}
+            {personality.hasEnoughData ? (
+              <>
+                <p style={{fontSize:13,color:"#F0997B",margin:"0 0 4px",lineHeight:1.4,fontWeight:600,letterSpacing:"0.01em"}}>
+                  {roastMode?personality.archetype.roastTitle:personality.archetype.title}
+                </p>
+                <p style={{fontSize:13,color:"#F1EFE8",margin:"0 0 10px",lineHeight:1.65,fontWeight:500}}>
+                  {roastMode?personality.archetype.roastBlurb:personality.archetype.blurb}
+                </p>
+                {personality.bullets.map((b)=>(
+                  <p key={b.key} style={{fontSize:13,color:"#888780",margin:"0 0 6px",lineHeight:1.65}}>
+                    {roastMode?b.roast:b.text}
+                  </p>
+                ))}
+              </>
+            ) : (
+              <p style={{fontSize:13,color:"#888780",margin:0,lineHeight:1.65,fontStyle:"italic"}}>{t.tastePersonalityLocked}</p>
+            )}
           </div>
           <div style={{...S.card}}>
             <div style={{...S.lbl,marginBottom:14}}>{t.cuisineBreakdown}</div>
