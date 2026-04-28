@@ -158,9 +158,9 @@ const ARCHETYPES = [
       )}/meal average. You find the steal that other people walk past.`,
     roastTitle: "The Hunter",
     roastBlurb: (s) =>
-      `${s.topPick.name} cleared everything else with ${fix1(s.topPick.score)}/10 and you're spending ${money(
+      `${s.topPick.name} pulled ${fix1(s.topPick.score)}/10 and your average tab is ${money(
         s.avgCost,
-      )}/meal. Either you have radar or you refuse to try anything new.`,
+      )}. Babe, that's not a discerning palate, that's a budget.`,
   },
   {
     key: "snob",
@@ -172,7 +172,7 @@ const ARCHETYPES = [
       )}% of meals scoring 8+. You don't waste a meal slot.`,
     roastTitle: "The Snob",
     roastBlurb: (s) =>
-      `${pct(s.eliteHitRate)}% of your meals scored ≥ 8. The bar is in the sky and the rest of us are not invited.`,
+      `${pct(s.eliteHitRate)}% of your meals score 8 or higher. Sweetie, the rest of us eat food too.`,
   },
   {
     key: "splurger",
@@ -185,7 +185,7 @@ const ARCHETYPES = [
     roastBlurb: (s) =>
       `${money(s.avgCost)}/meal average and only ${pct(
         s.eliteHitRate,
-      )}% of those landed at 8+. The credit card statement is doing more work than the kitchens are.`,
+      )}% of those landed at 8+. Babe, that's not "treating yourself," that's tipping for mediocrity.`,
   },
   {
     key: "patientPilgrim",
@@ -197,9 +197,9 @@ const ARCHETYPES = [
       )}% elite hits — you're willing to stand in line for a real one.`,
     roastTitle: "The Line-Stander",
     roastBlurb: (s) =>
-      `Average ${Math.round(s.avgWait)} min in line for an ${pct(
+      `${Math.round(s.avgWait)} min average wait for a ${pct(
         s.eliteHitRate,
-      )}% hit rate. You've made queueing a personality.`,
+      )}% hit rate. Sweetie, the line is not the vibe.`,
   },
   {
     key: "critic",
@@ -211,9 +211,9 @@ const ARCHETYPES = [
       )}/10. You see through the hype — the bar is yours, not the room's.`,
     roastTitle: "The Critic",
     roastBlurb: (s) =>
-      `${s.total} meals and a ${fix1(
+      `${s.total} meals, ${fix1(
         s.avgTaste,
-      )}/10 average. At some point this stops being discernment and becomes a personality disorder.`,
+      )}/10 average. At what point do we admit the common denominator is you.`,
   },
   {
     key: "loyalist",
@@ -226,7 +226,7 @@ const ARCHETYPES = [
       )}% earn a "must return". You know your lane and you stay in it.`,
     roastTitle: "The Loyalist",
     roastBlurb: (s) =>
-      `${pct(s.topRegionShare)}% ${s.topRegion}. The other regions filed a missing-person report.`,
+      `${pct(s.topRegionShare)}% ${s.topRegion}. Babe, ordering off the same menu your whole life isn't loyalty — it's fear.`,
   },
   {
     key: "globetrotter",
@@ -240,7 +240,7 @@ const ARCHETYPES = [
       )}% of meals. You eat like the world is the menu.`,
     roastTitle: "The Globetrotter",
     roastBlurb: (s) =>
-      `${s.cuisineCount} cuisines, ${s.regionCount} regions. Yes we get it, you're cultured.`,
+      `${s.cuisineCount} cuisines, ${s.regionCount} regions. Babe, the gap year ended.`,
   },
   {
     key: "explorer",
@@ -252,7 +252,7 @@ const ARCHETYPES = [
         : `You're still mapping it out — keep logging and the personality sharpens.`,
     roastTitle: "The Explorer",
     roastBlurb: (s) =>
-      `Still figuring it out. ${s.cuisineCount} cuisines logged and no clear pattern. We'll wait.`,
+      `${s.cuisineCount} cuisines logged and zero pattern. You don't have a personality yet, sweetie, you have a sample size.`,
   },
 ];
 
@@ -285,8 +285,8 @@ const BULLET_GENERATORS = [
       key: "regionMix",
       text: `${s.topRegion} is ${pct(s.topRegionShare)}% of your log${second}.`,
       roast: second
-        ? `${pct(s.topRegionShare)}% ${s.topRegion}${second}. Not a "diverse palate", more a "tested favorite".`
-        : `${pct(s.topRegionShare)}% ${s.topRegion}. The other regions are not getting a callback.`,
+        ? `${pct(s.topRegionShare)}% ${s.topRegion}${second}. Calling that a "shortlist" because "diverse palate" would be a lie.`
+        : `${pct(s.topRegionShare)}% ${s.topRegion}. The other regions left you on read.`,
     };
   },
   function tasteBullet(s) {
@@ -296,21 +296,21 @@ const BULLET_GENERATORS = [
       return {
         key: "taste",
         text: `Average taste ${t}/10 — ${elite}% of meals score 8 or higher.`,
-        roast: `Average taste ${t}. You rate restaurants like they're applying to your sorority.`,
+        roast: `Average taste ${t}/10. Sweetie, not every meal is the best night of your life.`,
       };
     }
     if (s.avgTaste >= 6.5) {
       return {
         key: "taste",
         text: `Average taste ${t}/10. You enjoy a meal without needing it to change your life.`,
-        roast: `Average taste ${t}. Solidly fine. The participation-trophy of palates.`,
+        roast: `Average taste ${t}/10. Babe, "fine" is a feeling, not a rating.`,
       };
     }
     if (s.total >= 8) {
       return {
         key: "taste",
         text: `Average taste ${t}/10 — every miss is data.`,
-        roast: `Average taste ${t}. Either the restaurants are bad or you are.`,
+        roast: `Average taste ${t}/10 across ${s.total} meals. Sweetie, at this volume it's not the restaurants.`,
       };
     }
     return null;
@@ -322,20 +322,20 @@ const BULLET_GENERATORS = [
       return {
         key: "value",
         text: `Spending ~${c}/meal — you go for the experience.`,
-        roast: `${c}/meal average. You're not eating out, you're funding restaurants.`,
+        roast: `${c}/meal average. Babe, that's not a treat, that's a subscription.`,
       };
     }
     if (s.avgCost >= 35) {
       return {
         key: "value",
         text: `Spending ~${c}/meal — middle ground between value and splurge.`,
-        roast: `${c}/meal average. The chaotic-middle-class dining experience.`,
+        roast: `${c}/meal average. Cute. Too high to brag, too low to flex.`,
       };
     }
     return {
       key: "value",
       text: `Spending ~${c}/meal — value finder.`,
-      roast: `${c}/meal average. Either hidden gems or a forgiving stomach.`,
+      roast: `${c}/meal average. Either you found gems, sweetie, or your standards live in the basement with the prices.`,
     };
   },
   function repeatBullet(s) {
@@ -344,14 +344,14 @@ const BULLET_GENERATORS = [
       return {
         key: "repeat",
         text: `${r}% of restaurants earn a "must return" — you commit to your hits.`,
-        roast: `${r}% must-returns. Variety is dead and you killed it.`,
+        roast: `${r}% must-returns. Babe, you're not committed, you're stuck.`,
       };
     }
     if (s.total >= 10 && s.mustReturnRate <= 0.1) {
       return {
         key: "repeat",
         text: `Only ${r}% earn a "must return" — you keep moving.`,
-        roast: `${r}% must-returns. Allergic to commitment, even pasta-shaped.`,
+        roast: `${r}% must-returns. You can't even commit to a noodle, sweetie.`,
       };
     }
     return null;
@@ -361,7 +361,7 @@ const BULLET_GENERATORS = [
     return {
       key: "topPick",
       text: `Top BITE pick: ${s.topPick.name} (${fix1(s.topPick.score)}/10).`,
-      roast: `Top BITE: ${s.topPick.name} at ${fix1(s.topPick.score)}/10. That's the ceiling.`,
+      roast: `Top BITE: ${s.topPick.name} at ${fix1(s.topPick.score)}/10. Babe, that's the peak. The rest is just downhill from here.`,
     };
   },
   function waitBullet(s) {
@@ -370,13 +370,13 @@ const BULLET_GENERATORS = [
       return {
         key: "wait",
         text: `Sat through 30+ min waits ${s.longWaits} times. Patient when it counts.`,
-        roast: `${s.longWaits} times you waited 30+ min for food. Therapy is also an option.`,
+        roast: `${s.longWaits} times you stood in line over 30 minutes. Sweetie, that's not dedication, that's availability.`,
       };
     }
     return {
       key: "wait",
       text: `Average wait ${Math.round(s.avgWait)} min — you'll queue when it's worth it.`,
-      roast: `Average ${Math.round(s.avgWait)} min waits. You like food enough to suffer for it.`,
+      roast: `Average ${Math.round(s.avgWait)} min waits. Babe, your time is being valued less than a hostess stand.`,
     };
   },
 ];

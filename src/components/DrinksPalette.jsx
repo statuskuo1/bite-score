@@ -94,15 +94,15 @@ export function DrinksPalette({cafes,drinkWeights,replaceDrinkWeights}) {
     : milkMajority ? "You lean "+milkMajority.toLowerCase()+" milk."
     : null;
   const beanLine = !hasEnoughData ? null : topBean ? "Your beans tend to come from "+topBean[0]+"." : null;
-  const notEnoughLine = !hasEnoughData ? (drinkRoastMode ? "You want me to give you a personality read when you've logged less than 3 coffees? Log more and come back." : "Lorelai Gilmore would be disappointed in your coffee logging frequency.") : null;
+  const notEnoughLine = !hasEnoughData ? (drinkRoastMode ? "Three coffees minimum. I can't read tea leaves out of two espressos and a vibe." : "Lorelai Gilmore would be disappointed in your coffee logging frequency.") : null;
 
   // Roast lines
-  const roastPersonality=+avgT>=8?"You rate your own coffee higher than you rate most people. That's fine. Coffee is more reliable.":+avgT>=7?"You think you have good taste in coffee. You're not wrong but you're also not making it yourself, so let's not get too comfortable.":+avgT>=6?"You're drinking coffee for the ritual, not the taste. Own it.":"Your coffee taste scores are telling me you need to either raise your standards or switch to tea.";
+  const roastPersonality=+avgT>=8?"Avg taste "+avgT+"/10. You're not a coffee drinker, you're a hostage with Stockholm syndrome and a ceramic mug.":+avgT>=7?"Avg taste "+avgT+"/10. You think you have good taste in coffee — sir, ma'am, you're paying someone seven dollars to boil bean water for you.":+avgT>=6?"Avg taste "+avgT+"/10. You're not drinking coffee, you're performing a 14-step morning sacrament to a bean god who doesn't even know your name.":"Avg taste "+avgT+"/10. The bean has done nothing to deserve this. Switch to tea before someone calls a barista intervention.";
   const roastMilkLine = !hasEnoughData||!hasMilkData ? null
-    : milkMajority==="None" ? "You drink it black. Either great taste or a complicated personality. Possibly both."
-    : milkMajority ? "You take "+milkMajority.toLowerCase()+" milk. One customization away from a Starbucks regular order."
+    : milkMajority==="None" ? "You drink it black. Either you've transcended the dairy industrial complex or you're held together with caffeine and unresolved trauma."
+    : milkMajority ? "You take "+milkMajority.toLowerCase()+" milk. One pump of vanilla away from being a name baristas know on sight."
     : null;
-  const roastBeanLine = !hasEnoughData ? null : topBean ? "You keep going back to "+topBean[0]+" beans. At this point just move there." : null;
+  const roastBeanLine = !hasEnoughData ? null : topBean ? topBean[0]+" beans, again. At this point you're not loyal, you're geographically obsessed. Buy a plane ticket." : null;
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:12}}>
