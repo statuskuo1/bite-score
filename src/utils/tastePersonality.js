@@ -18,7 +18,7 @@ import { calcBiteOutOf10 } from "./scoring.js";
  */
 
 /** Below this many entries the card shows a "log more meals" placeholder. */
-export const MIN_ENTRIES_FOR_PERSONALITY = 5;
+export const MIN_ENTRIES_FOR_PERSONALITY = 1;
 
 const NUM = (x, fallback = 0) => {
   const n = +x;

@@ -34,10 +34,12 @@ small "personality engine" living in
    its signal isn't meaningful; archetypes can mark themselves
    `coversRegion` / `coversValue` to suppress the corresponding bullet so the
    same fact isn't said twice.
-4. **Locked state** when `entries.length < 5` (`MIN_ENTRIES_FOR_PERSONALITY`):
-   the card shows a single italic line ("Log a few more meals to unlock your
-   taste personality.") instead of forcing an archetype on noise. The new
-   string lives only in `T.en` per the parity-drift policy below.
+4. **Locked state** when `entries.length < MIN_ENTRIES_FOR_PERSONALITY`: the
+   card shows a single italic line ("Log a few more meals to unlock your taste
+   personality.") instead of forcing an archetype on noise. The new string
+   lives only in `T.en` per the parity-drift policy below. (The threshold was
+   originally `5` and was later lowered to `1` — see
+   [`2026-04-28-taste-personality-threshold-lowered.md`](2026-04-28-taste-personality-threshold-lowered.md).)
 
 Render shape inside the existing card (preserves the PR / Roast toggle):
 
