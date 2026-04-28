@@ -14,6 +14,8 @@ import { SectionLabel } from "./SectionLabel.jsx";
 import { FieldLabel } from "./FieldLabel.jsx";
 import { FormScoreHeader } from "./FormScoreHeader.jsx";
 import { BEAN_ORIGINS } from "../constants/coffeeConstants.js";
+import { CityInput } from "./CityInput.jsx";
+
 
 const ROAST_LEVELS = [
   { value: "Light", labelKey: "roastLight" },
@@ -136,8 +138,7 @@ export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addT
       <SectionLabel>{t.theBasics}</SectionLabel>
       <div style={{marginBottom:16}}>
         <FieldLabel>{t.city||"City"} *</FieldLabel>
-        <input value={f.city||""} onChange={e=>inp("city",e.target.value)} placeholder="e.g. NYC, Tokyo, Lisbon" style={S.wb}/>
-        {sub&&!f.city&&<div style={S.err}>Required</div>}
+        <CityInput value={f.city||""} onChange={val=>inp("city",val)} />
       </div>
       <div style={S.mb16}>
         <FieldLabel>{t.cafeName}</FieldLabel>

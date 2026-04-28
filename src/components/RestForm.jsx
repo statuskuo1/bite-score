@@ -10,6 +10,7 @@ import { RepeatPicker } from "./RepeatPicker.jsx";
 import { SectionLabel } from "./SectionLabel.jsx";
 import { FieldLabel } from "./FieldLabel.jsx";
 import { FormScoreHeader } from "./FormScoreHeader.jsx";
+import { CityInput } from "./CityInput.jsx";
 
 export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,existingEntries,places,onPlaceCreated}) {
   const {t} = useLang();
@@ -34,8 +35,7 @@ export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,exi
       <SectionLabel>{t.theBasics}</SectionLabel>
       <div style={{marginBottom:16}}>
         <FieldLabel>{t.city||"City"} *</FieldLabel>
-        <input value={f.city||""} onChange={e=>inp("city",e.target.value)} placeholder="e.g. NYC, Tokyo, Lisbon" style={S.wb}/>
-        {sub&&!f.city&&<div style={S.err}>Required</div>}
+        <CityInput value={f.city||""} onChange={val=>inp("city",val)} />
       </div>
       <div style={S.mb16}>
         <FieldLabel>{t.restaurantName}</FieldLabel>
