@@ -1,5 +1,15 @@
 # Decision: Google Places verification on shared `*_places` rows
 
+> **Status update (2026-04-28, same day):** the active client path is the
+> browser-direct call in [`src/utils/googlePlacesApi.js`](../../src/utils/googlePlacesApi.js)
+> using `VITE_GOOGLE_PLACES_API_KEY`. The `places-search` / `places-resolve`
+> edge functions described below ship in the repo but are **not invoked**.
+> The "Browser never sees `GOOGLE_MAPS_API_KEY`" goal stated under
+> [Decision](#decision) is therefore not in effect today — see
+> [Places key stays client-side](2026-04-28-places-key-stays-client-side.md)
+> for the rationale and the mitigations (HTTP referrer restriction, billing
+> alert) that replace the server-side guardrail.
+
 ## Context
 
 Autopopulate (cuisine / city / canonical name) used to depend on whatever the
