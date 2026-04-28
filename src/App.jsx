@@ -44,6 +44,7 @@ import { SuggestView } from "./components/SuggestView.jsx";
 import { PaletteView } from "./components/PaletteView.jsx";
 import { FaqView } from "./components/FaqView.jsx";
 import { AuthModal } from "./components/AuthModal.jsx";
+import { ResetPasswordModal } from "./components/ResetPasswordModal.jsx";
 import { WeightSliders } from "./components/WeightSliders.jsx";
 
 /** Drops optional paragraphs from welcome body (DB or defaults): play-mode aside; sign-in/cloud disclaimer (EN+ZH) so languages stay aligned when overrides differ. */
@@ -929,6 +930,7 @@ export default function App() {
       )}
 
       <AuthModal open={showAuthModal} onClose={()=>setShowAuthModal(false)} />
+      <ResetPasswordModal />
     </div>
     </LangContext.Provider>
   );

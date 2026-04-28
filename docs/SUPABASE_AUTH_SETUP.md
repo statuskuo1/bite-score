@@ -2,10 +2,12 @@
 
 Apply these in the [Supabase Dashboard](https://supabase.com/dashboard) for your BITE Score project **before** relying on login in production.
 
+For **local Docker** auth, see [`docs/LOCAL_SUPABASE.md`](LOCAL_SUPABASE.md) instead of the dashboard URLs below.
+
 ## Authentication → URL configuration
 
 1. **Site URL** — set to your primary app origin (e.g. `http://localhost:5173` for Vite dev, or your production URL).
-2. **Redirect URLs** — add every origin users may return to after OAuth or magic links, one per line:
+2. **Redirect URLs** — add every origin users may return to after OAuth or password-reset emails, one per line:
    - `http://localhost:5173`
    - `http://localhost:5173/**` (if the dashboard supports wildcards)
    - Your production URL(s), e.g. `https://your-domain.com`
@@ -14,8 +16,10 @@ The client uses `window.location.origin` as `redirectTo` / `emailRedirectTo`; th
 
 ## Authentication → Providers
 
-1. **Email** — enable **Magic link** (and optionally **Confirm email** per your product needs).
+1. **Email** — provider on; **password sign-in** is the default. Magic link is no longer used by the app. Leave **Confirm email** off to match the local default in [`supabase/config.toml`](../supabase/config.toml), or turn it on if you want users to verify their email before first sign-in (requires working SMTP).
 2. **Google** (optional) — enable **Google**, add OAuth client ID/secret from Google Cloud Console, and add the Supabase callback URL Google shows you to your Google client’s **Authorized redirect URIs**.
+
+The **Forgot password?** link in the app calls `resetPasswordForEmail`, which uses the standard **Reset password** email template — make sure SMTP works in production if you want this flow to deliver.
 
 ## Database
 

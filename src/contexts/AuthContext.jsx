@@ -8,6 +8,7 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
   const [authReady, setAuthReady] = useState(false);
   const [profile, setProfile] = useState(null);
+  const [recoveryActive, setRecoveryActive] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -25,14 +26,17 @@ export function AuthProvider({ children }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, s) => {
+    } = supabase.auth.onAuthStateChange((event, s) => {
       setSession(s);
+      if (event === "PASSWORD_RECOVERY") setRecoveryActive(true);
     });
     return () => {
       cancelled = true;
       subscription.unsubscribe();
     };
   }, []);
+
+  const clearRecovery = () => setRecoveryActive(false);
 
   useEffect(() => {
     const u = session?.user;
@@ -61,8 +65,10 @@ export function AuthProvider({ children }) {
         (profile?.display_name && String(profile.display_name).trim()) ||
         session?.user?.email?.split("@")[0] ||
         "",
+      recoveryActive,
+      clearRecovery,
     }),
-    [session, authReady, profile]
+    [session, authReady, profile, recoveryActive]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -3,41 +3,35 @@ import { useLang } from "../contexts/LangContext.jsx";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { supabase } from "../config/supabaseClient.js";
 
-const redirectBase = () =>
-  (import.meta.env.VITE_AUTH_REDIRECT_URL || window.location.origin).replace(/\/$/, "");
+/** Always the tab’s origin so local dev and Vercel previews return here; must be listed in Supabase → Auth → URL configuration → Redirect URLs. */
+const redirectBase = () => window.location.origin.replace(/\/$/, "");
+
+/** Local dev disables Google because OAuth needs extra Google Cloud Console / Supabase redirect URI setup. Production keeps it on unless explicitly hidden. */
+const hideGoogleAuth =
+  import.meta.env.DEV || import.meta.env.VITE_HIDE_GOOGLE_AUTH === "true";
+
+function formatPasswordSignInError(e, t) {
+  const msg = e?.message || t.authErrorGeneric;
+  if (/invalid login credentials/i.test(msg)) return `${msg} — ${t.authInvalidLogin}`;
+  return msg;
+}
+
+function formatPasswordSignUpError(e, t) {
+  const msg = e?.message || t.authErrorGeneric;
+  if (/already registered|already been registered|user already exists/i.test(msg)) return `${msg} — ${t.authTrySignInInstead}`;
+  return msg;
+}
 
 export function AuthModal({ open, onClose }) {
   const { t } = useLang();
   const { user, session, displayName } = useAuth();
   const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
+  const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [resetSent, setResetSent] = useState(false);
 
   if (!open) return null;
-
-  async function sendMagicLink() {
-    setErr("");
-    const trimmed = email.trim();
-    if (!trimmed) {
-      setErr(t.authEmailRequired);
-      return;
-    }
-    setBusy(true);
-    try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email: trimmed,
-        options: { emailRedirectTo: `${redirectBase()}/` },
-      });
-      if (error) throw error;
-      setSent(true);
-    } catch (e) {
-      console.error(e);
-      setErr(e.message || t.authErrorGeneric);
-    } finally {
-      setBusy(false);
-    }
-  }
 
   async function signGoogle() {
     setErr("");
@@ -59,13 +53,97 @@ export function AuthModal({ open, onClose }) {
     }
   }
 
+  async function signInWithPassword() {
+    setErr("");
+    setResetSent(false);
+    const trimmed = email.trim();
+    if (!trimmed) {
+      setErr(t.authEmailRequired);
+      return;
+    }
+    if (!password) {
+      setErr(t.authPasswordRequired);
+      return;
+    }
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: trimmed,
+        password,
+      });
+      if (error) throw error;
+      setPassword("");
+      onClose();
+    } catch (e) {
+      console.error(e);
+      setErr(formatPasswordSignInError(e, t));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function signUpWithPassword() {
+    setErr("");
+    setResetSent(false);
+    const trimmed = email.trim();
+    if (!trimmed) {
+      setErr(t.authEmailRequired);
+      return;
+    }
+    if (!password) {
+      setErr(t.authPasswordRequired);
+      return;
+    }
+    setBusy(true);
+    try {
+      /** `emailRedirectTo` is a no-op when project disables confirmations (default), but kept for projects that turn it on. */
+      const { error } = await supabase.auth.signUp({
+        email: trimmed,
+        password,
+        options: { emailRedirectTo: `${redirectBase()}/` },
+      });
+      if (error) throw error;
+      setPassword("");
+      onClose();
+    } catch (e) {
+      console.error(e);
+      setErr(formatPasswordSignUpError(e, t));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function requestPasswordReset() {
+    setErr("");
+    setResetSent(false);
+    const trimmed = email.trim();
+    if (!trimmed) {
+      setErr(t.authEmailRequired);
+      return;
+    }
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(trimmed, {
+        redirectTo: `${redirectBase()}/`,
+      });
+      if (error) throw error;
+      setResetSent(true);
+    } catch (e) {
+      console.error(e);
+      setErr(e.message || t.authErrorGeneric);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function signOut() {
     setBusy(true);
     setErr("");
     try {
       await supabase.auth.signOut();
-      setSent(false);
       setEmail("");
+      setPassword("");
+      setResetSent(false);
       onClose();
     } catch (e) {
       console.error(e);
@@ -136,28 +214,70 @@ export function AuthModal({ open, onClose }) {
           </div>
         ) : (
           <div>
-            {sent ? (
-              <p style={{ fontSize: 14, color: "#97C459", margin: "0 0 12px", lineHeight: 1.6 }}>{t.authCheckEmail}</p>
-            ) : (
-              <>
-                <label style={{ fontSize: 11, color: "#888780", display: "block", marginBottom: 6 }}>{t.authEmailLabel}</label>
-                <input
-                  type="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  style={{ width: "100%", boxSizing: "border-box", marginBottom: 12, fontSize: 14 }}
-                />
-                <button type="button" disabled={busy} onClick={sendMagicLink} style={{ ...btn, background: "#F0997B", color: "#141413" }}>
-                  {t.authSendLink}
-                </button>
-                <div style={{ textAlign: "center", fontSize: 11, color: "#666663", margin: "4px 0 12px" }}>{t.authOr}</div>
-                <button type="button" disabled={busy} onClick={signGoogle} style={{ ...btn, background: "#252523", color: "#F1EFE8", border: "0.5px solid rgba(255,255,255,0.2)" }}>
-                  {t.authGoogle}
-                </button>
-              </>
-            )}
+            <label style={{ fontSize: 11, color: "#888780", display: "block", marginBottom: 6 }}>{t.authEmailLabel}</label>
+            <input
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              style={{ width: "100%", boxSizing: "border-box", marginBottom: 10, fontSize: 14 }}
+            />
+            <label style={{ fontSize: 11, color: "#888780", display: "block", marginBottom: 6 }}>{t.authPasswordLabel}</label>
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              style={{ width: "100%", boxSizing: "border-box", marginBottom: 12, fontSize: 14 }}
+            />
+            <button type="button" disabled={busy} onClick={signInWithPassword} style={{ ...btn, background: "#F0997B", color: "#141413" }}>
+              {t.authSignInPassword}
+            </button>
+            <button type="button" disabled={busy} onClick={signUpWithPassword} style={{ ...btn, background: "transparent", color: "#C4C2BA", border: "0.5px solid rgba(255,255,255,0.2)" }}>
+              {t.authSignUpPassword}
+            </button>
+            <div style={{ textAlign: "right", marginBottom: 10 }}>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={requestPasswordReset}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#888780",
+                  fontSize: 12,
+                  cursor: busy ? "wait" : "pointer",
+                  padding: 0,
+                  textDecoration: "underline",
+                }}
+              >
+                {t.authForgotPassword}
+              </button>
+            </div>
+            {resetSent ? (
+              <p style={{ fontSize: 12, color: "#97C459", margin: "0 0 10px", lineHeight: 1.5 }}>{t.authResetEmailSent}</p>
+            ) : null}
+            <div style={{ textAlign: "center", fontSize: 11, color: "#666663", margin: "4px 0 12px" }}>{t.authOr}</div>
+            <button
+              type="button"
+              disabled={busy || hideGoogleAuth}
+              onClick={signGoogle}
+              title={hideGoogleAuth ? t.authLocalDevHint : undefined}
+              style={{
+                ...btn,
+                background: hideGoogleAuth ? "#1c1c1b" : "#252523",
+                color: hideGoogleAuth ? "#6b6b68" : "#F1EFE8",
+                border: "0.5px solid rgba(255,255,255,0.12)",
+                cursor: busy || hideGoogleAuth ? "not-allowed" : "pointer",
+                opacity: hideGoogleAuth ? 0.72 : 1,
+              }}
+            >
+              {t.authGoogle}
+            </button>
+            {hideGoogleAuth ? (
+              <p style={{ fontSize: 11, color: "#888780", margin: "10px 0 0", lineHeight: 1.45 }}>{t.authLocalDevHint}</p>
+            ) : null}
           </div>
         )}
 

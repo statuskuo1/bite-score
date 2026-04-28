@@ -4,7 +4,7 @@ Last reviewed from codebase snapshot (Vite + React 18 SPA). Use this when implem
 
 ## Product intent
 
-Single-page **restaurant and café rating** experience: users record visits (taste, cost, portions, wait, repeatability, notes), see **BITE** scores derived from a formula, filter/sort/group listings, and track **quest** progress (A–Z cuisines, regional cuisine checklist). The product may evolve toward **social** discovery; **signed-in visit logs are private per user** (RLS + client filter). Aggregates across users are not implemented in-app yet. **Supabase Auth** (magic link + optional Google) backs sign-in; **RLS** enforces **own-row** access on visit tables (`restaurant_visits` / `cafe_visits`) and authenticated read/write on shared **place** tables (`restaurant_places` / `cafe_places`). The anon client **does not write** global `settings` (curators use SQL / service role). See [`docs/SUPABASE_AUTH_SETUP.md`](../docs/SUPABASE_AUTH_SETUP.md) and migrations under [`supabase/migrations/`](../supabase/migrations/).
+Single-page **restaurant and café rating** experience: users record visits (taste, cost, portions, wait, repeatability, notes), see **BITE** scores derived from a formula, filter/sort/group listings, and track **quest** progress (A–Z cuisines, regional cuisine checklist). The product may evolve toward **social** discovery; **signed-in visit logs are private per user** (RLS + client filter). Aggregates across users are not implemented in-app yet. **Supabase Auth** (email + password, with optional Google OAuth) backs sign-in; **RLS** enforces **own-row** access on visit tables (`restaurant_visits` / `cafe_visits`) and authenticated read/write on shared **place** tables (`restaurant_places` / `cafe_places`). The anon client **does not write** global `settings` (curators use SQL / service role). See [`docs/SUPABASE_AUTH_SETUP.md`](../docs/SUPABASE_AUTH_SETUP.md) and migrations under [`supabase/migrations/`](../supabase/migrations/).
 
 ## Tech stack
 
@@ -78,7 +78,8 @@ Client writes to `settings` are **disabled** under current RLS (see [`20260428_f
 |------|------|
 | `src/App.jsx` | Shell: data load, auth-aware CRUD, navigation, sorting/filtering, grouping |
 | `src/contexts/AuthContext.jsx` | Session + `authReady` |
-| `src/components/AuthModal.jsx` | Magic link + Google + sign out |
+| `src/components/AuthModal.jsx` | Email + password (sign in / create account / forgot password) + Google + sign out |
+| `src/components/ResetPasswordModal.jsx` | New-password screen shown after a `PASSWORD_RECOVERY` redirect |
 | `src/config/supabaseClient.js` | Singleton Supabase client |
 | `src/state/logReducer.js` | `ADD` / `DEL` / `UPD` / `VIEW` / `LOAD` for restaurant entries |
 | `src/utils/scoring.js` | BITE math and labels |
