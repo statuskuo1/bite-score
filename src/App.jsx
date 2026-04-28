@@ -7,8 +7,6 @@ import { canMutateVisit } from "./utils/rowAccess.js";
 import {
   fetchRestaurantVisitsJoined,
   fetchCafeVisitsJoined,
-  fetchCommunityRestaurantVisits,
-  fetchCommunityCafeVisits,
   ensureRestaurantPlace,
   ensureCafePlace,
   restaurantVisitInsertPayload,
@@ -46,6 +44,7 @@ import { FaqView } from "./components/FaqView.jsx";
 import { AuthModal } from "./components/AuthModal.jsx";
 import { ResetPasswordModal } from "./components/ResetPasswordModal.jsx";
 import { WeightSliders } from "./components/WeightSliders.jsx";
+import { CommunityTab } from "./components/community/CommunityTab.jsx";
 
 /** Drops optional paragraphs from welcome body (DB or defaults): play-mode aside; sign-in/cloud disclaimer (EN+ZH) so languages stay aligned when overrides differ. */
 function omitPlayWelcomeAside(body) {
@@ -93,10 +92,6 @@ export default function App() {
   const [editR, setEditR] = useState(null);
   const [editC, setEditC] = useState(null);
   const [logTab, setLogTab] = useState("restaurants");
-  const [communitySub, setCommunitySub] = useState("restaurants");
-  const [communityRest, setCommunityRest] = useState([]);
-  const [communityCafes, setCommunityCafes] = useState([]);
-  const [communityLoading, setCommunityLoading] = useState(false);
   const [addType, setAddType] = useState("restaurant");
   const [sortBy, setSortBy] = useState("bite");
   const [sortAsc, setSortAsc] = useState(false);
@@ -222,31 +217,6 @@ export default function App() {
       cancelled = true;
     };
   }, [authReady, user?.id]);
-
-  useEffect(() => {
-    if (!user?.id || !dbLoaded || st.view !== "community") return;
-    let cancelled = false;
-    setCommunityLoading(true);
-    (async () => {
-      try {
-        const [r, c] = await Promise.all([
-          fetchCommunityRestaurantVisits(supabase),
-          fetchCommunityCafeVisits(supabase),
-        ]);
-        if (!cancelled) {
-          setCommunityRest(r);
-          setCommunityCafes(c);
-        }
-      } catch (e) {
-        console.error("[BITE] community load:", e);
-      } finally {
-        if (!cancelled) setCommunityLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.id, dbLoaded, st.view]);
 
   /** Each slider 0–100; BITE uses relative mix (see `restaurantWeightRatios` in scoring). */
   function updW(k, v) {
@@ -739,51 +709,8 @@ export default function App() {
         </div>
       )}
 
-      {st.view==="community"&&(
-        <div>
-          <p style={{fontSize:12,color:"#888780",margin:"0 0 12px"}}>{t.communityHint}</p>
-          <div style={{display:"flex",background:"#252523",borderRadius:10,padding:3,gap:2,marginBottom:12}}>
-            {[["restaurants","🍽 "+t.restaurants],["drinks","☕ "+t.drinks],["sweets","🥐 "+t.sweets]].map(([v,l])=>(
-              <button key={v} type="button" onClick={()=>setCommunitySub(v)} style={{flex:1,padding:"6px 0",textAlign:"center",borderRadius:8,border:"none",background:communitySub===v?"#3C1F13":"transparent",color:communitySub===v?"#F0997B":"#888780",fontSize:11,fontWeight:communitySub===v?700:500,cursor:"pointer",transition:"all 0.15s"}}>{l}</button>
-            ))}
-          </div>
-          {communityLoading&&(
-            <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:8}}>
-              {[1,2,3,4].map(i=>(
-                <div key={i} style={{background:"#1E1E1C",borderRadius:10,height:62,opacity:0.4+i*0.1}}/>
-              ))}
-            </div>
-          )}
-          {!communityLoading&&communitySub==="restaurants"&&(
-            <>
-              {!communityRest.length&&<p style={{color:"#888780",fontSize:14}}>{t.noEntriesYet}</p>}
-              {communityRest.map((e)=>{
-                const sc=calcBiteOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights);
-                const display={val:sc!=null?sc.toFixed(2):"—",label:scoreLabel(sc,t),color:scoreColor(sc)};
-                return (
-                  <RestRow key={e.id} e={e} display={display} user={user} visits={1} group={[e]} weights={weights} showAuthor
-                    onEdit={()=>{}} onDelete={()=>{}}/>
-                );
-              })}
-            </>
-          )}
-          {!communityLoading&&communitySub==="drinks"&&(()=>{
-            const rows=[...communityCafes].filter(e=>DRINK_CATS.includes(e.category)).sort((a,b)=>
-              (calcCafeOutOf10(b.taste,b.cost,b.portions,b.wait,b.useR,b.repeatability,drinkWeights)??0)-(calcCafeOutOf10(a.taste,a.cost,a.portions,a.wait,a.useR,a.repeatability,drinkWeights)??0));
-            if(!rows.length)return <p style={{color:"#888780",fontSize:14}}>{t.noDrinks}</p>;
-            return rows.map(e=>(
-              <CafeGroupRow key={e.id} group={[e]} cafeSortBy="bite" weights={drinkWeights} user={user} showAuthor onEdit={()=>{}} onDelete={()=>{}}/>
-            ));
-          })()}
-          {!communityLoading&&communitySub==="sweets"&&(()=>{
-            const rows=[...communityCafes].filter(e=>e.category==="Sweets").sort((a,b)=>
-              (calcCafeOutOf10(b.taste,b.cost,b.portions,b.wait,b.useR,b.repeatability,sweetWeights)??0)-(calcCafeOutOf10(a.taste,a.cost,a.portions,a.wait,a.useR,a.repeatability,sweetWeights)??0));
-            if(!rows.length)return <p style={{color:"#888780",fontSize:14}}>{t.noSweets}</p>;
-            return rows.map(e=>(
-              <CafeGroupRow key={e.id} group={[e]} cafeSortBy="bite" weights={sweetWeights} user={user} showAuthor onEdit={()=>{}} onDelete={()=>{}}/>
-            ));
-          })()}
-        </div>
+      {st.view==="community"&&dbLoaded&&(
+        <CommunityTab user={user} />
       )}
 
       {st.view==="log"&&editR&&<RestForm initial={editR} weights={weights} existingNames={st.entries.map(e=>e.name)} existingEntries={st.entries} onSave={async e=>{

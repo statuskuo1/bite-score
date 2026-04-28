@@ -166,44 +166,6 @@ export async function fetchCafeVisitsJoined(client, userId) {
   return withAuthors.map(mapCafeVisitRow);
 }
 
-/** Community leaderboard: all restaurant visits (authenticated), newest first. */
-export async function fetchCommunityRestaurantVisits(client, limit = 120) {
-  const { data, error } = await client
-    .from("restaurant_visits")
-    .select(RESTAURANT_VISIT_SELECT)
-    .order("visited_at", { ascending: false })
-    .limit(limit);
-
-  devLog("[BITE] community restaurant_visits { data, error }", { data, error });
-  if (error) {
-    console.error("[BITE] community restaurant_visits:", error.message, error.details ?? "");
-    return [];
-  }
-  if (!data?.length) return [];
-
-  const withAuthors = await attachAuthorProfiles(client, data);
-  return withAuthors.map(mapRestaurantVisitRow);
-}
-
-/** Community leaderboard: all café visits (authenticated), newest first. */
-export async function fetchCommunityCafeVisits(client, limit = 120) {
-  const { data, error } = await client
-    .from("cafe_visits")
-    .select(CAFE_VISIT_SELECT)
-    .order("visited_at", { ascending: false })
-    .limit(limit);
-
-  devLog("[BITE] community cafe_visits { data, error }", { data, error });
-  if (error) {
-    console.error("[BITE] community cafe_visits:", error.message, error.details ?? "");
-    return [];
-  }
-  if (!data?.length) return [];
-
-  const withAuthors = await attachAuthorProfiles(client, data);
-  return withAuthors.map(mapCafeVisitRow);
-}
-
 /**
  * Find place by case-insensitive name match; if missing, insert.
  */
@@ -321,6 +283,159 @@ export function cafeVisitUpdatePayload(placeId, e) {
     use_r: e.useR !== false,
     notes: e.notes || "",
   };
+}
+
+/**
+ * Per-user visits joined with place — used by Compare / Groups to compute
+ * taste-by-cuisine compatibility against another user. Reads succeed because
+ * `*_visits` SELECT is open to authenticated (`20260501_*`).
+ */
+export async function fetchRestaurantVisitsForUser(client, userId) {
+  if (!userId) return [];
+  const { data, error } = await client
+    .from("restaurant_visits")
+    .select(RESTAURANT_VISIT_SELECT)
+    .eq("user_id", userId)
+    .order("visited_at", { ascending: false });
+  if (error) {
+    console.warn("[BITE] fetchRestaurantVisitsForUser:", error.message);
+    return [];
+  }
+  return (data || []).map(mapRestaurantVisitRow);
+}
+
+export async function fetchCafeVisitsForUser(client, userId) {
+  if (!userId) return [];
+  const { data, error } = await client
+    .from("cafe_visits")
+    .select(CAFE_VISIT_SELECT)
+    .eq("user_id", userId)
+    .order("visited_at", { ascending: false });
+  if (error) {
+    console.warn("[BITE] fetchCafeVisitsForUser:", error.message);
+    return [];
+  }
+  return (data || []).map(mapCafeVisitRow);
+}
+
+/**
+ * Aggregate community taste scores by place. One row per `*_places`,
+ * with avg taste, visit count, and up to `topReviewersLimit` author profiles
+ * (highest taste first) for chip display.
+ *
+ * Aggregation runs client-side over an unbounded SELECT, which is fine for v1
+ * (RLS allows authenticated read of all visits + all profiles). If the corpus
+ * grows, swap to a SECURITY DEFINER RPC similar to `popular_orders_for_place`.
+ */
+function aggregatePlaces(rows, getPlaceKey, makePlaceMeta, topReviewersLimit) {
+  const byKey = new Map();
+  for (const r of rows) {
+    const key = getPlaceKey(r);
+    if (!key) continue;
+    const t = +r.taste;
+    if (!Number.isFinite(t)) continue;
+    const bucket = byKey.get(key) || {
+      place: makePlaceMeta(r),
+      sumTaste: 0,
+      visitCount: 0,
+      reviewers: [],
+    };
+    bucket.sumTaste += t;
+    bucket.visitCount += 1;
+    bucket.reviewers.push({
+      userId: r.ownerId,
+      username: r.authorUsername,
+      displayName: r.authorDisplayName,
+      avatarUrl: r.authorAvatarUrl,
+      taste: t,
+    });
+    byKey.set(key, bucket);
+  }
+  const out = [];
+  for (const bucket of byKey.values()) {
+    const avgTaste = bucket.sumTaste / bucket.visitCount;
+    const topReviewers = [...bucket.reviewers]
+      .sort((a, b) => b.taste - a.taste)
+      .slice(0, topReviewersLimit);
+    out.push({
+      ...bucket.place,
+      avgTaste,
+      visitCount: bucket.visitCount,
+      topReviewers,
+    });
+  }
+  out.sort((a, b) => {
+    if (b.avgTaste !== a.avgTaste) return b.avgTaste - a.avgTaste;
+    return b.visitCount - a.visitCount;
+  });
+  return out;
+}
+
+export async function fetchAggregatedRestaurantPlaces(client, opts = {}) {
+  const minVisits = opts.minVisits ?? 1;
+  const topReviewersLimit = opts.topReviewersLimit ?? 3;
+  const { data, error } = await client
+    .from("restaurant_visits")
+    .select(RESTAURANT_VISIT_SELECT)
+    .order("visited_at", { ascending: false });
+  if (error) {
+    console.warn("[BITE] fetchAggregatedRestaurantPlaces:", error.message);
+    return [];
+  }
+  if (!data?.length) return [];
+  const withAuthors = await attachAuthorProfiles(client, data);
+  const rows = withAuthors.map(mapRestaurantVisitRow);
+  const aggregated = aggregatePlaces(
+    rows,
+    (r) => r.placeId,
+    (r) => ({
+      placeId: r.placeId,
+      name: r.name,
+      cuisine: r.cuisine,
+      cuisine2: r.cuisine2,
+      isFusion: r.isFusion,
+      city: r.city,
+    }),
+    topReviewersLimit
+  );
+  return aggregated.filter((p) => p.visitCount >= minVisits);
+}
+
+export async function fetchAggregatedCafePlaces(client, opts = {}) {
+  const minVisits = opts.minVisits ?? 1;
+  const topReviewersLimit = opts.topReviewersLimit ?? 3;
+  /** "drinks" = Coffee/Tea/Other; "sweets" = Sweets. Omit to aggregate everything. */
+  const categoryFilter = opts.categoryFilter ?? null;
+  let query = client
+    .from("cafe_visits")
+    .select(CAFE_VISIT_SELECT)
+    .order("visited_at", { ascending: false });
+  if (categoryFilter === "drinks") {
+    query = query.in("category", ["Coffee", "Tea", "Other"]);
+  } else if (categoryFilter === "sweets") {
+    query = query.eq("category", "Sweets");
+  }
+  const { data, error } = await query;
+  if (error) {
+    console.warn("[BITE] fetchAggregatedCafePlaces:", error.message);
+    return [];
+  }
+  if (!data?.length) return [];
+  const withAuthors = await attachAuthorProfiles(client, data);
+  const rows = withAuthors.map(mapCafeVisitRow);
+  const aggregated = aggregatePlaces(
+    rows,
+    /** Group by place + category — same place can appear under Drinks AND Sweets. */
+    (r) => `${r.placeId}::${r.category}`,
+    (r) => ({
+      placeId: r.placeId,
+      name: r.name,
+      city: r.city,
+      category: r.category,
+    }),
+    topReviewersLimit
+  );
+  return aggregated.filter((p) => p.visitCount >= minVisits);
 }
 
 /**
