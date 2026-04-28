@@ -2,6 +2,8 @@
 
 Last reviewed from codebase snapshot (Vite + React 18 SPA). Use this when implementing Supabase Auth, per-user data, or multi-rater aggregates.
 
+> **For per-page or per-feature behavior, read [`docs/pages/`](../docs/pages/) and [`docs/features/`](../docs/features/) first.** Those files are the always-current product spec (one per bottom-nav page, plus cross-cutting topics like scoring, auth/RLS, i18n, quests). They auto-flag as stale via the Cursor stop hook ([`scripts/docs-stale-check.mjs`](../scripts/docs-stale-check.mjs)) when source files matching their `scope` change. See [`docs/README.md`](../docs/README.md). This `ARCHITECTURE.md` is the system-wide reference; the page/feature docs are where current behavior lives.
+
 ## Product intent
 
 Single-page **restaurant and café rating** experience: users record visits (taste, cost, portions, wait, repeatability, notes), see **BITE** scores derived from a formula, filter/sort/group listings, and track **quest** progress (A–Z cuisines, regional cuisine checklist). The product may evolve toward **social** discovery; **signed-in visit logs are private per user** (RLS + client filter). Aggregates across users are not implemented in-app yet. **Supabase Auth** (email + password, with optional Google OAuth) backs sign-in; **RLS** enforces **own-row** access on visit tables (`restaurant_visits` / `cafe_visits`) and authenticated read/write on shared **place** tables (`restaurant_places` / `cafe_places`). The anon client **does not write** global `settings` (curators use SQL / service role). See [`docs/SUPABASE_AUTH_SETUP.md`](../docs/SUPABASE_AUTH_SETUP.md) and migrations under [`supabase/migrations/`](../supabase/migrations/).
@@ -67,7 +69,7 @@ Client writes to `settings` are **disabled** under current RLS (see [`20260428_f
 
 ## Authorization (current)
 
-- **Supabase Auth** — `AuthProvider` (`src/contexts/AuthContext.jsx`): `getSession` + `onAuthStateChange`; **`authReady`** when the initial session check finishes. Sign-in UI: `AuthModal` (header / triple-tap logo).
+- **Supabase Auth** — `AuthProvider` (`src/contexts/AuthContext.jsx`): `getSession` + `onAuthStateChange`; **`authReady`** when the initial session check finishes. Sign-in UI: `AuthModal` (header / triple-tap logo). The sign-in / forgot-password field accepts **email or username**; bare usernames are resolved to email via the `email_for_username` RPC (security definer) — see [`20260505_auth_email_for_username_rpc.sql`](../supabase/migrations/20260505_auth_email_for_username_rpc.sql). Sign-up requires **email verification** (`enable_confirmations = true`); after `signUp` the modal shows a "Check your email" panel with a 30s-throttled `auth.resend` action until the user clicks the confirmation link.
 - **Persistence** — Logged-in users **insert/update/delete** only rows where **`user_id = auth.uid()`**. Legacy rows with `user_id` null are **not** mutable from the app. Logged-out users: adds/edits are **local-only** (synthetic ids) until sign-in.
 - **Settings** — Read in-app for FAQ overrides / welcome copy / quest bootstrap. **`welcome_*`** applies when **`VITE_WELCOME_USE_SUPABASE=true`**. FAQ in **`FaqView`** is read-only; edits are done in the DB with elevated credentials.
 - **RLS** — Legacy policies may exist on `restaurants` / `cafes`. Current app uses [`20260430_restaurant_cafe_places_visits.sql`](../supabase/migrations/20260430_restaurant_cafe_places_visits.sql): own-row CRUD on `*_visits`; authenticated policies on `*_places`. No client **`settings`** writes.

@@ -90,6 +90,25 @@ export function validateUsername(value) {
 }
 
 /**
+ * Resolve a username to the auth.users.email behind it via the
+ * `email_for_username` RPC (security definer; see
+ * `supabase/migrations/20260505_auth_email_for_username_rpc.sql`).
+ * Returns the email string on hit, or `null` on miss / invalid input / RPC
+ * error. The caller can feed the result straight into
+ * `supabase.auth.signInWithPassword({ email, password })`.
+ */
+export async function fetchEmailForUsername(client, username) {
+  const u = String(username ?? "").trim().toLowerCase();
+  if (validateUsername(u)) return null;
+  const { data, error } = await client.rpc("email_for_username", { p_username: u });
+  if (error) {
+    console.warn("[BITE] email_for_username RPC failed:", error.message);
+    return null;
+  }
+  return typeof data === "string" && data.includes("@") ? data : null;
+}
+
+/**
  * Update own profile. Returns { ok, code, data }.
  *  - code "username_taken"    : another profile already owns this username (case-insensitive),
  *                               surfaced via a pre-check or a Postgres 23505 backstop.

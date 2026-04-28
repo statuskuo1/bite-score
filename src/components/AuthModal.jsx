@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLang } from "../contexts/LangContext.jsx";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { supabase } from "../config/supabaseClient.js";
-import { suggestAvailableUsernames, updateOwnProfile, validateUsername } from "../utils/profileApi.js";
+import { fetchEmailForUsername, suggestAvailableUsernames, updateOwnProfile, validateUsername } from "../utils/profileApi.js";
 
 /** Always the tab’s origin so local dev and Vercel previews return here; must be listed in Supabase → Auth → URL configuration → Redirect URLs. */
 const redirectBase = () => window.location.origin.replace(/\/$/, "");
@@ -31,6 +31,11 @@ export function AuthModal({ open, onClose }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [resetSent, setResetSent] = useState(false);
+  /** Email address awaiting verification after sign-up; renders the "Check your email" panel when set. */
+  const [pendingVerificationEmail, setPendingVerificationEmail] = useState(null);
+  /** Seconds remaining before the user may request another verification email; 0 means "available". */
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resendOk, setResendOk] = useState(false);
 
   /** Profile editor state. Drafts are seeded from the current profile when the modal opens. */
   const [usernameDraft, setUsernameDraft] = useState("");
@@ -59,6 +64,20 @@ export function AuthModal({ open, onClose }) {
     const id = setTimeout(() => setSaveOk(false), 1800);
     return () => clearTimeout(id);
   }, [saveOk]);
+
+  /** Tick the resend cooldown down to zero so the Resend button re-enables. */
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const id = setTimeout(() => setResendCooldown((s) => Math.max(0, s - 1)), 1000);
+    return () => clearTimeout(id);
+  }, [resendCooldown]);
+
+  /** Auto-clear the "Resent" confirmation after a short window. */
+  useEffect(() => {
+    if (!resendOk) return;
+    const id = setTimeout(() => setResendOk(false), 2400);
+    return () => clearTimeout(id);
+  }, [resendOk]);
 
   const usernameTrim = usernameDraft.trim();
   const displayNameTrim = displayNameDraft.trim();
@@ -101,6 +120,19 @@ export function AuthModal({ open, onClose }) {
     }
   }
 
+  /**
+   * Resolve a sign-in / reset identifier to an email address. Inputs containing
+   * `@` pass through as-is; bare usernames go through the `email_for_username`
+   * RPC. Returns null when a username can't be resolved so callers can surface
+   * the standard wrong-credentials error without leaking which half failed.
+   */
+  async function resolveIdentifierToEmail(input) {
+    const trimmed = input.trim();
+    if (!trimmed) return null;
+    if (trimmed.includes("@")) return trimmed;
+    return await fetchEmailForUsername(supabase, trimmed);
+  }
+
   async function signInWithPassword() {
     setErr("");
     setResetSent(false);
@@ -115,8 +147,13 @@ export function AuthModal({ open, onClose }) {
     }
     setBusy(true);
     try {
+      const resolved = await resolveIdentifierToEmail(trimmed);
+      if (!resolved) {
+        setErr(t.authInvalidLogin);
+        return;
+      }
       const { error } = await supabase.auth.signInWithPassword({
-        email: trimmed,
+        email: resolved,
         password,
       });
       if (error) throw error;
@@ -138,27 +175,70 @@ export function AuthModal({ open, onClose }) {
       setErr(t.authEmailRequired);
       return;
     }
+    /** Sign-in accepts username, but sign-up always needs a real email so Supabase can deliver the confirmation. */
+    if (!trimmed.includes("@")) {
+      setErr(t.authSignUpEmailRequired);
+      return;
+    }
     if (!password) {
       setErr(t.authPasswordRequired);
       return;
     }
     setBusy(true);
     try {
-      /** `emailRedirectTo` is a no-op when project disables confirmations (default), but kept for projects that turn it on. */
-      const { error } = await supabase.auth.signUp({
+      /** With email confirmations on, Supabase returns `data.session === null` and emails a confirm link. */
+      const { data, error } = await supabase.auth.signUp({
         email: trimmed,
         password,
         options: { emailRedirectTo: `${redirectBase()}/` },
       });
       if (error) throw error;
       setPassword("");
-      onClose();
+      if (data?.session) {
+        onClose();
+        return;
+      }
+      /** Confirmations on: keep modal open and show the "Check your email" panel.
+       *  Note: Supabase also returns 200 + null session for already-registered emails (anti-enumeration);
+       *  treating both cases identically is intentional. */
+      setPendingVerificationEmail(trimmed);
+      setResendCooldown(30);
+      setResendOk(false);
     } catch (e) {
       console.error(e);
       setErr(formatPasswordSignUpError(e, t));
     } finally {
       setBusy(false);
     }
+  }
+
+  async function resendVerification() {
+    if (!pendingVerificationEmail || resendCooldown > 0) return;
+    setErr("");
+    setResendOk(false);
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: pendingVerificationEmail,
+        options: { emailRedirectTo: `${redirectBase()}/` },
+      });
+      if (error) throw error;
+      setResendOk(true);
+      setResendCooldown(30);
+    } catch (e) {
+      console.error(e);
+      setErr(e.message || t.authErrorGeneric);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function changeEmailFromVerification() {
+    setPendingVerificationEmail(null);
+    setResendCooldown(0);
+    setResendOk(false);
+    setErr("");
   }
 
   async function requestPasswordReset() {
@@ -171,7 +251,13 @@ export function AuthModal({ open, onClose }) {
     }
     setBusy(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(trimmed, {
+      const resolved = await resolveIdentifierToEmail(trimmed);
+      if (!resolved) {
+        /** Mirror sign-in: don't surface "username not found" — show generic invalid-login text so we don't enumerate. */
+        setErr(t.authInvalidLogin);
+        return;
+      }
+      const { error } = await supabase.auth.resetPasswordForEmail(resolved, {
         redirectTo: `${redirectBase()}/`,
       });
       if (error) throw error;
@@ -269,7 +355,9 @@ export function AuthModal({ open, onClose }) {
     >
       <div onClick={(e) => e.stopPropagation()} style={panel}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-          <div style={{ fontSize: 17, fontWeight: 600, color: "#F1EFE8" }}>{session ? t.profileTitle : t.authTitle}</div>
+          <div style={{ fontSize: 17, fontWeight: 600, color: "#F1EFE8" }}>
+            {session ? t.profileTitle : (pendingVerificationEmail ? t.authVerifySentTitle : t.authTitle)}
+          </div>
           <button
             type="button"
             onClick={onClose}
@@ -397,15 +485,48 @@ export function AuthModal({ open, onClose }) {
               {t.signOut}
             </button>
           </div>
+        ) : pendingVerificationEmail ? (
+          <div>
+            <p style={{ fontSize: 13, color: "#C4C2BA", margin: "0 0 16px", lineHeight: 1.55 }}>
+              {t.authVerifySentBody.replace("{email}", pendingVerificationEmail)}
+            </p>
+            <button
+              type="button"
+              disabled={busy || resendCooldown > 0}
+              onClick={resendVerification}
+              style={{
+                ...btn,
+                background: resendCooldown > 0 ? "#5A4A43" : "#F0997B",
+                color: resendCooldown > 0 ? "#AFA8A3" : "#141413",
+                cursor: busy ? "wait" : (resendCooldown > 0 ? "not-allowed" : "pointer"),
+                opacity: resendCooldown > 0 ? 0.85 : 1,
+              }}
+            >
+              {resendCooldown > 0
+                ? t.authVerifyResendCooldown.replace("{sec}", String(resendCooldown))
+                : t.authVerifyResend}
+            </button>
+            {resendOk && (
+              <p style={{ fontSize: 12, color: "#97C459", margin: "0 0 10px", textAlign: "center" }}>{t.authVerifyResent}</p>
+            )}
+            <button
+              type="button"
+              disabled={busy}
+              onClick={changeEmailFromVerification}
+              style={{ ...btn, background: "transparent", color: "#C4C2BA", border: "0.5px solid rgba(255,255,255,0.2)" }}
+            >
+              {t.authVerifyChangeEmail}
+            </button>
+          </div>
         ) : (
           <div>
-            <label style={{ fontSize: 11, color: "#888780", display: "block", marginBottom: 6 }}>{t.authEmailLabel}</label>
+            <label style={{ fontSize: 11, color: "#888780", display: "block", marginBottom: 6 }}>{t.authEmailOrUsernameLabel}</label>
             <input
-              type="email"
-              autoComplete="email"
+              type="text"
+              autoComplete="username"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
+              placeholder={t.authEmailOrUsernamePlaceholder}
               style={{ width: "100%", boxSizing: "border-box", marginBottom: 10, fontSize: 14 }}
             />
             <label style={{ fontSize: 11, color: "#888780", display: "block", marginBottom: 6 }}>{t.authPasswordLabel}</label>

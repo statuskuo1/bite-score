@@ -16,10 +16,12 @@ The client uses `window.location.origin` as `redirectTo` / `emailRedirectTo`; th
 
 ## Authentication → Providers
 
-1. **Email** — provider on; **password sign-in** is the default. Magic link is no longer used by the app. Leave **Confirm email** off to match the local default in [`supabase/config.toml`](../supabase/config.toml), or turn it on if you want users to verify their email before first sign-in (requires working SMTP).
+1. **Email** — provider on; **password sign-in** is the default. Magic link is no longer used by the app. Turn **Confirm email** **on** to match [`supabase/config.toml`](../supabase/config.toml) (`enable_confirmations = true`); the app's create-account flow expects this and shows a "Check your email" panel after sign-up. Requires working SMTP.
 2. **Google** (optional) — enable **Google**, add OAuth client ID/secret from Google Cloud Console, and add the Supabase callback URL Google shows you to your Google client’s **Authorized redirect URIs**.
 
-The **Forgot password?** link in the app calls `resetPasswordForEmail`, which uses the standard **Reset password** email template — make sure SMTP works in production if you want this flow to deliver.
+### SMTP
+
+Both **email confirmation on sign-up** and **Forgot password?** (`resetPasswordForEmail`) deliver through the project's SMTP. The Supabase default sender is heavily rate-limited (a few emails/hour); for production, configure a real SMTP provider in **Project Settings → Auth → SMTP Settings** before launch. The verification email uses the **Confirm signup** template; the reset link uses **Reset password**.
 
 ## Database
 
@@ -30,6 +32,7 @@ Run the SQL in these migrations in **SQL Editor** (or use the Supabase CLI if yo
 3. [`supabase/migrations/20260428_flat_user_rls_no_admin.sql`](../supabase/migrations/20260428_flat_user_rls_no_admin.sql) — **own-row only** for `restaurants` / `cafes` (no admin read/write bypass); removes client writes to `settings`  
 4. [`supabase/migrations/20260430_restaurant_cafe_places_visits.sql`](../supabase/migrations/20260430_restaurant_cafe_places_visits.sql) — **current app**: `restaurant_places` / `restaurant_visits`, `cafe_places` / `cafe_visits` (normalized venues + visits). Legacy `restaurants` / `cafes` are optional historical tables.  
 5. [`supabase/migrations/20260501_profiles_display_leaderboard.sql`](../supabase/migrations/20260501_profiles_display_leaderboard.sql) — **`profiles`** `username` / `display_name` / `avatar_url`; sign-up trigger fills from OAuth metadata; visits FK → `profiles`; authenticated **SELECT** all visits + all profiles for community feed.
+6. [`supabase/migrations/20260505_auth_email_for_username_rpc.sql`](../supabase/migrations/20260505_auth_email_for_username_rpc.sql) — `email_for_username(text)` RPC (`security definer`) so the client can let users sign in with username or email; granted to `anon` and `authenticated`.
 
 The `profiles.is_admin` column may still exist from step 1; the **app no longer uses it**. Global `settings` rows (FAQ/welcome defaults, etc.) are edited with the **service role** or SQL Editor, not the browser client.
 
