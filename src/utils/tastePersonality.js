@@ -351,7 +351,7 @@ const BULLET_GENERATORS = [
       return {
         key: "repeat",
         text: `Only ${r}% earn a "must return" — you keep moving.`,
-        roast: `${r}% must-returns. You can't even commit to a noodle, sweetie.`,
+        roast: `${r}% must-returns. Allergic to commitment, even pasta-shaped.`,
       };
     }
     return null;
@@ -361,7 +361,7 @@ const BULLET_GENERATORS = [
     return {
       key: "topPick",
       text: `Top BITE pick: ${s.topPick.name} (${fix1(s.topPick.score)}/10).`,
-      roast: `Top BITE: ${s.topPick.name} at ${fix1(s.topPick.score)}/10. Babe, that's the peak. The rest is just downhill from here.`,
+      roast: `Top BITE: ${s.topPick.name} at ${fix1(s.topPick.score)}/10. That's the ceiling.`,
     };
   },
   function waitBullet(s) {
@@ -370,13 +370,13 @@ const BULLET_GENERATORS = [
       return {
         key: "wait",
         text: `Sat through 30+ min waits ${s.longWaits} times. Patient when it counts.`,
-        roast: `${s.longWaits} times you stood in line over 30 minutes. Sweetie, that's not dedication, that's availability.`,
+        roast: `${s.longWaits} times you waited 30+ min for food. Therapy is also an option.`,
       };
     }
     return {
       key: "wait",
       text: `Average wait ${Math.round(s.avgWait)} min — you'll queue when it's worth it.`,
-      roast: `Average ${Math.round(s.avgWait)} min waits. Babe, your time is being valued less than a hostess stand.`,
+      roast: `Average ${Math.round(s.avgWait)} min waits. You like food enough to suffer for it.`,
     };
   },
 ];
