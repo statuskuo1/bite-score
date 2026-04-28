@@ -5,6 +5,12 @@
 
 const PROFILE_FIELDS = "id, username, display_name, avatar_url";
 
+/** Gated debug log — silent in production builds (Vite drops the call site). */
+const isDev = typeof import.meta !== "undefined" && !!import.meta.env?.DEV;
+function devLog(...args) {
+  if (isDev) console.log(...args);
+}
+
 function mapAuthor(row) {
   const a = row.author || row.profiles || {};
   return {
@@ -108,7 +114,7 @@ export function normalizeCafeVisitEmbed(row) {
 
 /** Load visits with place + author; never throws — logs and returns []. */
 export async function fetchRestaurantVisitsJoined(client, userId) {
-  console.log("[BITE] fetching with userId:", userId);
+  devLog("[BITE] fetching with userId:", userId);
   if (userId == null || userId === "") {
     console.warn("[BITE] fetchRestaurantVisitsJoined: userId argument is null or empty");
     return [];
@@ -120,7 +126,7 @@ export async function fetchRestaurantVisitsJoined(client, userId) {
     .eq("user_id", userId)
     .order("visited_at", { ascending: false });
 
-  console.log("[BITE] restaurant_visits { data, error }", { data, error });
+  devLog("[BITE] restaurant_visits { data, error }", { data, error });
   if (error) {
     console.error("[BITE] restaurant_visits query error:", error.message, error.details ?? "");
     return [];
@@ -132,7 +138,7 @@ export async function fetchRestaurantVisitsJoined(client, userId) {
 }
 
 export async function fetchCafeVisitsJoined(client, userId) {
-  console.log("[BITE] fetching with userId:", userId);
+  devLog("[BITE] fetching with userId:", userId);
   if (userId == null || userId === "") {
     console.warn("[BITE] fetchCafeVisitsJoined: userId argument is null or empty");
     return [];
@@ -144,7 +150,7 @@ export async function fetchCafeVisitsJoined(client, userId) {
     .eq("user_id", userId)
     .order("visited_at", { ascending: false });
 
-  console.log("[BITE] cafe_visits { data, error }", { data, error });
+  devLog("[BITE] cafe_visits { data, error }", { data, error });
   if (error) {
     console.error("[BITE] cafe_visits query error:", error.message, error.details ?? "");
     return [];
@@ -163,7 +169,7 @@ export async function fetchCommunityRestaurantVisits(client, limit = 120) {
     .order("visited_at", { ascending: false })
     .limit(limit);
 
-  console.log("[BITE] community restaurant_visits { data, error }", { data, error });
+  devLog("[BITE] community restaurant_visits { data, error }", { data, error });
   if (error) {
     console.error("[BITE] community restaurant_visits:", error.message, error.details ?? "");
     return [];
@@ -182,7 +188,7 @@ export async function fetchCommunityCafeVisits(client, limit = 120) {
     .order("visited_at", { ascending: false })
     .limit(limit);
 
-  console.log("[BITE] community cafe_visits { data, error }", { data, error });
+  devLog("[BITE] community cafe_visits { data, error }", { data, error });
   if (error) {
     console.error("[BITE] community cafe_visits:", error.message, error.details ?? "");
     return [];

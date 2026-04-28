@@ -3,7 +3,6 @@ import { LangContext } from "./contexts/LangContext.jsx";
 import { useAuth } from "./contexts/AuthContext.jsx";
 import { T } from "./translations.js";
 import { supabase } from "./config/supabaseClient.js";
-import { ensureProfile } from "./utils/profileApi.js";
 import { canMutateVisit } from "./utils/rowAccess.js";
 import {
   fetchRestaurantVisitsJoined,
@@ -155,7 +154,7 @@ export default function App() {
           }
           dispatch({ type: "LOAD", entries: [] });
           setCafes([]);
-          await ensureProfile(supabase, user);
+          // Profile sync is owned by AuthContext; we just read visits here.
           const [entries, cafeRows] = await Promise.all([
             fetchRestaurantVisitsJoined(supabase, user.id),
             fetchCafeVisitsJoined(supabase, user.id),

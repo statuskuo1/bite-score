@@ -41,7 +41,7 @@ Adds resolve café place by name (`ilike`); insert place if missing; batch café
 
 ### `profiles`
 
-`id` (FK to `auth.users`), `username`, `display_name`, `avatar_url`, optional legacy `is_admin`. Sign-up trigger fills names/avatar from OAuth **`raw_user_meta_data`** (see [`20260431_profiles_display_leaderboard.sql`](../supabase/migrations/20260431_profiles_display_leaderboard.sql)). Client [`profileApi.js`](../src/utils/profileApi.js) **`ensureProfile`** patches missing fields after login. **`AuthContext`** exposes **`displayName`** for the shell; visit rows embed **`author:profiles`** via FK `visits.user_id → profiles(id)`.
+`id` (FK to `auth.users`), `username`, `display_name`, `avatar_url`, optional legacy `is_admin`. Sign-up trigger fills names/avatar from OAuth **`raw_user_meta_data`** (see [`20260501_profiles_display_leaderboard.sql`](../supabase/migrations/20260501_profiles_display_leaderboard.sql)). Client [`profileApi.js`](../src/utils/profileApi.js) **`ensureProfile`** patches missing fields after login. **`AuthContext`** exposes **`displayName`** for the shell; visit rows embed **`author:profiles`** via FK `visits.user_id → profiles(id)`.
 
 ### `settings`
 

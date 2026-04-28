@@ -19,6 +19,6 @@ Users should see a friendly **display name** from `public.profiles` instead of r
 
 ## Consequences
 
-- Apply [`supabase/migrations/20260431_profiles_display_leaderboard.sql`](../../supabase/migrations/20260431_profiles_display_leaderboard.sql) **after** [`20260430_restaurant_cafe_places_visits.sql`](../../supabase/migrations/20260430_restaurant_cafe_places_visits.sql). Orphan users without `profiles` are backfilled before FK swap.
+- Apply [`supabase/migrations/20260501_profiles_display_leaderboard.sql`](../../supabase/migrations/20260501_profiles_display_leaderboard.sql) **after** [`20260430_restaurant_cafe_places_visits.sql`](../../supabase/migrations/20260430_restaurant_cafe_places_visits.sql). Orphan users without `profiles` are backfilled before FK swap.
 
 **Primary files:** migration above, [`src/utils/profileApi.js`](../src/utils/profileApi.js), [`src/contexts/AuthContext.jsx`](../src/contexts/AuthContext.jsx), [`src/utils/visitPlacesApi.js`](../src/utils/visitPlacesApi.js), [`src/App.jsx`](../src/App.jsx), [`src/components/RestRow.jsx`](../src/components/RestRow.jsx), [`src/components/CafeGroupRow.jsx`](../src/components/CafeGroupRow.jsx), [`src/components/AuthModal.jsx`](../src/components/AuthModal.jsx).
