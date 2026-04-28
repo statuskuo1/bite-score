@@ -2,7 +2,11 @@
 .branches
 .temp
 
-# dotenvx
-.env.keys
+# Edge Function secrets (auto-loaded by `supabase functions serve` locally).
+# Never commit — Google Places API key + alert webhook live here.
+.env
 .env.local
 .env.*.local
+
+# dotenvx
+.env.keys

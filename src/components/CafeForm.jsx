@@ -32,7 +32,7 @@ const FLAVOR_NOTES = [
   { value: "Smoky", labelKey: "flavorSmoky" },
 ];
 
-export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addType,setAddType,existingCafes,places}) {
+export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addType,setAddType,existingCafes,places,onPlaceCreated}) {
   const {t} = useLang();
   const [f, setF] = useState({...INIT_CAFE, ...initial});
   const [sub, setSub] = useState(false);
@@ -137,9 +137,11 @@ export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addT
       <div style={S.mb16}>
         <FieldLabel>{t.cafeName}</FieldLabel>
         <PlacePicker
+          kind="cafe"
           value={f.name}
           selectedPlaceId={f.placeId||null}
           places={places||[]}
+          onPlaceCreated={onPlaceCreated}
           onChange={({name, placeId, city})=>{
             setF(p=>({
               ...p,

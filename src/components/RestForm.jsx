@@ -11,7 +11,7 @@ import { SectionLabel } from "./SectionLabel.jsx";
 import { FieldLabel } from "./FieldLabel.jsx";
 import { FormScoreHeader } from "./FormScoreHeader.jsx";
 
-export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,existingEntries,places}) {
+export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,existingEntries,places,onPlaceCreated}) {
   const {t} = useLang();
   const [f,setF] = useState(initial);
   const [sub,setSub] = useState(false);
@@ -35,29 +35,36 @@ export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,exi
       <div style={S.mb16}>
         <FieldLabel>{t.restaurantName}</FieldLabel>
         <PlacePicker
+          kind="restaurant"
           value={f.name}
           selectedPlaceId={f.placeId||null}
           places={places||[]}
-          onChange={({name, placeId, city})=>{
+          onPlaceCreated={onPlaceCreated}
+          onChange={({name, placeId, city, cuisine: pickedCuisine, cuisine2: pickedCuisine2, isFusion: pickedFusion})=>{
             if(!placeId){
               /** Typing or "Add new" — just update name + clear pinned placeId. */
               setF(p=>({...p, name, placeId: null}));
               return;
             }
-            /** The "basics" (cuisine, fusion, city) are place-level fields stored
-             *  on `restaurant_places`, so the canonical place row is the source
-             *  of truth — pull from `places` rather than the user's own log. */
+            /** Picker-provided fields (a) win for freshly-resolved Google rows
+             *  that aren't in the parent `places` catalog yet, and (b) prefer
+             *  `verified_*` over user-typed for catalog hits. Fall back to the
+             *  catalog lookup so existing rows without verified fields still
+             *  autopopulate cuisine/fusion. */
             const place=(places||[]).find(p=>p.id===placeId);
-            const cuisine=place?.cuisine || "";
+            const cuisine = pickedCuisine || place?.verifiedCuisine || place?.cuisine || "";
+            const cuisine2 = pickedCuisine2 != null ? pickedCuisine2 : place?.cuisine2 || "";
+            const isFusion = pickedFusion != null ? pickedFusion : !!place?.isFusion;
+            const cty = city || place?.verifiedCity || place?.city || "";
             setF(p=>({
               ...p,
               name,
               placeId,
-              city: place?.city || city || p.city || "",
+              city: cty || p.city || "",
               cuisine: cuisine || p.cuisine || "",
               letter: ((cuisine || p.cuisine || "")[0] || "").toUpperCase(),
-              cuisine2: place?.cuisine2 || "",
-              isFusion: !!place?.isFusion,
+              cuisine2,
+              isFusion,
             }));
             /** Layer the user's own past-visit metadata on top for visit-level
              *  fields only (portions, wait, repeatability) — keyed by placeId

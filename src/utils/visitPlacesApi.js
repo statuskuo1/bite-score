@@ -224,11 +224,19 @@ export async function ensureCafePlace(client, { placeId, name, city }) {
  * Shared catalog read used by PlacePicker. RLS allows any authenticated user
  * to SELECT all rows in `*_places`, so this is just a flat list — no joins,
  * no auth filter. Returns `[]` on any error so the picker stays usable.
+ *
+ * `verified_*` fields (populated by the Google Places `places-resolve` Edge
+ * Function) are surfaced alongside the user-typed columns. PlacePicker and
+ * the form autopopulate prefer `verified*` when present so canonical Google
+ * data wins over the first-write-from-a-user fallback. See
+ * docs/decisions/2026-04-28-google-places-verified-fields.md.
  */
 export async function fetchAllRestaurantPlaces(client) {
   const { data, error } = await client
     .from("restaurant_places")
-    .select("id, name, cuisine, cuisine2, is_fusion, city");
+    .select(
+      "id, name, cuisine, cuisine2, is_fusion, city, google_place_id, verified_name, verified_cuisine, verified_city, lat, lng, verified_at",
+    );
   if (error) {
     console.warn("[BITE] fetchAllRestaurantPlaces:", error.message);
     return [];
@@ -240,13 +248,22 @@ export async function fetchAllRestaurantPlaces(client) {
     cuisine: p.cuisine || "",
     cuisine2: p.cuisine2 || "",
     isFusion: !!p.is_fusion,
+    googlePlaceId: p.google_place_id || "",
+    verifiedName: p.verified_name || "",
+    verifiedCuisine: p.verified_cuisine || "",
+    verifiedCity: p.verified_city || "",
+    lat: p.lat ?? null,
+    lng: p.lng ?? null,
+    verifiedAt: p.verified_at || null,
   }));
 }
 
 export async function fetchAllCafePlaces(client) {
   const { data, error } = await client
     .from("cafe_places")
-    .select("id, name, city");
+    .select(
+      "id, name, city, google_place_id, verified_name, verified_city, lat, lng, verified_at",
+    );
   if (error) {
     console.warn("[BITE] fetchAllCafePlaces:", error.message);
     return [];
@@ -255,6 +272,12 @@ export async function fetchAllCafePlaces(client) {
     id: p.id,
     name: p.name || "",
     city: p.city || "",
+    googlePlaceId: p.google_place_id || "",
+    verifiedName: p.verified_name || "",
+    verifiedCity: p.verified_city || "",
+    lat: p.lat ?? null,
+    lng: p.lng ?? null,
+    verifiedAt: p.verified_at || null,
   }));
 }
 

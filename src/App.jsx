@@ -340,9 +340,25 @@ export default function App() {
   /** Keep the local PlacePicker catalog warm: any time `ensure*Place` resolves a
    *  placeId we don't yet know about (newly inserted, or matched via ilike to a
    *  row we hadn't loaded), append it so the dropdown reflects reality without
-   *  a full refetch. */
+   *  a full refetch. When the row is already present, merge any **new** fields
+   *  in (e.g. verified_* fields freshly populated by `places-resolve` arriving
+   *  for a row we already had under a different lookup) — but never overwrite
+   *  existing non-empty values, so user-typed fallbacks aren't clobbered by
+   *  empty Google data. */
   function upsertPlace(setter, placeId, fields) {
-    setter((cur) => (cur.some((p) => p.id === placeId) ? cur : [...cur, { id: placeId, ...fields }]));
+    setter((cur) => {
+      const idx = cur.findIndex((p) => p.id === placeId);
+      if (idx === -1) return [...cur, { id: placeId, ...fields }];
+      const existing = cur[idx];
+      const merged = { ...existing };
+      for (const [k, v] of Object.entries(fields || {})) {
+        if (v == null || v === "") continue;
+        if (merged[k] == null || merged[k] === "") merged[k] = v;
+      }
+      const next = cur.slice();
+      next[idx] = merged;
+      return next;
+    });
   }
 
   async function insertCafeEntry(entry) {
@@ -746,7 +762,9 @@ export default function App() {
         />
       )}
 
-      {st.view==="log"&&editR&&<RestForm initial={editR} weights={weights} existingEntries={st.entries} places={restaurantPlaces} onSave={async e=>{
+      {st.view==="log"&&editR&&<RestForm initial={editR} weights={weights} existingEntries={st.entries} places={restaurantPlaces}
+        onPlaceCreated={(p)=>upsertPlace(setRestaurantPlaces, p.id, p)}
+        onSave={async e=>{
         let resolvedPlaceId = e.placeId;
         if(canMutateVisit(e,user)) {
           try {
@@ -777,7 +795,9 @@ export default function App() {
         dispatch({ type: "UPD", e: { ...e, placeId: resolvedPlaceId, ownerId: e.ownerId ?? user?.id ?? null } });
         setEditR(null);
       }} onCancel={()=>{setEditR(null);window.scrollTo({top:0,behavior:"smooth"});}}/>}
-      {st.view==="log"&&editC&&<CafeForm initial={editC} weights={editC?.category==="Sweets"?sweetWeights:drinkWeights} onSave={async e=>{
+      {st.view==="log"&&editC&&<CafeForm initial={editC} weights={editC?.category==="Sweets"?sweetWeights:drinkWeights}
+        onPlaceCreated={(p)=>upsertPlace(setCafePlaces, p.id, p)}
+        onSave={async e=>{
         if (e.city) lastCity.current = e.city;
         let resolvedPlaceId = e.placeId;
         if(canMutateVisit(e,user)) {
@@ -808,6 +828,7 @@ export default function App() {
         <div>
           {addType==="restaurant"
             ?<RestForm initial={{...INIT_REST,city:lastCity.current}} weights={weights} existingEntries={st.entries} places={restaurantPlaces}
+                onPlaceCreated={(p)=>upsertPlace(setRestaurantPlaces, p.id, p)}
                 onSave={async e=>{
                   if (e.city) lastCity.current = e.city;
                   if (!user) return;
@@ -846,6 +867,7 @@ export default function App() {
                 addType={addType} setAddType={setAddType}
               />
             :<CafeForm initial={{...INIT_CAFE,city:lastCity.current}} weights={drinkWeights}
+                onPlaceCreated={(p)=>upsertPlace(setCafePlaces, p.id, p)}
                 onSave={async e=>{
                   if (e.city) lastCity.current = e.city;
                   await insertCafeEntry(e);
