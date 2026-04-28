@@ -25,6 +25,10 @@ How a user signs in, what `auth.uid()` lets them read/write, and how the client 
 
 The sign-in field accepts either an email or a `profiles.username`. `resolveIdentifierToEmail` in [`AuthModal.jsx`](../../src/components/AuthModal.jsx) routes by `@` presence: with `@`, the input is treated as an email and passed straight to `supabase.auth.signInWithPassword`; without `@`, it calls `fetchEmailForUsername` ([`profileApi.js`](../../src/utils/profileApi.js)) which invokes the `email_for_username` RPC. The RPC ([`20260505_auth_email_for_username_rpc.sql`](../../supabase/migrations/20260505_auth_email_for_username_rpc.sql)) is `security definer` so it can read `auth.users.email` despite RLS, and returns `null` on miss. Misses surface as the standard `authInvalidLogin` ("Wrong email or password") so the UI does not distinguish "no such username" from "wrong password." Forgot-password uses the same indirection. **Sign-up still requires an email** — a client-side `@` guard rejects bare usernames before calling Supabase.
 
+### Google-only account detection
+
+Supabase returns the same `Invalid login credentials` error for both wrong-password and "user has no password (Google-only)" cases. To give Google users a friendlier message instead of the generic one, [`AuthModal.signInWithPassword`](../../src/components/AuthModal.jsx) calls `accountUsesOauthOnly` ([`profileApi.js`](../../src/utils/profileApi.js)) inside the `catch` block whenever the error message matches `/invalid login credentials/i`. The helper wraps the `account_uses_oauth_only(text)` RPC ([`20260506_auth_account_uses_oauth_only.sql`](../../supabase/migrations/20260506_auth_account_uses_oauth_only.sql)), which is `security definer`, accepts either an email or a username, and returns `true` only when the account exists AND has no `email` provider in `auth.identities`. On `true`, the modal swaps the generic message for `authUseGoogleInstead` ("This account uses Google sign-in. Tap Continue with Google below."). The check runs only on failure, so happy-path sign-ins remain a single round trip.
+
 ### Email verification on sign-up
 
 `enable_confirmations = true` in [`supabase/config.toml`](../../supabase/config.toml). After `supabase.auth.signUp(...)` resolves with `data.session === null`, [`AuthModal.jsx`](../../src/components/AuthModal.jsx) keeps the modal open and renders a "Check your email" panel showing the target address, a **Resend email** button (30s local cooldown, calls `supabase.auth.resend({ type: "signup" })`), and a **Use a different email** action that returns to the form. Clicking the link in the email returns the user to the app origin signed in. Already-registered emails (Supabase returns 200 + null session for anti-enumeration) render the same panel by design.
@@ -79,6 +83,7 @@ The anon client **cannot write** `settings`; curators edit it via SQL / service 
 
 - [2026-04-29 — Google OAuth account picker](../decisions/2026-04-29-google-oauth-account-picker.md)
 - [2026-04-29 — Assign legacy visits to owner](../decisions/2026-04-29-assign-legacy-visits-to-owner.md)
+- [2026-04-28 — Friendly error for Google-only accounts](../decisions/2026-04-28-google-only-account-friendly-error.md)
 - [2026-04-28 — Sign in with email or username](../decisions/2026-04-28-username-or-email-sign-in.md)
 - [2026-04-28 — Enable email verification on sign-up](../decisions/2026-04-28-enable-email-verification-on-signup.md)
 - [2026-04-28 — Username lowercase & pre-check](../decisions/2026-04-28-username-lowercase-and-pre-check.md)
