@@ -6,14 +6,14 @@ import { S } from "../styles/sharedStyles.js";
 import { SwipeRow } from "./SwipeRow.jsx";
 import { canMutateVisit, canSwipeGroup } from "../utils/rowAccess.js";
 
-export function CafeGroupRow({ group, cafeSortBy, onEdit, onDelete, user, showAuthor = false }) {
+export function CafeGroupRow({ group, cafeSortBy, onEdit, onDelete, user, weights, showAuthor = false }) {
   const {t,lang} = useLang();
   const [exp, setExp] = useState(false);
   const [showVisits, setShowVisits] = useState(false);
   const icon = getCafeIcon(group[0].category, group[0].order);
   const visits = group.length;
 
-  const scores = group.map(e=>calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability)).filter(s=>s!=null);
+  const scores = group.map(e=>calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights)).filter(s=>s!=null);
   const avgScore = scores.length ? scores.reduce((a,b)=>a+b,0)/scores.length : null;
   const avgTaste = group.reduce((a,e)=>a+e.taste,0)/visits;
   const avgCost = group.reduce((a,e)=>a+e.cost,0)/visits;
@@ -46,7 +46,7 @@ export function CafeGroupRow({ group, cafeSortBy, onEdit, onDelete, user, showAu
             </div>
             <div style={{overflowY:"auto",padding:"1rem 1.25rem",flex:1}}>
               {[...group].reverse().map((e,i)=>{
-                const sc = calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability);
+                const sc = calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights);
                 return (
                   <div key={e.id} style={{background:"#141413",borderRadius:10,padding:"12px 14px",marginBottom:10}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>

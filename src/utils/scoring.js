@@ -84,33 +84,39 @@ export function meanRestaurantBiteOutOf10(entries, wts) {
   return n === 0 ? null : sum / n;
 }
 
-/** Raw café score (fixed blend in formula, then /1.593). */
-export function calcCafe(t, cost, portions, wait, useR, r) {
+/** Defaults for café (drinks + sweets) weight sliders. Independent from restaurants. */
+export const CAFE_WEIGHT_DEFAULTS = { taste: 70, bpb: 20, wait: 10 };
+
+/**
+ * Raw café score with parameterized weights. Same blend shape as restaurants
+ * (`rt*t − rb*bpb − rw*wp`) but two cafe-specific calibrations:
+ *   - bpb divisor `/5.25` keeps bang/buck meaningful for cheaper items
+ *   - wait curve uses `log(31)` so it saturates around 30 min instead of 120
+ */
+export function calcCafe(t, cost, portions, wait, useR, r, wts) {
   if (!portions) return null;
   const bpb = (cost / portions) / 5.25;
-  const wp = Math.min(10, (Math.log(wait + 1) / Math.log(121)) * 10);
-  const base = 0.7 * t - 0.3 * bpb;
-  const waitPenalty = Math.abs(base) * 0.1 * (wp / 10);
-  const withWait = base - waitPenalty;
-  const raw = useR ? applyR(withWait, r) : Math.round(withWait * 100) / 100;
-  return Math.round((raw / 1.593) * 100) / 100;
+  const wp = Math.min(10, (Math.log(wait + 1) / Math.log(31)) * 10);
+  const { rt, rb, rw } = restaurantWeightRatios(wts || CAFE_WEIGHT_DEFAULTS);
+  const base = rt * t - rb * bpb - rw * wp;
+  return useR ? applyR(base, r) : Math.round(base * 100) / 100;
 }
 
-/** Best raw café score for current formula (same pipeline as calcCafe). */
-export function calcCafeMax() {
-  return calcCafe(10, 0, 1, 0, true, 3);
+/** Best raw café score for these weights (same pipeline as calcCafe). */
+export function calcCafeMax(wts) {
+  return calcCafe(10, 0, 1, 0, true, 3, wts);
 }
 
 /** Café: utility ratio (0–1), or null. */
-export function calcCafeUtilityRatio(t, cost, portions, wait, useR, r) {
-  const raw = calcCafe(t, cost, portions, wait, useR, r);
-  const max = calcCafeMax();
+export function calcCafeUtilityRatio(t, cost, portions, wait, useR, r, wts) {
+  const raw = calcCafe(t, cost, portions, wait, useR, r, wts);
+  const max = calcCafeMax(wts);
   return biteUtilityRatio(raw, max);
 }
 
 /** Café BITE on 0–10: normalized ratio × 10. */
-export function calcCafeOutOf10(t, cost, portions, wait, useR, r) {
-  return utilityRatioToOutOf10(calcCafeUtilityRatio(t, cost, portions, wait, useR, r));
+export function calcCafeOutOf10(t, cost, portions, wait, useR, r, wts) {
+  return utilityRatioToOutOf10(calcCafeUtilityRatio(t, cost, portions, wait, useR, r, wts));
 }
 
 /** Tier color for normalized BITE / café 0–10 (ratio to theoretical best). */

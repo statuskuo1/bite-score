@@ -1,17 +1,69 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLang } from "../contexts/LangContext.jsx";
-import { calcCafeOutOf10 } from "../utils/scoring.js";
+import { calcCafeOutOf10, CAFE_WEIGHT_DEFAULTS } from "../utils/scoring.js";
 import { S } from "../styles/sharedStyles.js";
 import { WeightSliders } from "./WeightSliders.jsx";
 
-export function SweetsPalette({cafes, cafeWeights, updateCafeW, resetCafeWeights}) {
+const btnGhost = {fontSize:11,color:"#5B9BD5",background:"none",border:"1px solid rgba(91,155,213,0.45)",borderRadius:8,padding:"5px 12px",cursor:"pointer",fontWeight:500};
+
+export function SweetsPalette({cafes, sweetWeights, replaceSweetWeights}) {
   const {t,lang} = useLang();
-  // Note: uses same weights as Drinks
   const sweets = cafes.filter(e=>e.category==="Sweets");
   const total = sweets.length;
-  if(!total) return <p style={{color:"#888780",fontSize:14}}>{t.noSweets}</p>;
 
-  const scored = [...sweets].map(e=>({...e,sc:calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability)})).sort((a,b)=>(b.sc??0)-(a.sc??0));
+  const [editingW,setEditingW] = useState(false);
+  const [draftW,setDraftW] = useState(()=>({...sweetWeights}));
+  useEffect(()=>{if(!editingW)setDraftW({...sweetWeights});},[sweetWeights,editingW]);
+  const draftSum = draftW.taste + draftW.bpb + draftW.wait;
+  const draftOk = draftSum === 100;
+  const liveSum = sweetWeights.taste + sweetWeights.bpb + sweetWeights.wait;
+  const liveOk = liveSum === 100;
+  function draftUpd(k,v){
+    const nv = Math.round(Math.min(100,Math.max(0,+v)));
+    setDraftW(w=>({...w,[k]:nv}));
+  }
+  function saveSweetWeights(){
+    if(!draftOk)return;
+    replaceSweetWeights(draftW);
+    setEditingW(false);
+  }
+
+  const weightsCard = (
+    <div style={{...S.card}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+        <div style={{...S.lbl,marginBottom:0}}>{t.weights}</div>
+        {!editingW
+          ? <button type="button" onClick={()=>{setDraftW({...sweetWeights});setEditingW(true);}} style={btnGhost}>{t.editWeights}</button>
+          : <button type="button" onClick={()=>setEditingW(false)} style={{...btnGhost,color:"#888780",borderColor:"rgba(255,255,255,0.15)"}}>{t.cancel}</button>}
+      </div>
+      {editingW?(
+        <>
+          <WeightSliders weights={draftW} labels={[[t.taste,"taste"],[t.bangBuck,"bpb"],[t.wait,"wait"]]} onUpdate={draftUpd} onReset={()=>setDraftW({...CAFE_WEIGHT_DEFAULTS})} defaults={CAFE_WEIGHT_DEFAULTS}/>
+          <div style={{fontSize:11,color:draftOk?"#97C459":"#EF9F27",textAlign:"center",marginTop:8}}>{t.weightsTotal}: {draftSum}/100</div>
+          {!draftOk&&<div style={{fontSize:10,color:"#F1EFE8",textAlign:"center",marginTop:4}}>{t.weightsSumTo100}</div>}
+          <button type="button" disabled={!draftOk} onClick={saveSweetWeights} style={{width:"100%",marginTop:10,padding:"10px",borderRadius:8,border:"none",fontSize:14,fontWeight:500,cursor:draftOk?"pointer":"not-allowed",background:draftOk?"#F0997B":"#5A4A43",color:draftOk?"#141413":"#AFA8A3",opacity:draftOk?1:0.85}}>{t.weightsSave}</button>
+        </>
+      ):(
+        <>
+          <p style={{fontSize:13,color:"#F1EFE8",margin:0,lineHeight:1.5}}>
+            {t.taste} <span style={{fontWeight:600,color:"#F0997B"}}>{sweetWeights.taste}%</span>
+            {" · "}{t.bangBuck} <span style={{fontWeight:600,color:"#5B9BD5"}}>{sweetWeights.bpb}%</span>
+            {" · "}{t.wait} <span style={{fontWeight:600,color:"#97C459"}}>{sweetWeights.wait}%</span>
+          </p>
+          {!liveOk&&<div style={{fontSize:10,color:"#F1EFE8",textAlign:"center",marginTop:8}}>{t.weightsSumTo100}</div>}
+        </>
+      )}
+    </div>
+  );
+
+  if(!total) return (
+    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      {weightsCard}
+      <p style={{color:"#888780",fontSize:14}}>{t.noSweets}</p>
+    </div>
+  );
+
+  const scored = [...sweets].map(e=>({...e,sc:calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,sweetWeights)})).sort((a,b)=>(b.sc??0)-(a.sc??0));
   const avgT=(sweets.reduce((a,e)=>a+e.taste,0)/total).toFixed(1);
   const mustReturn=sweets.filter(e=>e.repeatability===3).length;
   const mustReturnPct=Math.round(mustReturn/total*100);
@@ -40,19 +92,12 @@ export function SweetsPalette({cafes, cafeWeights, updateCafeW, resetCafeWeights
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:12}}>
-      <div style={{...S.card}}>
-        <div style={{...S.lbl,marginBottom:10}}>Weights</div>
-        <WeightSliders weights={cafeWeights} labels={[[t.taste,"taste"],[t.bangBuck,"bpb"]]} onUpdate={updateCafeW} onReset={resetCafeWeights} defaults={{taste:70,bpb:30}}/>
-        <div style={{fontSize:10,color:"#888780",marginTop:8}}>Same weights as drinks</div>
-      </div>
+      {weightsCard}
       <div style={{...S.card}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
           <div style={{...S.lbl,marginBottom:0}}>{t.sweetsPersonality}</div>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <div onClick={()=>setSweetsRoastMode(r=>!r)} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",background:sweetsRoastMode?"#2A1E05":"#1A2E0A",border:"1px solid "+(sweetsRoastMode?"#EF9F27":"#97C459"),borderRadius:20,padding:"4px 10px"}}>
-              <span style={{fontSize:11,color:sweetsRoastMode?"#EF9F27":"#97C459",fontWeight:500}}>{sweetsRoastMode?t.roastMe:t.prVersion}</span>
-            </div>
-            <div style={{fontSize:10,color:"#888780"}}>Same weights as drinks</div>
+          <div onClick={()=>setSweetsRoastMode(r=>!r)} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",background:sweetsRoastMode?"#2A1E05":"#1A2E0A",border:"1px solid "+(sweetsRoastMode?"#EF9F27":"#97C459"),borderRadius:20,padding:"4px 10px"}}>
+            <span style={{fontSize:11,color:sweetsRoastMode?"#EF9F27":"#97C459",fontWeight:500}}>{sweetsRoastMode?t.roastMe:t.prVersion}</span>
           </div>
         </div>
         <p style={{fontSize:13,color:"#F1EFE8",margin:"0 0 6px",lineHeight:1.65,fontWeight:500}}>{sweetsRoastMode?roastPersonality:personality}</p>
@@ -91,7 +136,7 @@ export function SweetsPalette({cafes, cafeWeights, updateCafeW, resetCafeWeights
           const typeEntries=Object.entries(typeCounts).sort((a,b)=>b[1]-a[1]);
           const topType=typeEntries[0];
           const best2=scored[0];
-          const avgBiteSweets=total?(sweets.reduce((a,e)=>a+(calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability)??0),0)/total).toFixed(2):"—";
+          const avgBiteSweets=total?(sweets.reduce((a,e)=>a+(calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,sweetWeights)??0),0)/total).toFixed(2):"—";
           const avgCostSweets=total?"$"+(sweets.reduce((a,e)=>a+e.cost,0)/total).toFixed(2):"—";
 
           const S2=160,CX2=80,CY2=80,R2=68,RI2=44;

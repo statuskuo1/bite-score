@@ -18,11 +18,10 @@ export function PaletteView({
   cafes,
   weights,
   replaceRestaurantWeights,
-  cafeWeights,
-  updateCafeW,
-  resetCafeWeights,
-  cafeTotalW,
-  cafeWErr,
+  drinkWeights,
+  replaceDrinkWeights,
+  sweetWeights,
+  replaceSweetWeights,
   questL,
   toggleQ,
   onOpenSuggest,
@@ -230,8 +229,8 @@ export function PaletteView({
         </div>
       )}
 
-      {paletteTab==="drinks"&&<DrinksPalette cafes={cafes} cafeWeights={cafeWeights} updateCafeW={updateCafeW} resetCafeWeights={resetCafeWeights} cafeTotalW={cafeTotalW} cafeWErr={cafeWErr}/>}
-      {paletteTab==="sweets"&&<SweetsPalette cafes={cafes} cafeWeights={cafeWeights} updateCafeW={updateCafeW} resetCafeWeights={resetCafeWeights}/>}
+      {paletteTab==="drinks"&&<DrinksPalette cafes={cafes} drinkWeights={drinkWeights} replaceDrinkWeights={replaceDrinkWeights}/>}
+      {paletteTab==="sweets"&&<SweetsPalette cafes={cafes} sweetWeights={sweetWeights} replaceSweetWeights={replaceSweetWeights}/>}
     </div>
   );
 }

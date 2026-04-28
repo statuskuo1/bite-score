@@ -105,8 +105,8 @@ export default function App() {
   const [weights, setWeights] = useState({taste:50,bpb:40,wait:10});
   const restaurantWeightsSum = weights.taste + weights.bpb + weights.wait;
   const canProceedWelcome = restaurantWeightsSum === 100;
-  const [cafeWeights, setCafeWeights] = useState({taste:70,bpb:30});
-  const [cafeWErr, setCafeWErr] = useState("");
+  const [drinkWeights, setDrinkWeights] = useState({taste:70,bpb:20,wait:10});
+  const [sweetWeights, setSweetWeights] = useState({taste:70,bpb:20,wait:10});
   const [questL, setQuestL] = useState(new Set(["T","M","S","U","C","D","Y","K"]));
   const [cafeSortBy, setCafeSortBy] = useState("bite");
   const [cafeSortAsc, setCafeSortAsc] = useState(false);
@@ -244,24 +244,6 @@ export default function App() {
     };
   }, [user?.id, dbLoaded, st.view]);
 
-  /** Café weights (2 sliders): redistribute the other key to keep sum 100. */
-  function rebalance(current, changedKey, newVal) {
-    const nv = Math.min(100, Math.max(0, Math.round(newVal)));
-    const others = Object.keys(current).filter(k=>k!==changedKey);
-    const remaining = 100 - nv;
-    const otherSum = others.reduce((a,k)=>a+current[k],0);
-    const newW = {...current,[changedKey]:nv};
-    if(otherSum===0){
-      const each = Math.floor(remaining/others.length);
-      others.forEach((k,i)=>newW[k]=i===others.length-1?remaining-each*(others.length-1):each);
-    } else {
-      others.forEach(k=>newW[k]=Math.max(0,Math.round(current[k]/otherSum*remaining)));
-      const diff=100-Object.values(newW).reduce((a,x)=>a+x,0);
-      if(diff!==0) newW[others[0]]+=diff;
-    }
-    return newW;
-  }
-
   /** Each slider 0–100; BITE uses relative mix (see `restaurantWeightRatios` in scoring). */
   function updW(k, v) {
     const nv = Math.round(Math.min(100, Math.max(0, +v)));
@@ -280,12 +262,16 @@ export default function App() {
     });
   }
 
-  function updCafeW(k,v){
-    const newW=rebalance(cafeWeights,k,+v);
-    setCafeWeights(newW);setCafeWErr("");
+  /** Drinks / sweets weights: same edit-then-Save pattern as restaurants (see PaletteView). */
+  function clampWeights(next) {
+    return {
+      taste: Math.round(Math.min(100, Math.max(0, Number(next.taste) || 0))),
+      bpb:   Math.round(Math.min(100, Math.max(0, Number(next.bpb)   || 0))),
+      wait:  Math.round(Math.min(100, Math.max(0, Number(next.wait)  || 0))),
+    };
   }
-
-  function resetCafeWeights(defaults){ setCafeWeights({...defaults});setCafeWErr(""); }
+  function replaceDrinkWeights(next){ setDrinkWeights(clampWeights(next)); }
+  function replaceSweetWeights(next){ setSweetWeights(clampWeights(next)); }
 
   function toggleQ(l) {
     const letterCovered = new Set(st.entries.map((e) => (e.letter || e.cuisine?.[0])?.toUpperCase()));
@@ -324,7 +310,7 @@ export default function App() {
   const DRINK_CATS = ["Coffee","Tea","Other"];
   const sortedDrinks = [...cafes].filter(e=>DRINK_CATS.includes(e.category)).sort((a,b)=>{
     let d=0;
-    if(cafeSortBy==="bite") d=(calcCafeOutOf10(b.taste,b.cost,b.portions,b.wait,b.useR,b.repeatability)??0)-(calcCafeOutOf10(a.taste,a.cost,a.portions,a.wait,a.useR,a.repeatability)??0);
+    if(cafeSortBy==="bite") d=(calcCafeOutOf10(b.taste,b.cost,b.portions,b.wait,b.useR,b.repeatability,drinkWeights)??0)-(calcCafeOutOf10(a.taste,a.cost,a.portions,a.wait,a.useR,a.repeatability,drinkWeights)??0);
     else if(cafeSortBy==="taste") d=b.taste-a.taste;
     else if(cafeSortBy==="bpb") d=(a.cost/a.portions)-(b.cost/b.portions);
     else if(cafeSortBy==="wait") d=a.wait-b.wait;
@@ -339,7 +325,7 @@ export default function App() {
 
   const sortedSweets = [...cafes].filter(e=>e.category==="Sweets").sort((a,b)=>{
     let d=0;
-    if(sweetsSortBy==="bite") d=(calcCafeOutOf10(b.taste,b.cost,b.portions,b.wait,b.useR,b.repeatability)??0)-(calcCafeOutOf10(a.taste,a.cost,a.portions,a.wait,a.useR,a.repeatability)??0);
+    if(sweetsSortBy==="bite") d=(calcCafeOutOf10(b.taste,b.cost,b.portions,b.wait,b.useR,b.repeatability,sweetWeights)??0)-(calcCafeOutOf10(a.taste,a.cost,a.portions,a.wait,a.useR,a.repeatability,sweetWeights)??0);
     else if(sweetsSortBy==="taste") d=b.taste-a.taste;
     else if(sweetsSortBy==="bpb") d=(a.cost/a.portions)-(b.cost/b.portions);
     else if(sweetsSortBy==="wait") d=a.wait-b.wait;
@@ -655,10 +641,10 @@ export default function App() {
                   if(cafeSortBy==="bpb") return -avg(e=>e.cost/e.portions);
                   if(cafeSortBy==="wait") return -avg(e=>e.wait);
                   if(cafeSortBy==="repeat") return avg(e=>e.repeatability)+(grp.length*0.001);
-                  return avg(e=>calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability)??0);
+                  return avg(e=>calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,drinkWeights)??0);
                 };
                 return Object.entries(groups).sort((a,b)=>cafeSortAsc?getSortVal(a[1])-getSortVal(b[1]):getSortVal(b[1])-getSortVal(a[1])).map(([name,grp])=>(
-                  <CafeGroupRow key={name} group={grp} cafeSortBy={cafeSortBy} user={user} onEdit={e=>{setEditC(e);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={async id=>{
+                  <CafeGroupRow key={name} group={grp} cafeSortBy={cafeSortBy} weights={drinkWeights} user={user} onEdit={e=>{setEditC(e);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={async id=>{
                         const row=cafes.find(x=>x.id===id);
                         if(!canMutateVisit(row,user))return;
                         try{await supabase.from("cafe_visits").delete().eq("id",id);}catch(err){console.error("cafe delete threw:",err);}
@@ -668,7 +654,7 @@ export default function App() {
               })()}
               {sortedDrinks.length>0&&(
                 <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginTop:16}}>
-                  {[[t.entries,String(sortedDrinks.length)],[t.avgBite,(sortedDrinks.reduce((a,e)=>a+(calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability)??0),0)/sortedDrinks.length).toFixed(2)]].map(([l,v])=>(
+                  {[[t.entries,String(sortedDrinks.length)],[t.avgBite,(sortedDrinks.reduce((a,e)=>a+(calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,drinkWeights)??0),0)/sortedDrinks.length).toFixed(2)]].map(([l,v])=>(
                     <div key={l} style={{background:"#1E1E1C",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:8,padding:"10px 12px"}}>
                       <div style={S.sm}>{l}</div>
                       <div style={{fontSize:20,fontWeight:500,color:"#F1EFE8"}}>{v}</div>
@@ -712,10 +698,10 @@ export default function App() {
                   if(sweetsSortBy==="bpb") return -avg(e=>e.cost/e.portions);
                   if(sweetsSortBy==="wait") return -avg(e=>e.wait);
                   if(sweetsSortBy==="repeat") return avg(e=>e.repeatability)+(grp.length*0.001);
-                  return avg(e=>calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability)??0);
+                  return avg(e=>calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,sweetWeights)??0);
                 };
                 return Object.entries(groups).sort((a,b)=>sweetsSortAsc?getSortValS(a[1])-getSortValS(b[1]):getSortValS(b[1])-getSortValS(a[1])).map(([name,grp])=>(
-                  <CafeGroupRow key={name} group={grp} cafeSortBy={sweetsSortBy} user={user} onEdit={e=>{setEditC(e);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={async id=>{
+                  <CafeGroupRow key={name} group={grp} cafeSortBy={sweetsSortBy} weights={sweetWeights} user={user} onEdit={e=>{setEditC(e);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={async id=>{
                         const row=cafes.find(x=>x.id===id);
                         if(!canMutateVisit(row,user))return;
                         try{await supabase.from("cafe_visits").delete().eq("id",id);}catch(err){console.error("cafe delete threw:",err);}
@@ -725,7 +711,7 @@ export default function App() {
               })()}
               {sortedSweets.length>0&&(
                 <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginTop:16}}>
-                  {[[t.entries,String(sortedSweets.length)],[t.avgBite,(sortedSweets.reduce((a,e)=>a+(calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability)??0),0)/sortedSweets.length).toFixed(2)]].map(([l,v])=>(
+                  {[[t.entries,String(sortedSweets.length)],[t.avgBite,(sortedSweets.reduce((a,e)=>a+(calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,sweetWeights)??0),0)/sortedSweets.length).toFixed(2)]].map(([l,v])=>(
                     <div key={l} style={{background:"#1E1E1C",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:8,padding:"10px 12px"}}>
                       <div style={S.sm}>{l}</div>
                       <div style={{fontSize:20,fontWeight:500,color:"#F1EFE8"}}>{v}</div>
@@ -768,18 +754,18 @@ export default function App() {
           )}
           {!communityLoading&&communitySub==="drinks"&&(()=>{
             const rows=[...communityCafes].filter(e=>DRINK_CATS.includes(e.category)).sort((a,b)=>
-              (calcCafeOutOf10(b.taste,b.cost,b.portions,b.wait,b.useR,b.repeatability)??0)-(calcCafeOutOf10(a.taste,a.cost,a.portions,a.wait,a.useR,a.repeatability)??0));
+              (calcCafeOutOf10(b.taste,b.cost,b.portions,b.wait,b.useR,b.repeatability,drinkWeights)??0)-(calcCafeOutOf10(a.taste,a.cost,a.portions,a.wait,a.useR,a.repeatability,drinkWeights)??0));
             if(!rows.length)return <p style={{color:"#888780",fontSize:14}}>{t.noDrinks}</p>;
             return rows.map(e=>(
-              <CafeGroupRow key={e.id} group={[e]} cafeSortBy="bite" user={user} showAuthor onEdit={()=>{}} onDelete={()=>{}}/>
+              <CafeGroupRow key={e.id} group={[e]} cafeSortBy="bite" weights={drinkWeights} user={user} showAuthor onEdit={()=>{}} onDelete={()=>{}}/>
             ));
           })()}
           {!communityLoading&&communitySub==="sweets"&&(()=>{
             const rows=[...communityCafes].filter(e=>e.category==="Sweets").sort((a,b)=>
-              (calcCafeOutOf10(b.taste,b.cost,b.portions,b.wait,b.useR,b.repeatability)??0)-(calcCafeOutOf10(a.taste,a.cost,a.portions,a.wait,a.useR,a.repeatability)??0));
+              (calcCafeOutOf10(b.taste,b.cost,b.portions,b.wait,b.useR,b.repeatability,sweetWeights)??0)-(calcCafeOutOf10(a.taste,a.cost,a.portions,a.wait,a.useR,a.repeatability,sweetWeights)??0));
             if(!rows.length)return <p style={{color:"#888780",fontSize:14}}>{t.noSweets}</p>;
             return rows.map(e=>(
-              <CafeGroupRow key={e.id} group={[e]} cafeSortBy="bite" user={user} showAuthor onEdit={()=>{}} onDelete={()=>{}}/>
+              <CafeGroupRow key={e.id} group={[e]} cafeSortBy="bite" weights={sweetWeights} user={user} showAuthor onEdit={()=>{}} onDelete={()=>{}}/>
             ));
           })()}
         </div>
@@ -911,11 +897,10 @@ export default function App() {
           cafes={cafes}
           weights={weights}
           replaceRestaurantWeights={replaceRestaurantWeights}
-          cafeWeights={cafeWeights}
-          updateCafeW={updCafeW}
-          resetCafeWeights={resetCafeWeights}
-          cafeTotalW={+(cafeWeights.taste+cafeWeights.bpb).toFixed(0)}
-          cafeWErr={cafeWErr}
+          drinkWeights={drinkWeights}
+          replaceDrinkWeights={replaceDrinkWeights}
+          sweetWeights={sweetWeights}
+          replaceSweetWeights={replaceSweetWeights}
           questL={questL}
           toggleQ={toggleQ}
           onOpenSuggest={()=>dispatch({type:"VIEW",view:"suggest"})}
