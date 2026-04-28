@@ -28,6 +28,11 @@ export function PlacePicker({
   /** "restaurant" (default) or "cafe" — drives Google primaryType filter and
    *  which `*_places` table the resolve function writes to. */
   kind = "restaurant",
+  /** Optional free-text city the form already collected (e.g. "Chicago",
+   *  "Tokyo"). Forwarded to Google Text Search so predictions are biased to
+   *  the user's stated location instead of the browser IP. Empty string is
+   *  treated as "no hint" and we fall back to Google's IP-based bias. */
+  cityHint = "",
 }) {
   const [show, setShow] = useState(false);
   const ref = useRef(null);
@@ -111,6 +116,7 @@ export function PlacePicker({
       const { predictions, capped, aborted } = await searchGooglePlaces(supabase, {
         kind,
         query: q,
+        cityHint,
         sessionToken: sessionTokenRef.current,
         signal: ac.signal,
       });
@@ -123,7 +129,7 @@ export function PlacePicker({
       ac.abort();
       clearTimeout(handle);
     };
-  }, [q, kind, exactMatch]);
+  }, [q, kind, exactMatch, cityHint]);
 
   /** Apply the catalog-dedup filter at render time so post-resolve catalog
    *  growth (via `onPlaceCreated` → parent `places` update) hides the just-

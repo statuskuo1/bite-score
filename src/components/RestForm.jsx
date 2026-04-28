@@ -32,6 +32,11 @@ export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,exi
         scoreLabel={scoreLabel(score,t)}
       />
       <SectionLabel>{t.theBasics}</SectionLabel>
+      <div style={{marginBottom:16}}>
+        <FieldLabel>{t.city||"City"} *</FieldLabel>
+        <input value={f.city||""} onChange={e=>inp("city",e.target.value)} placeholder="e.g. NYC, Tokyo, Lisbon" style={S.wb}/>
+        {sub&&!f.city&&<div style={S.err}>Required</div>}
+      </div>
       <div style={S.mb16}>
         <FieldLabel>{t.restaurantName}</FieldLabel>
         <PlacePicker
@@ -39,6 +44,7 @@ export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,exi
           value={f.name}
           selectedPlaceId={f.placeId||null}
           places={places||[]}
+          cityHint={f.city||""}
           onPlaceCreated={onPlaceCreated}
           onChange={({name, placeId, city, cuisine: pickedCuisine, cuisine2: pickedCuisine2, isFusion: pickedFusion})=>{
             if(!placeId){
@@ -88,11 +94,6 @@ export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,exi
         {f.letter&&<div style={{display:"flex",alignItems:"flex-end",paddingBottom:2}}><div style={{width:36,height:36,borderRadius:8,background:"#3C1F13",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>{FLAGS[f.cuisine]||f.letter}</div></div>}
       </div>
 
-      <div style={{marginBottom:16}}>
-        <FieldLabel>{t.city||"City"} *</FieldLabel>
-        <input value={f.city||""} onChange={e=>inp("city",e.target.value)} placeholder="e.g. NYC, Tokyo, Lisbon" style={S.wb}/>
-        {sub&&!f.city&&<div style={S.err}>Required</div>}
-      </div>
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}>
         <Toggle on={f.isFusion} onClick={()=>inp("isFusion",!f.isFusion)}/><span style={{fontSize:13,color:"#888780"}}>{t.fusionDish}</span>
       </div>

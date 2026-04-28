@@ -134,6 +134,11 @@ export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addT
       />
 
       <SectionLabel>{t.theBasics}</SectionLabel>
+      <div style={{marginBottom:16}}>
+        <FieldLabel>{t.city||"City"} *</FieldLabel>
+        <input value={f.city||""} onChange={e=>inp("city",e.target.value)} placeholder="e.g. NYC, Tokyo, Lisbon" style={S.wb}/>
+        {sub&&!f.city&&<div style={S.err}>Required</div>}
+      </div>
       <div style={S.mb16}>
         <FieldLabel>{t.cafeName}</FieldLabel>
         <PlacePicker
@@ -141,6 +146,7 @@ export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addT
           value={f.name}
           selectedPlaceId={f.placeId||null}
           places={places||[]}
+          cityHint={f.city||""}
           onPlaceCreated={onPlaceCreated}
           onChange={({name, placeId, city})=>{
             setF(p=>({
@@ -167,11 +173,6 @@ export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addT
           }}
         />
         {sub&&!f.name&&<div style={S.err}>Required</div>}
-      </div>
-      <div style={{marginBottom:16}}>
-        <FieldLabel>{t.city||"City"} *</FieldLabel>
-        <input value={f.city||""} onChange={e=>inp("city",e.target.value)} placeholder="e.g. NYC, Tokyo, Lisbon" style={S.wb}/>
-        {sub&&!f.city&&<div style={S.err}>Required</div>}
       </div>
 
       <div style={S.sec}><SectionLabel>{t.cafeItems}</SectionLabel></div>

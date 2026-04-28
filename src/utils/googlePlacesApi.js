@@ -147,7 +147,7 @@ const SEARCH_TIMEOUT_MS = 4000;
  *  Pass an `AbortSignal` so PlacePicker can drop in-flight fetches when the
  *  user keeps typing (otherwise we burn Google quota and risk per-IP 429s
  *  from rapid bursts of stale requests). */
-export async function searchGooglePlaces(client, { kind, query, sessionToken: _sessionToken, locationBias, signal }) {
+export async function searchGooglePlaces(client, { kind, query, cityHint, sessionToken: _sessionToken, locationBias, signal }) {
   const q = (query || "").trim();
   if (q.length < 2) return { predictions: [], capped: false, aborted: false };
   const key = googleApiKey();
@@ -156,8 +156,16 @@ export async function searchGooglePlaces(client, { kind, query, sessionToken: _s
     return { predictions: [], capped: false, aborted: false };
   }
   try {
+    /** Append the form's typed City (if any) directly to the textQuery so
+     *  Google biases predictions to that city instead of the caller's IP.
+     *  Free-text city tokens (e.g. "Chicago", "Tokyo") are resolved natively
+     *  by Text Search, so we don't need a geocoding round-trip. The
+     *  coordinate-based `locationBias` branch below is left intact for a
+     *  future upgrade that caches city → lat/lng. */
+    const cityToken = (cityHint || "").trim();
+    const textQuery = cityToken ? `${q} ${cityToken}` : q;
     const body = {
-      textQuery: q,
+      textQuery,
       includedType: includedTypeFor(kind),
       /** Bias toward food places (filters out random POIs sharing the name). */
       strictTypeFiltering: false,
