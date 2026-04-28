@@ -207,26 +207,18 @@ export function PaletteView({
               const avgBiteStr = avgBiteMean != null ? `${avgBiteMean.toFixed(2)}/10` : "—";
               const statRows = [
                 [t.topCuisine, (FLAGS[topC] || "") + " " + topC],
-                [t.topRated, topB ? topB.name : "—", "topRated"],
+                [t.topRated, topB ? topB.name : "—"],
                 [t.avgBite, avgBiteStr, "avgBite"],
                 [t.avgTaste, avgT + "/10"],
                 [t.avgSpend, "$" + avgC + " / meal"],
-                [t.regionsExplored, rCount + " / " + Object.keys(CUISINE_REGIONS).length, "regions"],
+                [t.regionsExplored, rCount + " / " + Object.keys(CUISINE_REGIONS).length],
               ];
               return statRows.map(([label, val, key]) => (
                 <StatCard
                   key={label}
                   label={label}
                   val={val}
-                  note={
-                    key === "topRated"
-                      ? t.tasteTopNote
-                      : key === "regions"
-                        ? t.regionsNote
-                        : key === "avgBite"
-                          ? t.avgBitePaletteNote
-                          : undefined
-                  }
+                  note={key === "avgBite" ? t.avgBitePaletteNote : undefined}
                 />
               ));
             })()}
