@@ -11,56 +11,39 @@ import {
 import { fetchRestaurantVisitsForUser } from "../../utils/visitPlacesApi.js";
 import { pairCompatibility } from "../../utils/compatibility.js";
 import { tasteColor } from "../../utils/scoring.js";
+import { Pill } from "./Pill.jsx";
+import { UserIdentity } from "./UserIdentity.jsx";
 
-function avatar(profile, size = 32) {
-  const fallback = (profile?.username || profile?.display_name || "?").charAt(0).toUpperCase();
-  if (profile?.avatar_url) {
-    return (
-      <img
-        src={profile.avatar_url}
-        alt=""
-        referrerPolicy="no-referrer"
-        style={{
-          width: size, height: size, borderRadius: "50%",
-          objectFit: "cover", flexShrink: 0,
-          border: "0.5px solid rgba(255,255,255,0.12)",
-        }}
-      />
-    );
+const ROW_STYLE = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  padding: "8px 10px",
+  marginBottom: 6,
+  background: "#1E1E1C",
+  border: "0.5px solid rgba(255,255,255,0.08)",
+  borderRadius: 10,
+};
+
+const SECTION_LABEL_STYLE = {
+  fontSize: 11,
+  color: "#888780",
+  textTransform: "uppercase",
+  letterSpacing: "0.06em",
+  marginBottom: 6,
+};
+
+/** Map sendFriendRequest result codes onto user-visible reasons. */
+function describeAddFriendError(code, t) {
+  switch (code) {
+    case "already_friends": return t.alreadyFriends || "Already friends";
+    case "already_pending": return t.requestSentLabel || "Request already sent";
+    case "self": return t.cannotAddSelf || "You can't add yourself";
+    case "invalid":
+    case "network":
+    default:
+      return t.addFriendFailed || "Couldn't send request — try again.";
   }
-  return (
-    <div style={{
-      width: size, height: size, borderRadius: "50%", flexShrink: 0,
-      background: "#3C1F13", color: "#F0997B",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      fontSize: Math.round(size * 0.42), fontWeight: 600,
-    }}>{fallback}</div>
-  );
-}
-
-function PillButton({ children, onClick, tone = "default", disabled }) {
-  const palette = tone === "primary"
-    ? { bg: "#F0997B", color: "#141413", border: "#F0997B" }
-    : tone === "danger"
-    ? { bg: "transparent", color: "#A32D2D", border: "rgba(163,45,45,0.5)" }
-    : tone === "muted"
-    ? { bg: "transparent", color: "#888780", border: "rgba(255,255,255,0.1)" }
-    : { bg: "#3C1F13", color: "#F0997B", border: "rgba(240,153,123,0.4)" };
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        padding: "5px 12px", borderRadius: 14, fontSize: 12,
-        background: palette.bg, color: palette.color,
-        border: "1px solid " + palette.border,
-        cursor: disabled ? "not-allowed" : "pointer",
-        opacity: disabled ? 0.5 : 1,
-        whiteSpace: "nowrap",
-      }}
-    >{children}</button>
-  );
 }
 
 /**
@@ -75,37 +58,37 @@ function FriendRowAction({ profile, relation, busy, onAdd, onAccept, onCancel, o
       return (
         <div style={{ display: "flex", gap: 6 }}>
           {onCompareWith && (
-            <PillButton onClick={() => onCompareWith(profile)} tone="default">
+            <Pill onClick={() => onCompareWith(profile)} tone="default">
               {t.compareSub}
-            </PillButton>
+            </Pill>
           )}
-          <PillButton onClick={() => onUnfriend(relation.row.id)} tone="danger">
+          <Pill onClick={() => onUnfriend(relation.row.id)} tone="danger">
             {t.unfriend}
-          </PillButton>
+          </Pill>
         </div>
       );
     case "outgoing":
       return (
-        <PillButton onClick={() => onCancel(relation.row.id)} tone="muted">
+        <Pill onClick={() => onCancel(relation.row.id)} tone="muted">
           {t.cancelRequest}
-        </PillButton>
+        </Pill>
       );
     case "incoming":
       return (
         <div style={{ display: "flex", gap: 6 }}>
-          <PillButton onClick={() => onAccept(relation.row.id)} tone="primary">
+          <Pill onClick={() => onAccept(relation.row.id)} tone="primary">
             {t.acceptRequest}
-          </PillButton>
-          <PillButton onClick={() => onDecline(relation.row.id)} tone="muted">
+          </Pill>
+          <Pill onClick={() => onDecline(relation.row.id)} tone="muted">
             {t.declineRequest}
-          </PillButton>
+          </Pill>
         </div>
       );
     default:
       return (
-        <PillButton onClick={() => onAdd(profile.id)} tone="primary">
+        <Pill onClick={() => onAdd(profile.id)} tone="primary">
           {t.addFriend}
-        </PillButton>
+        </Pill>
       );
   }
 }
@@ -151,15 +134,9 @@ function FriendCard({ friendship, myVisits, onCompareWith, onUnfriend }) {
       borderRadius: 12, padding: "10px 12px", marginBottom: 8,
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        {avatar(profile)}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 500, color: "#F1EFE8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {profile?.display_name || profile?.username || "—"}
-          </div>
-          <div style={{ fontSize: 11, color: "#888780" }}>@{profile?.username || "—"}</div>
-        </div>
+        <UserIdentity profile={profile} size={32} variant="header" />
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <PillButton onClick={() => onCompareWith(profile)} tone="default">{t.compareSub}</PillButton>
+          <Pill onClick={() => onCompareWith(profile)} tone="default">{t.compareSub}</Pill>
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
@@ -179,7 +156,7 @@ function FriendCard({ friendship, myVisits, onCompareWith, onUnfriend }) {
           ) : (
             <>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-                <span style={{ fontSize: 11, color: "#888780", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                <span style={SECTION_LABEL_STYLE}>
                   {t.compatibility}
                 </span>
                 {compat?.score != null ? (
@@ -191,7 +168,7 @@ function FriendCard({ friendship, myVisits, onCompareWith, onUnfriend }) {
                 )}
               </div>
 
-              <div style={{ marginBottom: 4, fontSize: 11, color: "#888780", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+              <div style={{ ...SECTION_LABEL_STYLE, marginBottom: 4 }}>
                 {t.topPicks}
               </div>
               {!topPicks.length && (
@@ -217,9 +194,9 @@ function FriendCard({ friendship, myVisits, onCompareWith, onUnfriend }) {
           )}
 
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
-            <PillButton onClick={() => onUnfriend(friendship.id)} tone="danger">
+            <Pill onClick={() => onUnfriend(friendship.id)} tone="danger">
               {t.unfriend}
-            </PillButton>
+            </Pill>
           </div>
         </div>
       )}
@@ -237,6 +214,8 @@ export function FriendsTab({ user, onCompareWith }) {
   const [outgoing, setOutgoing] = useState([]);
   const [busyById, setBusyById] = useState({});
   const [myVisits, setMyVisits] = useState([]);
+  /** `addError`: { targetId, message } | null. Inline so failures don't pop a modal. */
+  const [addError, setAddError] = useState(null);
   const debounceRef = useRef(null);
 
   const reload = useCallback(async () => {
@@ -286,12 +265,26 @@ export function FriendsTab({ user, onCompareWith }) {
     setBusyById((m) => ({ ...m, [id]: on }));
   }
 
+  /**
+   * Send a request, then reload. We surface failures inline so users see *why*
+   * the button "did nothing" instead of guessing — the most common cases are
+   * already-pending and network/RLS rejection.
+   */
   async function handleAdd(targetId) {
     if (!user?.id || !targetId) return;
+    setAddError(null);
     setBusy(targetId, true);
     try {
-      await sendFriendRequest(supabase, user.id, targetId);
+      const res = await sendFriendRequest(supabase, user.id, targetId);
+      if (!res?.ok) {
+        setAddError({ targetId, message: describeAddFriendError(res?.code, t) });
+      }
+      // Reload either way: `already_pending` / `already_friends` should still
+      // refresh the relation map so the row's button switches to the right state.
       await reload();
+    } catch (err) {
+      console.warn("[BITE] handleAdd threw:", err);
+      setAddError({ targetId, message: describeAddFriendError("network", t) });
     } finally {
       setBusy(targetId, false);
     }
@@ -341,31 +334,31 @@ export function FriendsTab({ user, onCompareWith }) {
           {results.map((p) => {
             const rel = relationByUserId.get(p.id);
             const busy = !!busyById[p.id] || !!busyById[rel?.row?.id];
+            const errForRow = addError?.targetId === p.id ? addError.message : null;
             return (
-              <div key={p.id} style={{
-                display: "flex", alignItems: "center", gap: 10,
-                padding: "8px 10px", marginBottom: 6,
-                background: "#1E1E1C", border: "0.5px solid rgba(255,255,255,0.08)",
-                borderRadius: 10,
-              }}>
-                {avatar(p, 28)}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, color: "#F1EFE8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {p.display_name || p.username}
-                  </div>
-                  <div style={{ fontSize: 11, color: "#888780" }}>@{p.username}</div>
+              <div key={p.id}>
+                <div style={ROW_STYLE}>
+                  <UserIdentity profile={p} size={28} />
+                  <FriendRowAction
+                    profile={p}
+                    relation={rel}
+                    busy={busy}
+                    onAdd={handleAdd}
+                    onAccept={handleAccept}
+                    onCancel={handleRemove}
+                    onDecline={handleRemove}
+                    onUnfriend={handleRemove}
+                    onCompareWith={onCompareWith}
+                  />
                 </div>
-                <FriendRowAction
-                  profile={p}
-                  relation={rel}
-                  busy={busy}
-                  onAdd={handleAdd}
-                  onAccept={handleAccept}
-                  onCancel={handleRemove}
-                  onDecline={handleRemove}
-                  onUnfriend={handleRemove}
-                  onCompareWith={onCompareWith}
-                />
+                {errForRow && (
+                  <p style={{
+                    fontSize: 11, color: "#A32D2D",
+                    margin: "-2px 0 8px 4px",
+                  }}>
+                    {errForRow}
+                  </p>
+                )}
               </div>
             );
           })}
@@ -374,23 +367,10 @@ export function FriendsTab({ user, onCompareWith }) {
 
       {incoming.length > 0 && (
         <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 11, color: "#888780", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
-            {t.incomingRequests}
-          </div>
+          <div style={SECTION_LABEL_STYLE}>{t.incomingRequests}</div>
           {incoming.map((r) => (
-            <div key={r.id} style={{
-              display: "flex", alignItems: "center", gap: 10,
-              padding: "8px 10px", marginBottom: 6,
-              background: "#1E1E1C", border: "0.5px solid rgba(255,255,255,0.08)",
-              borderRadius: 10,
-            }}>
-              {avatar(r.otherProfile, 28)}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, color: "#F1EFE8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {r.otherProfile?.display_name || r.otherProfile?.username || "—"}
-                </div>
-                <div style={{ fontSize: 11, color: "#888780" }}>@{r.otherProfile?.username || "—"}</div>
-              </div>
+            <div key={r.id} style={ROW_STYLE}>
+              <UserIdentity profile={r.otherProfile} size={28} />
               <FriendRowAction
                 profile={r.otherProfile}
                 relation={{ kind: "incoming", row: r }}
@@ -408,34 +388,19 @@ export function FriendsTab({ user, onCompareWith }) {
 
       {outgoing.length > 0 && (
         <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 11, color: "#888780", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
-            {t.outgoingRequests}
-          </div>
+          <div style={SECTION_LABEL_STYLE}>{t.outgoingRequests}</div>
           {outgoing.map((r) => (
-            <div key={r.id} style={{
-              display: "flex", alignItems: "center", gap: 10,
-              padding: "8px 10px", marginBottom: 6,
-              background: "#1E1E1C", border: "0.5px solid rgba(255,255,255,0.08)",
-              borderRadius: 10,
-            }}>
-              {avatar(r.otherProfile, 28)}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, color: "#F1EFE8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {r.otherProfile?.display_name || r.otherProfile?.username || "—"}
-                </div>
-                <div style={{ fontSize: 11, color: "#888780" }}>@{r.otherProfile?.username || "—"}</div>
-              </div>
-              <PillButton onClick={() => handleRemove(r.id)} tone="muted" disabled={!!busyById[r.id]}>
+            <div key={r.id} style={ROW_STYLE}>
+              <UserIdentity profile={r.otherProfile} size={28} />
+              <Pill onClick={() => handleRemove(r.id)} tone="muted" disabled={!!busyById[r.id]}>
                 {t.cancelRequest}
-              </PillButton>
+              </Pill>
             </div>
           ))}
         </div>
       )}
 
-      <div style={{ fontSize: 11, color: "#888780", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
-        {t.friendsList}
-      </div>
+      <div style={SECTION_LABEL_STYLE}>{t.friendsList}</div>
       {!friends.length && (
         <p style={{ fontSize: 12, color: "#888780", margin: 0 }}>{t.noFriendsYet}</p>
       )}

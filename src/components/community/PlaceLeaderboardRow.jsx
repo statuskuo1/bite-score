@@ -3,8 +3,9 @@ import { FLAGS } from "../../constants/cuisineConstants.js";
 import { tasteColor, tasteLabel } from "../../utils/scoring.js";
 
 /**
- * One aggregated place row for Global tab. Renders avg taste (community)
- * front-and-center; visit count + top reviewers as secondary detail.
+ * One aggregated place row for Global tab (restaurants / drinks / sweets).
+ * Aggregates across ALL users — we deliberately don't show individual @usernames
+ * here so the leaderboard reads as community-level rather than per-user.
  */
 export function PlaceLeaderboardRow({ place }) {
   const { t } = useLang();
@@ -40,19 +41,6 @@ export function PlaceLeaderboardRow({ place }) {
         <div style={{ fontSize: 11, color: "#888780", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {subtitle}
         </div>
-        {place.topReviewers?.length > 0 && (
-          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 6 }}>
-            {place.topReviewers.slice(0, 3).map((r, i) => (
-              <span key={r.userId || i} style={{
-                fontSize: 10, padding: "1px 6px", borderRadius: 8,
-                background: "#252523", color: "#888780",
-                border: "0.5px solid rgba(255,255,255,0.08)",
-              }}>
-                @{r.username || (r.displayName || "user")}
-              </span>
-            ))}
-          </div>
-        )}
       </div>
 
       <div style={{ textAlign: "right", flexShrink: 0 }}>

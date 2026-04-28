@@ -19,32 +19,8 @@ import {
 import { rankGroupCuisines, getRestaurantCuisines } from "../../utils/compatibility.js";
 import { tasteColor } from "../../utils/scoring.js";
 import { FLAGS } from "../../constants/cuisineConstants.js";
-
-function avatar(profile, size = 28) {
-  const fallback = (profile?.username || profile?.display_name || "?").charAt(0).toUpperCase();
-  if (profile?.avatar_url) {
-    return (
-      <img
-        src={profile.avatar_url}
-        alt=""
-        referrerPolicy="no-referrer"
-        style={{
-          width: size, height: size, borderRadius: "50%",
-          objectFit: "cover", flexShrink: 0,
-          border: "0.5px solid rgba(255,255,255,0.12)",
-        }}
-      />
-    );
-  }
-  return (
-    <div style={{
-      width: size, height: size, borderRadius: "50%", flexShrink: 0,
-      background: "#3C1F13", color: "#F0997B",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      fontSize: Math.round(size * 0.42), fontWeight: 600,
-    }}>{fallback}</div>
-  );
-}
+import { Pill } from "./Pill.jsx";
+import { UserIdentity } from "./UserIdentity.jsx";
 
 /** Detail view for one group: members, invite picker, ranked cuisines + suggested places. */
 function GroupDetail({ user, groupId, onBack, onDeleted }) {
@@ -212,16 +188,7 @@ function GroupDetail({ user, groupId, onBack, onDeleted }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
           <div style={{ fontSize: 16, fontWeight: 600, color: "#F1EFE8" }}>{data.group.name}</div>
           {isOwner && (
-            <button
-              type="button"
-              onClick={handleDelete}
-              disabled={busy}
-              style={{
-                fontSize: 11, color: "#A32D2D", background: "transparent",
-                border: "1px solid rgba(163,45,45,0.5)", padding: "3px 10px",
-                borderRadius: 12, cursor: busy ? "wait" : "pointer",
-              }}
-            >{t.deleteGroup}</button>
+            <Pill onClick={handleDelete} tone="danger" disabled={busy}>{t.deleteGroup}</Pill>
           )}
         </div>
 
@@ -246,33 +213,22 @@ function GroupDetail({ user, groupId, onBack, onDeleted }) {
           {data.members.map((m) => {
             const isMe = m.user_id === user.id;
             const isOwnerMember = m.user_id === data.group.owner_id;
+            const suffix = isMe
+              ? <span style={{ color: "#888780", marginLeft: 6 }}>· {t.youLabel}</span>
+              : (isOwnerMember
+                  ? <span style={{ color: "#888780", marginLeft: 6 }}>· {t.ownerLabel}</span>
+                  : null);
             return (
               <div key={m.user_id} style={{
                 display: "flex", alignItems: "center", gap: 8,
                 padding: "4px 0",
               }}>
-                {avatar(m.profile, 26)}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, color: "#F1EFE8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {m.profile?.display_name || m.profile?.username || "—"}
-                    {isMe && <span style={{ color: "#888780", marginLeft: 6 }}>· {t.youLabel}</span>}
-                    {isOwnerMember && !isMe && <span style={{ color: "#888780", marginLeft: 6 }}>· {t.ownerLabel}</span>}
-                  </div>
-                  <div style={{ fontSize: 11, color: "#888780" }}>@{m.profile?.username || "—"}</div>
-                </div>
+                <UserIdentity profile={m.profile} size={26} nameSuffix={suffix} />
                 {isMe && !isOwnerMember && (
-                  <button type="button" onClick={handleLeave} disabled={busy} style={{
-                    fontSize: 11, color: "#A32D2D", background: "transparent",
-                    border: "1px solid rgba(163,45,45,0.5)", padding: "3px 10px",
-                    borderRadius: 12, cursor: busy ? "wait" : "pointer",
-                  }}>{t.leaveGroup}</button>
+                  <Pill onClick={handleLeave} tone="danger" disabled={busy}>{t.leaveGroup}</Pill>
                 )}
                 {isOwner && !isMe && (
-                  <button type="button" onClick={() => handleRemove(m.user_id)} disabled={busy} style={{
-                    fontSize: 11, color: "#888780", background: "transparent",
-                    border: "1px solid rgba(255,255,255,0.1)", padding: "3px 10px",
-                    borderRadius: 12, cursor: busy ? "wait" : "pointer",
-                  }}>{t.removeMember}</button>
+                  <Pill onClick={() => handleRemove(m.user_id)} tone="muted" disabled={busy}>{t.removeMember}</Pill>
                 )}
               </div>
             );
@@ -291,24 +247,12 @@ function GroupDetail({ user, groupId, onBack, onDeleted }) {
               <div key={f.id} style={{
                 display: "flex", alignItems: "center", gap: 8, padding: "4px 0",
               }}>
-                {avatar(f.otherProfile, 24)}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, color: "#F1EFE8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {f.otherProfile?.display_name || f.otherProfile?.username || "—"}
-                  </div>
-                  <div style={{ fontSize: 10, color: "#888780" }}>@{f.otherProfile?.username || "—"}</div>
-                </div>
-                <button
-                  type="button"
+                <UserIdentity profile={f.otherProfile} size={24} />
+                <Pill
                   onClick={() => handleInvite(f.otherUserId)}
+                  tone="primary"
                   disabled={busy || data.members.length >= SOFT_CAP}
-                  style={{
-                    fontSize: 11, padding: "3px 10px", borderRadius: 12,
-                    background: "#F0997B", color: "#141413", border: "none",
-                    cursor: busy ? "wait" : "pointer",
-                    opacity: data.members.length >= SOFT_CAP ? 0.5 : 1,
-                  }}
-                >{t.addFriend}</button>
+                >{t.addFriend}</Pill>
               </div>
             ))}
           </div>

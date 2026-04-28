@@ -6,32 +6,7 @@ import { fetchRestaurantVisitsForUser } from "../../utils/visitPlacesApi.js";
 import { pairCompatibility } from "../../utils/compatibility.js";
 import { tasteColor } from "../../utils/scoring.js";
 import { FLAGS } from "../../constants/cuisineConstants.js";
-
-function avatar(profile, size = 36) {
-  const fallback = (profile?.username || profile?.display_name || "?").charAt(0).toUpperCase();
-  if (profile?.avatar_url) {
-    return (
-      <img
-        src={profile.avatar_url}
-        alt=""
-        referrerPolicy="no-referrer"
-        style={{
-          width: size, height: size, borderRadius: "50%",
-          objectFit: "cover", flexShrink: 0,
-          border: "0.5px solid rgba(255,255,255,0.12)",
-        }}
-      />
-    );
-  }
-  return (
-    <div style={{
-      width: size, height: size, borderRadius: "50%", flexShrink: 0,
-      background: "#3C1F13", color: "#F0997B",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      fontSize: Math.round(size * 0.42), fontWeight: 600,
-    }}>{fallback}</div>
-  );
-}
+import { UserIdentity } from "./UserIdentity.jsx";
 
 function CuisineRow({ cuisine, mine, theirs, delta }) {
   const myCol = tasteColor(mine);
@@ -139,13 +114,7 @@ export function CompareTab({ user, initialTarget, onClearTarget }) {
               borderRadius: 12, cursor: "pointer", textAlign: "left",
             }}
           >
-            {avatar(f.otherProfile, 32)}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, color: "#F1EFE8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {f.otherProfile?.display_name || f.otherProfile?.username || "—"}
-              </div>
-              <div style={{ fontSize: 11, color: "#888780" }}>@{f.otherProfile?.username || "—"}</div>
-            </div>
+            <UserIdentity profile={f.otherProfile} size={32} />
             <span style={{ fontSize: 18, color: "#888780" }}>›</span>
           </button>
         ))}
@@ -172,13 +141,7 @@ export function CompareTab({ user, initialTarget, onClearTarget }) {
         background: "#1E1E1C", border: "0.5px solid rgba(255,255,255,0.1)",
         borderRadius: 12, padding: "12px 14px", marginBottom: 12,
       }}>
-        {avatar(target, 40)}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 500, color: "#F1EFE8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {target.display_name || target.username}
-          </div>
-          <div style={{ fontSize: 11, color: "#888780" }}>@{target.username}</div>
-        </div>
+        <UserIdentity profile={target} size={40} variant="header" />
         <div style={{ textAlign: "right" }}>
           <div style={{ fontSize: 11, color: "#888780", textTransform: "uppercase", letterSpacing: "0.06em" }}>
             {t.compatibility}
