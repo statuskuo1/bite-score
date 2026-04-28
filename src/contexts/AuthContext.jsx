@@ -65,6 +65,10 @@ export function AuthProvider({ children }) {
         (profile?.display_name && String(profile.display_name).trim()) ||
         session?.user?.email?.split("@")[0] ||
         "",
+      username:
+        (profile?.username && String(profile.username).trim()) ||
+        session?.user?.email?.split("@")[0] ||
+        "",
       recoveryActive,
       clearRecovery,
     }),

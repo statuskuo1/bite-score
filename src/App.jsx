@@ -58,7 +58,7 @@ function omitPlayWelcomeAside(body) {
 }
 
 export default function App() {
-  const { user, authReady, displayName } = useAuth();
+  const { user, authReady, username } = useAuth();
   const [st, dispatch] = useReducer(reducer, { entries: [], view: "log" });
   const [cafes, setCafes] = useState([]);
   const [dbLoaded, setDbLoaded] = useState(false);
@@ -393,7 +393,7 @@ export default function App() {
           </div>
         </div>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          <button type="button" onClick={()=>setShowAuthModal(true)} style={{fontSize:11,fontWeight:500,padding:"5px 12px",borderRadius:20,border:"1.5px solid rgba(255,255,255,0.2)",background:user?"#3C1F13":"transparent",color:user?"#F0997B":"#888780",cursor:"pointer",letterSpacing:"0.03em",flexShrink:0,maxWidth:120,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={user?.email||t.signIn}>{user?(displayName||user.email?.split("@")[0]||t.account):t.signIn}</button>
+          <button type="button" onClick={()=>setShowAuthModal(true)} style={{fontSize:11,fontWeight:500,padding:"5px 12px",borderRadius:20,border:"1.5px solid rgba(255,255,255,0.2)",background:user?"#3C1F13":"transparent",color:user?"#F0997B":"#888780",cursor:"pointer",letterSpacing:"0.03em",flexShrink:0,maxWidth:120,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={user?.email||t.signIn}>{user?(username||user.email?.split("@")[0]||t.account):t.signIn}</button>
         </div>
       </div>
 

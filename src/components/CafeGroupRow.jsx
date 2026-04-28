@@ -66,7 +66,10 @@ export function CafeGroupRow({ group, cafeSortBy, onEdit, onDelete, user, weight
         title={group[0].name}
         badges={badges}
         subtitle={group[0].category}
-        authorLine={showAuthor && group[0].authorDisplayName ? `${t.loggedBy} ${group[0].authorDisplayName}` : null}
+        authorLine={(() => {
+          const who = group[0].authorUsername || group[0].authorDisplayName;
+          return showAuthor && who ? `${t.loggedBy} ${who}` : null;
+        })()}
         score={display}
         expandedRows={[
           [t.taste, avgTaste.toFixed(1)],

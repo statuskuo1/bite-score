@@ -24,7 +24,7 @@ function formatPasswordSignUpError(e, t) {
 
 export function AuthModal({ open, onClose }) {
   const { t } = useLang();
-  const { user, session, displayName } = useAuth();
+  const { user, session, username } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -203,7 +203,7 @@ export function AuthModal({ open, onClose }) {
           <div>
             <p style={{ fontSize: 13, color: "#888780", margin: "0 0 16px", lineHeight: 1.5 }}>
               {t.authSignedInAs}{" "}
-              <span style={{ color: "#F0997B", fontWeight: 600 }}>{displayName || user.email?.split("@")[0] || user.id}</span>
+              <span style={{ color: "#F0997B", fontWeight: 600 }}>{username || user.email?.split("@")[0] || user.id}</span>
               {user.email && (
                 <span style={{ display: "block", fontSize: 11, color: "#888780", marginTop: 8, wordBreak: "break-all" }}>{user.email}</span>
               )}

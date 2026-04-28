@@ -56,7 +56,10 @@ export function RestRow({ e, display, onEdit, onDelete, user, visits = 1, group,
         title={e.name}
         badges={badges}
         subtitle={subtitle}
-        authorLine={showAuthor && e.authorDisplayName ? `${t.loggedBy} ${e.authorDisplayName}` : null}
+        authorLine={(() => {
+          const who = e.authorUsername || e.authorDisplayName;
+          return showAuthor && who ? `${t.loggedBy} ${who}` : null;
+        })()}
         score={display}
         expandedRows={[
           [t.taste, String(e.taste)],
