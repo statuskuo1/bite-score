@@ -66,8 +66,12 @@ export default function App() {
   const [showWelcome, setShowWelcome] = useState(true);
   const [faqOverrides, setFaqOverrides] = useState({});
   const [welcomeOverride, setWelcomeOverride] = useState({});
-  const [lang, setLang] = useState(()=>localStorage.getItem("bite_lang")||"en");
-  const t = T[lang]||T.en;
+  /** Mandarin localization is temporarily stashed while EN gets polish.
+   *  `T.zh` and components' `lang === "zh"` branches are intentionally preserved
+   *  so reviving = restore lang state + UI toggles. See
+   *  docs/decisions/2026-04-28-stash-mandarin-localization.md. */
+  const lang = "en";
+  const t = T.en;
   const needsAuth = authReady && !user;
 
   useEffect(() => {
@@ -82,7 +86,6 @@ export default function App() {
   const welcomeUseDbCopy = import.meta.env.VITE_WELCOME_USE_SUPABASE === 'true';
   const welcomeTitleDisplay = (welcomeUseDbCopy && welcomeOverride[lang+"_title"]) || t.welcome1;
   const welcomeBodyDisplay = omitPlayWelcomeAside((welcomeUseDbCopy && welcomeOverride[lang+"_body"]) || t.welcome2);
-  function toggleLang(){const nl=lang==="en"?"zh":"en";setLang(nl);localStorage.setItem("bite_lang",nl);}
 
   function dismissWelcome() {
     setShowWelcome(false);
@@ -369,7 +372,7 @@ export default function App() {
   }
 
   return (
-    <LangContext.Provider value={{t,lang,toggleLang}}>
+    <LangContext.Provider value={{t,lang}}>
     <div style={{fontFamily:"var(--font-sans)",maxWidth:640,margin:"0 auto",padding:user?"1.25rem 1rem max(8rem, env(safe-area-inset-bottom)) 1rem":"1.25rem 1rem 2rem 1rem",background:"#141413",minHeight:"100vh",color:"#F1EFE8",overflowX:"hidden"}}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&display=swap');
@@ -386,18 +389,17 @@ export default function App() {
             <MouthLogo />
           </div>
           <div>
-            <h1 style={{fontSize:28,fontWeight:600,color:"#F0997B",margin:0,fontFamily:"'Fredoka',sans-serif"}}>{lang==="zh"?"BITE Score 吃貨榜":"BITE Score"}</h1>
+            <h1 style={{fontSize:28,fontWeight:600,color:"#F0997B",margin:0,fontFamily:"'Fredoka',sans-serif"}}>BITE Score</h1>
           </div>
         </div>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
           <button type="button" onClick={()=>setShowAuthModal(true)} style={{fontSize:11,fontWeight:500,padding:"5px 12px",borderRadius:20,border:"1.5px solid rgba(255,255,255,0.2)",background:user?"#3C1F13":"transparent",color:user?"#F0997B":"#888780",cursor:"pointer",letterSpacing:"0.03em",flexShrink:0,maxWidth:120,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={user?.email||t.signIn}>{user?(displayName||user.email?.split("@")[0]||t.account):t.signIn}</button>
-          <button onClick={toggleLang} style={{fontSize:11,fontWeight:500,padding:"5px 12px",borderRadius:20,border:"1.5px solid rgba(255,255,255,0.2)",background:"transparent",color:"#888780",cursor:"pointer",letterSpacing:"0.03em",flexShrink:0}}>{lang==="en"?"繁中":"EN"}</button>
         </div>
       </div>
 
       {!authReady && (
         <p style={{ fontSize: 14, color: "#888780", margin: "8px 0 0" }}>
-          {lang === "zh" ? "連線中…" : "Connecting…"}
+          Connecting…
         </p>
       )}
 
@@ -429,13 +431,6 @@ export default function App() {
         <div onClick={()=>dismissWelcome()} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:"1.5rem"}}>
           <div onClick={e=>e.stopPropagation()} style={{background:"#1E1E1C",borderRadius:16,padding:"1.5rem",maxWidth:360,width:"100%",border:"0.5px solid rgba(255,255,255,0.15)"}}>
             <div style={{fontSize:24,marginBottom:12,textAlign:"center",cursor:"default",userSelect:"none"}}>👋</div>
-            <div style={{display:"flex",justifyContent:"center",gap:8,marginBottom:16}}>
-              {["en","zh"].map(l=>(
-                <button key={l} onClick={()=>{setLang(l);localStorage.setItem("bite_lang",l);}} style={{padding:"5px 16px",borderRadius:20,border:"1.5px solid "+(lang===l?"#F0997B":"rgba(255,255,255,0.2)"),background:lang===l?"#3C1F13":"transparent",color:lang===l?"#F0997B":"#888780",fontSize:12,fontWeight:lang===l?500:400,cursor:"pointer"}}>
-                  {l==="en"?"English":"繁體中文"}
-                </button>
-              ))}
-            </div>
             <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:16}}>
               <p style={{fontSize:16,fontWeight:600,color:"#F1EFE8",margin:0,lineHeight:1.5,textAlign:"center"}}>{welcomeTitleDisplay}</p>
               <InfoBubble content={welcomeBodyDisplay.split("\n\n")[0]||""}/>
