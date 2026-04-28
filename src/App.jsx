@@ -550,11 +550,11 @@ export default function App() {
                   const sortVal=sortBy==="taste"?avgTaste:sortBy==="bpb"?-avgBpb:sortBy==="wait"?-avgWait:sortBy==="repeat"?avgRepeat+(visits*0.001):avgBite;
                   return {grp, e, sortVal};
                 }).sort((a,b)=>sortAsc?a.sortVal-b.sortVal:b.sortVal-a.sortVal);
-                return groupArr.map(({grp,e},i)=>{
+                return groupArr.map(({grp,e})=>{
                   const visits=grp.length;
                   const display=getDisplay(e);
                   return (
-                    <RestRow key={e.id} e={e} i={i} display={display} user={user} visits={visits} group={grp} weights={weights}
+                    <RestRow key={e.id} e={e} display={display} user={user} visits={visits} group={grp} weights={weights}
                       onEdit={v=>{setEditR(v||e);window.scrollTo({top:0,behavior:"smooth"});}}
                       onDelete={async id=>{
                         const did=id||e.id;
@@ -742,11 +742,11 @@ export default function App() {
           {!communityLoading&&communitySub==="restaurants"&&(
             <>
               {!communityRest.length&&<p style={{color:"#888780",fontSize:14}}>{t.noEntriesYet}</p>}
-              {communityRest.map((e,i)=>{
+              {communityRest.map((e)=>{
                 const sc=calcBiteOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights);
                 const display={val:sc!=null?sc.toFixed(2):"—",label:scoreLabel(sc,t),color:scoreColor(sc)};
                 return (
-                  <RestRow key={e.id} e={e} i={i} display={display} user={user} visits={1} group={[e]} weights={weights} showAuthor
+                  <RestRow key={e.id} e={e} display={display} user={user} visits={1} group={[e]} weights={weights} showAuthor
                     onEdit={()=>{}} onDelete={()=>{}}/>
                 );
               })}
@@ -794,7 +794,7 @@ export default function App() {
         dispatch({ type: "UPD", e: { ...e, placeId: resolvedPlaceId, ownerId: e.ownerId ?? user?.id ?? null } });
         setEditR(null);
       }} onCancel={()=>{setEditR(null);window.scrollTo({top:0,behavior:"smooth"});}}/>}
-      {st.view==="log"&&editC&&<CafeForm initial={editC} onSave={async entries=>{
+      {st.view==="log"&&editC&&<CafeForm initial={editC} weights={editC?.category==="Sweets"?sweetWeights:drinkWeights} onSave={async entries=>{
         const e=Array.isArray(entries)?entries[0]:entries;
         let resolvedPlaceId = e.placeId;
         if(canMutateVisit(e,user)) {
@@ -849,7 +849,7 @@ export default function App() {
                 onCancel={()=>dispatch({type:"VIEW",view:"log"})}
                 addType={addType} setAddType={setAddType}
               />
-            :<CafeForm initial={INIT_CAFE}
+            :<CafeForm initial={INIT_CAFE} weights={drinkWeights}
                 onSave={async entries=>{
                   const arr=Array.isArray(entries)?entries:[entries];
                   if (!user) {

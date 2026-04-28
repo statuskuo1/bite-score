@@ -2,15 +2,15 @@ import { useState } from "react";
 import { useLang } from "../contexts/LangContext.jsx";
 import { calcCafeOutOf10, cafeScoreColor, cafeScoreLabel } from "../utils/scoring.js";
 import { S } from "../styles/sharedStyles.js";
-import { Pill } from "./Pill.jsx";
 import { CafeNameInput } from "./CafeNameInput.jsx";
 import { CafeItemBlock } from "./CafeItemBlock.jsx";
 import { Toggle } from "./Toggle.jsx";
 import { RepeatPicker } from "./RepeatPicker.jsx";
 import { SectionLabel } from "./SectionLabel.jsx";
 import { FieldLabel } from "./FieldLabel.jsx";
+import { FormScoreHeader } from "./FormScoreHeader.jsx";
 
-export function CafeForm({initial,onSave,onCancel,addType,setAddType,existingNames,existingCafes,pastOrders}) {
+export function CafeForm({initial,onSave,onCancel,weights,addType,setAddType,existingNames,existingCafes,pastOrders}) {
   const {t} = useLang();
   const BEANS = ["Africa","Central America","South America","Asia-Pacific","Blend","Unknown"];
   const blankItem = () => ({category:"Coffee",order:"",taste:5,cost:"",portions:1,milkLevel:"Light",beanRegion:""});
@@ -39,25 +39,19 @@ export function CafeForm({initial,onSave,onCancel,addType,setAddType,existingNam
     onSave(entries);
   }
 
+  const previewScore = items[0]
+    ? calcCafeOutOf10(+items[0].taste, +items[0].cost, +items[0].portions, 0, false, 0, weights)
+    : null;
+
   return (
     <div style={{...S.card,marginBottom:12}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-        {addType!==undefined?(
-          <div style={{display:"flex",gap:0,background:"#141413",borderRadius:20,padding:3}}>
-            <Pill active={addType==="restaurant"} onClick={()=>setAddType("restaurant")}>{t.restaurantTab}</Pill>
-            <Pill active={addType==="cafe"} onClick={()=>setAddType("cafe")}>{t.cafeTab}</Pill>
-          </div>
-        ):<div/>}
-        {(()=>{
-          const sc=items[0]?calcCafeOutOf10(+items[0].taste,+items[0].cost,+items[0].portions,0,false,0):null;
-          return(
-            <div style={{textAlign:"right"}}>
-              <div style={{fontSize:22,fontWeight:600,color:cafeScoreColor(sc),lineHeight:1}}>{sc!=null?sc.toFixed(2):"—"}</div>
-              <div style={{fontSize:11,color:cafeScoreColor(sc)}}>{cafeScoreLabel(sc,t)}</div>
-            </div>
-          );
-        })()}
-      </div>
+      <FormScoreHeader
+        addType={addType}
+        setAddType={setAddType}
+        score={previewScore}
+        scoreColor={cafeScoreColor(previewScore)}
+        scoreLabel={cafeScoreLabel(previewScore,t)}
+      />
 
       {/* ── The basics ── */}
       <SectionLabel>{t.theBasics}</SectionLabel>

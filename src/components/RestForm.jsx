@@ -3,13 +3,13 @@ import { useLang } from "../contexts/LangContext.jsx";
 import { FLAGS } from "../constants/cuisineConstants.js";
 import { calcBiteOutOf10, scoreColor, scoreLabel, tasteLabel } from "../utils/scoring.js";
 import { S } from "../styles/sharedStyles.js";
-import { Pill } from "./Pill.jsx";
 import { CafeNameInput } from "./CafeNameInput.jsx";
 import { CuisineInput } from "./CuisineInput.jsx";
 import { Toggle } from "./Toggle.jsx";
 import { RepeatPicker } from "./RepeatPicker.jsx";
 import { SectionLabel } from "./SectionLabel.jsx";
 import { FieldLabel } from "./FieldLabel.jsx";
+import { FormScoreHeader } from "./FormScoreHeader.jsx";
 
 export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,existingNames,existingEntries}) {
   const {t} = useLang();
@@ -24,18 +24,13 @@ export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,exi
   }
   return (
     <div style={{...S.card,marginBottom:12}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-        {addType!==undefined?(
-          <div style={{display:"flex",gap:0,background:"#141413",borderRadius:20,padding:3}}>
-            <Pill active={addType==="restaurant"} onClick={()=>setAddType("restaurant")}>{t.restaurantTab}</Pill>
-            <Pill active={addType==="cafe"} onClick={()=>setAddType("cafe")}>{t.cafeTab}</Pill>
-          </div>
-        ):<div/>}
-        <div style={{textAlign:"right"}}>
-          <div style={{fontSize:22,fontWeight:600,color:scoreColor(score),lineHeight:1}}>{score!=null?score.toFixed(2):"—"}</div>
-          <div style={{fontSize:11,color:scoreColor(score)}}>{scoreLabel(score,t)}</div>
-        </div>
-      </div>
+      <FormScoreHeader
+        addType={addType}
+        setAddType={setAddType}
+        score={score}
+        scoreColor={scoreColor(score)}
+        scoreLabel={scoreLabel(score,t)}
+      />
       <SectionLabel>{t.theBasics}</SectionLabel>
       <div style={S.mb16}>
         <FieldLabel>{t.restaurantName}</FieldLabel>
