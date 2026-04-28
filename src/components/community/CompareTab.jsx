@@ -1,40 +1,163 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLang } from "../../contexts/LangContext.jsx";
 import { supabase } from "../../config/supabaseClient.js";
-import { listFriendships } from "../../utils/friendsApi.js";
+import { listFriendships, deleteFriendship } from "../../utils/friendsApi.js";
 import { fetchRestaurantVisitsForUser } from "../../utils/visitPlacesApi.js";
-import { pairCompatibility } from "../../utils/compatibility.js";
+import { pairCompatibility, restaurantOverlap } from "../../utils/compatibility.js";
 import { tasteColor } from "../../utils/scoring.js";
 import { FLAGS } from "../../constants/cuisineConstants.js";
+import { Pill } from "./Pill.jsx";
+import { Avatar } from "./Avatar.jsx";
 import { UserIdentity } from "./UserIdentity.jsx";
 
-function CuisineRow({ cuisine, mine, theirs, delta }) {
-  const myCol = tasteColor(mine);
-  const theirCol = tasteColor(theirs);
-  const flag = FLAGS[cuisine] || (cuisine?.[0] || "?").toUpperCase();
+const SECTION_LABEL_STYLE = {
+  fontSize: 11,
+  color: "#F0997B",
+  textTransform: "uppercase",
+  letterSpacing: "0.06em",
+  fontWeight: 600,
+  marginBottom: 8,
+};
+
+const FLAG_BOX_STYLE = {
+  width: 36,
+  height: 36,
+  borderRadius: 8,
+  background: "#252523",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: 18,
+  flexShrink: 0,
+};
+
+/** Color-side legend uses fixed accents so users can tell "left = me, right =
+ *  them" at a glance even when both row scores happen to land on the same
+ *  tier color. The friend accent matches the "good" tier color so it reads
+ *  as a stable identifier rather than competing with score colors. */
+const YOU_LEGEND_COLOR = "#F0997B";
+const FRIEND_LEGEND_COLOR = "#5B9BD5";
+
+const TOP_DISCOVER_LIMIT = 3;
+
+/** Pick top shared cuisines for the "You both love …" summary line. We
+ *  weight by `min(mine, theirs)` so the list highlights cuisines BOTH
+ *  rate highly, not ones where one user drags the average up. */
+function topSharedCuisines(agreements, { limit = 2, threshold = 7 } = {}) {
+  return [...(agreements || [])]
+    .filter((a) => Math.min(a.mine, a.theirs) >= threshold)
+    .sort((a, b) => Math.min(b.mine, b.theirs) - Math.min(a.mine, a.theirs))
+    .slice(0, limit)
+    .map((a) => a.cuisine);
+}
+
+function flagFor(cuisine, name) {
+  return FLAGS[cuisine] || (cuisine?.[0] || name?.[0] || "?").toUpperCase();
+}
+
+function fmtTemplate(tpl, vars) {
+  if (!tpl) return "";
+  return Object.entries(vars).reduce(
+    (s, [k, v]) => s.replace(new RegExp(`\\{${k}\\}`, "g"), v),
+    tpl,
+  );
+}
+
+/** Tier-colored hero card: "78% / Taste compatibility / You both love …". */
+function CompatHeroCard({ score, summaryLine, t }) {
+  const col = score == null ? "#888780" : tasteColor(score / 10);
   return (
     <div style={{
-      display: "grid",
-      gridTemplateColumns: "auto 1fr auto auto auto",
-      alignItems: "center", gap: 10,
-      padding: "8px 0", borderBottom: "0.5px solid rgba(255,255,255,0.06)",
+      display: "flex", alignItems: "center", gap: 14,
+      background: `${col}14`,
+      border: `1px solid ${col}55`,
+      borderRadius: 12, padding: "14px 16px",
+      marginBottom: 16,
     }}>
-      <span style={{ fontSize: 16, width: 22, textAlign: "center" }}>{flag}</span>
-      <span style={{ fontSize: 13, color: "#F1EFE8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-        {cuisine}
-      </span>
-      <span style={{ fontSize: 13, color: myCol, fontWeight: 500, textAlign: "right", minWidth: 32 }}>
-        {mine.toFixed(1)}
-      </span>
-      <span style={{ fontSize: 13, color: theirCol, fontWeight: 500, textAlign: "right", minWidth: 32 }}>
-        {theirs.toFixed(1)}
-      </span>
-      <span style={{ fontSize: 11, color: "#888780", textAlign: "right", minWidth: 36 }}>
-        Δ{delta.toFixed(1)}
-      </span>
+      <div style={{ fontSize: 32, fontWeight: 800, color: col, lineHeight: 1, flexShrink: 0 }}>
+        {score == null ? "—" : `${score}%`}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "#F1EFE8" }}>
+          {t.tasteCompatibility || "Taste compatibility"}
+        </div>
+        {summaryLine ? (
+          <div style={{ fontSize: 12, color: "#888780", marginTop: 2 }}>{summaryLine}</div>
+        ) : (
+          <div style={{ fontSize: 12, color: "#888780", marginTop: 2 }}>
+            {score == null ? t.notEnoughSharedData : ""}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
+
+/** Score with tier color, used inside Both-visited rows. */
+function Score({ value }) {
+  const col = tasteColor(value);
+  return (
+    <span style={{
+      fontSize: 15, fontWeight: 600, color: col, lineHeight: 1.1,
+      minWidth: 32, textAlign: "right",
+    }}>
+      {value.toFixed(2)}
+    </span>
+  );
+}
+
+function BothRow({ row, isLast }) {
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 12,
+      padding: "10px 12px",
+      borderBottom: isLast ? "none" : "0.5px solid rgba(255,255,255,0.06)",
+    }}>
+      <div style={FLAG_BOX_STYLE}>{flagFor(row.cuisine, row.name)}</div>
+      <div style={{
+        flex: 1, minWidth: 0, fontSize: 14, fontWeight: 500, color: "#F1EFE8",
+        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+      }}>{row.name}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+        <Score value={row.mine} />
+        <span style={{ fontSize: 11, color: "#666663" }}>vs</span>
+        <Score value={row.theirs} />
+      </div>
+    </div>
+  );
+}
+
+function DiscoverRow({ row, subLine, badgeText, badgeTone }) {
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 12,
+      padding: "10px 12px", marginBottom: 6,
+      background: "#1E1E1C", border: "0.5px solid rgba(255,255,255,0.08)",
+      borderRadius: 10,
+    }}>
+      <div style={FLAG_BOX_STYLE}>{flagFor(row.cuisine, row.name)}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontSize: 14, fontWeight: 500, color: "#F1EFE8",
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }}>{row.name}</div>
+        <div style={{
+          fontSize: 11, color: "#888780",
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }}>{subLine}</div>
+      </div>
+      <span style={{
+        fontSize: 11, fontWeight: 600, padding: "5px 12px", borderRadius: 999,
+        background: badgeTone.bg, color: badgeTone.color,
+        border: `1px solid ${badgeTone.border}`,
+        whiteSpace: "nowrap", flexShrink: 0,
+      }}>{badgeText}</span>
+    </div>
+  );
+}
+
+const DISCOVER_TONE = { bg: "rgba(91,155,213,0.14)", color: "#5B9BD5", border: "rgba(91,155,213,0.4)" };
+const RECOMMEND_TONE = { bg: "rgba(151,196,89,0.14)", color: "#97C459", border: "rgba(151,196,89,0.4)" };
 
 export function CompareTab({ user, initialTarget, onClearTarget }) {
   const { t } = useLang();
@@ -90,9 +213,24 @@ export function CompareTab({ user, initialTarget, onClearTarget }) {
     return pairCompatibility(myVisits, theirVisits);
   }, [myVisits, theirVisits, target?.id]);
 
+  const overlap = useMemo(() => {
+    if (!target?.id) return null;
+    return restaurantOverlap(myVisits, theirVisits);
+  }, [myVisits, theirVisits, target?.id]);
+
   function clearTarget() {
     setTarget(null);
     onClearTarget?.();
+  }
+
+  /** Unfriend lives here (rather than on the flat Friends row) because that
+   *  row is now a single click-target → Compare; we keep the destructive
+   *  action one drill-down away from the casual scan. */
+  async function handleUnfriend() {
+    const row = friends.find((f) => f.otherUserId === target?.id);
+    if (!row?.id) return;
+    await deleteFriendship(supabase, row.id);
+    clearTarget();
   }
 
   if (!target) {
@@ -122,8 +260,19 @@ export function CompareTab({ user, initialTarget, onClearTarget }) {
     );
   }
 
-  const compatColor = compat?.score != null ? tasteColor((compat.score / 10)) : "#888780";
   const insufficientMine = (myVisits || []).length === 0;
+  const sharedTop = compat ? topSharedCuisines(compat.agreements) : [];
+  const summaryLine = sharedTop.length
+    ? fmtTemplate(t.youBothLove || "You both love {cuisines}", {
+      cuisines: sharedTop.join(t.andSeparator || " and "),
+    })
+    : null;
+
+  const friendName = target.display_name || target.username || "—";
+  const isAcceptedFriend = friends.some((f) => f.otherUserId === target?.id);
+
+  const onlyTheirs = overlap?.onlyTheirs?.slice(0, TOP_DISCOVER_LIMIT) || [];
+  const onlyMine = overlap?.onlyMine?.slice(0, TOP_DISCOVER_LIMIT) || [];
 
   return (
     <div>
@@ -134,23 +283,34 @@ export function CompareTab({ user, initialTarget, onClearTarget }) {
           fontSize: 12, color: "#888780", background: "none", border: "none",
           cursor: "pointer", padding: 0, marginBottom: 12,
         }}
-      >{t.backToList}</button>
+      >{t.pickFriendToCompare}</button>
 
       <div style={{
         display: "flex", alignItems: "center", gap: 12,
-        background: "#1E1E1C", border: "0.5px solid rgba(255,255,255,0.1)",
-        borderRadius: 12, padding: "12px 14px", marginBottom: 12,
+        marginBottom: 14,
       }}>
-        <UserIdentity profile={target} size={40} variant="header" />
-        <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 11, color: "#888780", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-            {t.compatibility}
-          </div>
-          <div style={{ fontSize: 26, fontWeight: 700, color: compatColor, lineHeight: 1.1 }}>
-            {loading ? "…" : compat?.score != null ? `${compat.score}%` : "—"}
+        <Avatar profile={target} size={48} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontSize: 18, fontWeight: 600, color: "#F1EFE8",
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}>{friendName}</div>
+          <div style={{
+            fontSize: 12, color: "#888780",
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}>
+            {fmtTemplate(t.comparingSharedRestaurants || "Comparing {n} shared restaurants", {
+              n: overlap?.both?.length ?? 0,
+            })}
           </div>
         </div>
       </div>
+
+      <CompatHeroCard
+        score={loading ? null : compat?.score}
+        summaryLine={summaryLine}
+        t={t}
+      />
 
       {loading && (
         <p style={{ fontSize: 12, color: "#888780" }}>…</p>
@@ -160,77 +320,91 @@ export function CompareTab({ user, initialTarget, onClearTarget }) {
         <p style={{ fontSize: 12, color: "#888780" }}>{t.insufficientVisits}</p>
       )}
 
-      {!loading && !insufficientMine && compat?.notEnoughData && (
-        <p style={{ fontSize: 12, color: "#888780" }}>{t.notEnoughSharedData}</p>
-      )}
+      {!loading && !insufficientMine && overlap && (
+        <>
+          <section style={{ marginBottom: 18 }}>
+            <div style={SECTION_LABEL_STYLE}>{t.bothVisited}</div>
+            {overlap.both.length === 0 ? (
+              <p style={{ fontSize: 12, color: "#888780", margin: 0 }}>{t.noOverlapYet}</p>
+            ) : (
+              <>
+                <div style={{
+                  background: "#1E1E1C", border: "0.5px solid rgba(255,255,255,0.1)",
+                  borderRadius: 12, overflow: "hidden",
+                }}>
+                  {overlap.both.map((r, i) => (
+                    <BothRow key={r.placeId} row={r} isLast={i === overlap.both.length - 1} />
+                  ))}
+                </div>
+                <div style={{
+                  display: "flex", justifyContent: "center", gap: 6,
+                  fontSize: 11, color: "#888780", marginTop: 8,
+                }}>
+                  <span style={{ color: YOU_LEGEND_COLOR, fontWeight: 600 }}>
+                    {t.youLegend || "You"}
+                  </span>
+                  <span>vs</span>
+                  <span style={{ color: FRIEND_LEGEND_COLOR, fontWeight: 600 }}>
+                    {friendName}
+                  </span>
+                </div>
+              </>
+            )}
+          </section>
 
-      {!loading && compat?.agreements?.length > 0 && (
-        <div style={{ marginTop: 4 }}>
-          <div style={{
-            display: "flex", justifyContent: "space-between", alignItems: "baseline",
-            marginBottom: 6,
-          }}>
-            <span style={{ fontSize: 11, color: "#888780", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              {t.youAgreeOn}
-            </span>
-            <span style={{ fontSize: 11, color: "#888780" }}>
-              {compat.sharedCuisines} {t.sharedCuisines.toLowerCase()}
-            </span>
-          </div>
-          <div style={{
-            display: "grid", gridTemplateColumns: "auto 1fr auto auto auto",
-            gap: 10, padding: "0 0 4px",
-            fontSize: 10, color: "#666663",
-          }}>
-            <span></span>
-            <span></span>
-            <span style={{ textAlign: "right" }}>{t.youLabel}</span>
-            <span style={{ textAlign: "right" }}>@{target.username?.slice(0, 8) || "them"}</span>
-            <span style={{ textAlign: "right" }}>Δ</span>
-          </div>
-          {compat.agreements.map((a) => (
-            <CuisineRow key={a.cuisine} cuisine={a.cuisine} mine={a.mine} theirs={a.theirs} delta={a.delta} />
-          ))}
-        </div>
-      )}
-
-      {!loading && compat?.onlyTheirs?.length > 0 && (
-        <div style={{ marginTop: 16 }}>
-          <div style={{ fontSize: 11, color: "#888780", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
-            {t.youShouldTry}
-          </div>
-          {compat.onlyTheirs.slice(0, 6).map((c) => (
-            <div key={c.cuisine} style={{
-              display: "flex", justifyContent: "space-between",
-              padding: "5px 0", fontSize: 12,
-              borderBottom: "0.5px solid rgba(255,255,255,0.06)",
-            }}>
-              <span style={{ color: "#F1EFE8" }}>
-                {(FLAGS[c.cuisine] || "")} {c.cuisine}
-              </span>
-              <span style={{ color: tasteColor(c.avg), fontWeight: 500 }}>{c.avg.toFixed(1)}</span>
+          <section style={{ marginBottom: 18 }}>
+            <div style={SECTION_LABEL_STYLE}>
+              {fmtTemplate(t.theyTriedYouHavent || "{name} tried, you haven't", { name: friendName })}
             </div>
-          ))}
-        </div>
+            {onlyTheirs.length === 0 ? (
+              <p style={{ fontSize: 12, color: "#888780", margin: 0 }}>{t.nothingNewFromThem}</p>
+            ) : (
+              onlyTheirs.map((r) => (
+                <DiscoverRow
+                  key={r.placeId}
+                  row={r}
+                  subLine={[
+                    r.cuisine,
+                    fmtTemplate(t.friendRatedText || "{name} rated {score}", {
+                      name: friendName, score: r.theirs.toFixed(2),
+                    }),
+                  ].filter(Boolean).join(" · ")}
+                  badgeText={t.discoverBadge}
+                  badgeTone={DISCOVER_TONE}
+                />
+              ))
+            )}
+          </section>
+
+          <section style={{ marginBottom: 16 }}>
+            <div style={SECTION_LABEL_STYLE}>
+              {fmtTemplate(t.youTriedTheyHavent || "You tried, {name} hasn't", { name: friendName })}
+            </div>
+            {onlyMine.length === 0 ? (
+              <p style={{ fontSize: 12, color: "#888780", margin: 0 }}>{t.nothingNewFromYou}</p>
+            ) : (
+              onlyMine.map((r) => (
+                <DiscoverRow
+                  key={r.placeId}
+                  row={r}
+                  subLine={[
+                    r.cuisine,
+                    fmtTemplate(t.youRatedText || "You rated {score}", {
+                      score: r.mine.toFixed(2),
+                    }),
+                  ].filter(Boolean).join(" · ")}
+                  badgeText={t.recommendBadge}
+                  badgeTone={RECOMMEND_TONE}
+                />
+              ))
+            )}
+          </section>
+        </>
       )}
 
-      {!loading && compat?.onlyMine?.length > 0 && (
-        <div style={{ marginTop: 16 }}>
-          <div style={{ fontSize: 11, color: "#888780", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
-            {t.theyShouldTry}
-          </div>
-          {compat.onlyMine.slice(0, 6).map((c) => (
-            <div key={c.cuisine} style={{
-              display: "flex", justifyContent: "space-between",
-              padding: "5px 0", fontSize: 12,
-              borderBottom: "0.5px solid rgba(255,255,255,0.06)",
-            }}>
-              <span style={{ color: "#F1EFE8" }}>
-                {(FLAGS[c.cuisine] || "")} {c.cuisine}
-              </span>
-              <span style={{ color: tasteColor(c.avg), fontWeight: 500 }}>{c.avg.toFixed(1)}</span>
-            </div>
-          ))}
+      {isAcceptedFriend && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
+          <Pill onClick={handleUnfriend} tone="danger">{t.unfriend}</Pill>
         </div>
       )}
     </div>

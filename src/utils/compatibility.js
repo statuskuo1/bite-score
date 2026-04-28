@@ -115,6 +115,164 @@ export function pairCompatibility(myVisits, theirVisits, getCuisine = getRestaur
  * require *all* members to have rated it (coverage === total). Caller can pass
  * `opts.minCoverage = 'all' | <int>` to relax (e.g. allow N-1 of N).
  */
+/**
+ * Aggregate a single user's visits by `placeId`, averaging taste across repeat
+ * visits to the same restaurant. Visits without a `placeId` (legacy / orphan
+ * rows) and visits with a non-finite taste are dropped.
+ *
+ * Returns `{ [placeId]: { placeId, name, cuisine, city, taste, visits } }`.
+ * `taste` is the per-place mean — using the latest visit would be more
+ * volatile when a user re-rates the same place.
+ */
+export function visitsByPlace(visits) {
+  const buckets = new Map();
+  for (const v of visits || []) {
+    if (!v?.placeId) continue;
+    if (!Number.isFinite(+v.taste)) continue;
+    const existing = buckets.get(v.placeId) || {
+      placeId: v.placeId,
+      name: v.name || "",
+      cuisine: v.cuisine || "",
+      city: v.city || "",
+      sum: 0,
+      visits: 0,
+    };
+    existing.sum += +v.taste;
+    existing.visits += 1;
+    if (!existing.name && v.name) existing.name = v.name;
+    if (!existing.cuisine && v.cuisine) existing.cuisine = v.cuisine;
+    if (!existing.city && v.city) existing.city = v.city;
+    buckets.set(v.placeId, existing);
+  }
+  const out = {};
+  for (const [pid, b] of buckets) {
+    out[pid] = {
+      placeId: b.placeId,
+      name: b.name,
+      cuisine: b.cuisine,
+      city: b.city,
+      taste: b.sum / b.visits,
+      visits: b.visits,
+    };
+  }
+  return out;
+}
+
+/**
+ * Restaurant-level set diff between two users, keyed by `placeId`. Powers the
+ * Compare tab's three sections — "Both visited" (intersection), "They tried"
+ * (their-only), "You tried" (mine-only).
+ *
+ * Each user's per-place taste is the mean of their visits to that place
+ * (see `visitsByPlace`). Place metadata (name/cuisine/city) prefers whichever
+ * side has it populated, so an older orphan-row on one side doesn't blank a
+ * row that the other side has full data for.
+ *
+ * Returns:
+ *   {
+ *     both:       [{ placeId, name, cuisine, city, mine, theirs, avg }] // sorted desc by avg
+ *     onlyTheirs: [{ placeId, name, cuisine, city, theirs }]            // sorted desc by theirs
+ *     onlyMine:   [{ placeId, name, cuisine, city, mine }]              // sorted desc by mine
+ *   }
+ */
+export function restaurantOverlap(myVisits, theirVisits) {
+  const mine = visitsByPlace(myVisits);
+  const theirs = visitsByPlace(theirVisits);
+
+  const both = [];
+  const onlyMine = [];
+  const onlyTheirs = [];
+
+  for (const [pid, mp] of Object.entries(mine)) {
+    const tp = theirs[pid];
+    if (tp) {
+      both.push({
+        placeId: pid,
+        name: mp.name || tp.name,
+        cuisine: mp.cuisine || tp.cuisine,
+        city: mp.city || tp.city,
+        mine: mp.taste,
+        theirs: tp.taste,
+        avg: (mp.taste + tp.taste) / 2,
+      });
+    } else {
+      onlyMine.push({
+        placeId: pid,
+        name: mp.name,
+        cuisine: mp.cuisine,
+        city: mp.city,
+        mine: mp.taste,
+      });
+    }
+  }
+  for (const [pid, tp] of Object.entries(theirs)) {
+    if (mine[pid]) continue;
+    onlyTheirs.push({
+      placeId: pid,
+      name: tp.name,
+      cuisine: tp.cuisine,
+      city: tp.city,
+      theirs: tp.taste,
+    });
+  }
+
+  both.sort((a, b) => b.avg - a.avg);
+  onlyTheirs.sort((a, b) => b.theirs - a.theirs);
+  onlyMine.sort((a, b) => b.mine - a.mine);
+  return { both, onlyTheirs, onlyMine };
+}
+
+/**
+ * Aggregate restaurant visits across many users (friends) keyed by `placeId`.
+ * For each place, returns the mean taste across **per-user means** (so a
+ * friend who visited a place 5 times doesn't get 5x the weight of a friend
+ * who visited once) and the count of distinct users who rated it.
+ *
+ * `friendVisitsByUser`: `[{ userId, visits: [...] }, ...]`. Visits without
+ * `placeId` or non-finite taste are dropped.
+ *
+ * Returns rows sorted by `avg` desc:
+ *   [{ placeId, name, cuisine, city, avg, friendCount }]
+ */
+export function aggregateFriendsTopPicks(friendVisitsByUser) {
+  const places = new Map();
+  for (const { visits } of friendVisitsByUser || []) {
+    const perPlace = visitsByPlace(visits);
+    for (const entry of Object.values(perPlace)) {
+      const existing = places.get(entry.placeId) || {
+        placeId: entry.placeId,
+        name: entry.name,
+        cuisine: entry.cuisine,
+        city: entry.city,
+        sum: 0,
+        friendCount: 0,
+      };
+      existing.sum += entry.taste;
+      existing.friendCount += 1;
+      if (!existing.name && entry.name) existing.name = entry.name;
+      if (!existing.cuisine && entry.cuisine) existing.cuisine = entry.cuisine;
+      if (!existing.city && entry.city) existing.city = entry.city;
+      places.set(entry.placeId, existing);
+    }
+  }
+  const rows = [];
+  for (const p of places.values()) {
+    rows.push({
+      placeId: p.placeId,
+      name: p.name,
+      cuisine: p.cuisine,
+      city: p.city,
+      avg: p.sum / p.friendCount,
+      friendCount: p.friendCount,
+    });
+  }
+  rows.sort((a, b) => {
+    if (b.avg !== a.avg) return b.avg - a.avg;
+    return b.friendCount - a.friendCount;
+  });
+  return rows;
+}
+
 export function rankGroupCuisines(memberVisitsByUser, getCuisine = getRestaurantCuisines, opts = {}) {
   const total = memberVisitsByUser.length;
   if (total === 0) return [];

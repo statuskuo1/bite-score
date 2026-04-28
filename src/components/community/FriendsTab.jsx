@@ -9,9 +9,11 @@ import {
   listFriendships,
 } from "../../utils/friendsApi.js";
 import { fetchRestaurantVisitsForUser } from "../../utils/visitPlacesApi.js";
-import { pairCompatibility } from "../../utils/compatibility.js";
+import { pairCompatibility, aggregateFriendsTopPicks } from "../../utils/compatibility.js";
 import { tasteColor } from "../../utils/scoring.js";
+import { FLAGS } from "../../constants/cuisineConstants.js";
 import { Pill } from "./Pill.jsx";
+import { Avatar } from "./Avatar.jsx";
 import { UserIdentity } from "./UserIdentity.jsx";
 
 const ROW_STYLE = {
@@ -27,10 +29,23 @@ const ROW_STYLE = {
 
 const SECTION_LABEL_STYLE = {
   fontSize: 11,
-  color: "#888780",
+  color: "#F0997B",
   textTransform: "uppercase",
   letterSpacing: "0.06em",
+  fontWeight: 600,
   marginBottom: 6,
+};
+
+const FLAG_BOX_STYLE = {
+  width: 36,
+  height: 36,
+  borderRadius: 8,
+  background: "#252523",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: 18,
+  flexShrink: 0,
 };
 
 /** Map sendFriendRequest result codes onto user-visible reasons. */
@@ -44,6 +59,52 @@ function describeAddFriendError(code, t) {
     default:
       return t.addFriendFailed || "Couldn't send request — try again.";
   }
+}
+
+/** Tier-colored pill that reads as "78% match". Same color ramp as the
+ *  Compare-tab badge so the two views stay visually consistent. */
+function MatchPill({ score, suffix }) {
+  if (score == null) {
+    return (
+      <span style={{
+        padding: "5px 12px", borderRadius: 999, fontSize: 11,
+        background: "transparent", color: "#888780",
+        border: "1px solid rgba(255,255,255,0.1)", whiteSpace: "nowrap",
+      }}>—</span>
+    );
+  }
+  const col = tasteColor(score / 10);
+  return (
+    <span style={{
+      padding: "5px 12px", borderRadius: 999, fontSize: 12, fontWeight: 600,
+      background: `${col}22`,
+      color: col,
+      border: `1px solid ${col}66`,
+      whiteSpace: "nowrap",
+    }}>
+      {score}%{suffix ? ` ${suffix}` : ""}
+    </span>
+  );
+}
+
+function flagFor(cuisine, name) {
+  return FLAGS[cuisine] || (cuisine?.[0] || name?.[0] || "?").toUpperCase();
+}
+
+/** Mode (most frequent) value of `field` across `rows`, ignoring blanks. */
+function modeOf(rows, field) {
+  const counts = new Map();
+  for (const r of rows || []) {
+    const v = (r?.[field] || "").trim();
+    if (!v) continue;
+    counts.set(v, (counts.get(v) || 0) + 1);
+  }
+  let best = "";
+  let bestCount = 0;
+  for (const [k, c] of counts) {
+    if (c > bestCount) { best = k; bestCount = c; }
+  }
+  return best;
 }
 
 /**
@@ -93,113 +154,79 @@ function FriendRowAction({ profile, relation, busy, onAdd, onAccept, onCancel, o
   }
 }
 
-/**
- * One accepted-friend card with collapsible "top picks" (their highest taste
- * restaurant visits) and the live compatibility % between you and them.
- */
-function FriendCard({ friendship, myVisits, onCompareWith, onUnfriend }) {
+/** One always-visible friend card. Click → jump to Compare with that friend.
+ *  The compatibility pill is computed eagerly (`pairCompatibility`) so the
+ *  user can scan the list and pick whom to compare against without expanding.
+ *  We bypass `UserIdentity` because the sub-line shows ratings + city instead
+ *  of `@username`. */
+function FriendListRow({ friendship, stats, onCompareWith }) {
   const { t } = useLang();
-  const [open, setOpen] = useState(false);
-  const [theirVisits, setTheirVisits] = useState(null);
-
-  useEffect(() => {
-    if (!open || theirVisits) return;
-    let cancelled = false;
-    (async () => {
-      const v = await fetchRestaurantVisitsForUser(supabase, friendship.otherUserId);
-      if (!cancelled) setTheirVisits(v);
-    })();
-    return () => { cancelled = true; };
-  }, [open, theirVisits, friendship.otherUserId]);
-
-  const compat = useMemo(() => {
-    if (!theirVisits) return null;
-    return pairCompatibility(myVisits || [], theirVisits || []);
-  }, [theirVisits, myVisits]);
-
-  const topPicks = useMemo(() => {
-    if (!theirVisits) return [];
-    return [...theirVisits]
-      .filter((v) => Number.isFinite(+v.taste))
-      .sort((a, b) => b.taste - a.taste)
-      .slice(0, 5);
-  }, [theirVisits]);
-
   const profile = friendship.otherProfile;
-  const compatColor = compat?.score != null ? tasteColor((compat.score / 10)) : "#888780";
-
+  const subParts = [];
+  if (stats?.ratings != null) {
+    subParts.push(`${stats.ratings} ${t.ratingsLabel || "ratings"}`);
+  }
+  if (stats?.city) subParts.push(stats.city);
+  const subLine = subParts.length ? subParts.join(" · ") : (profile?.username ? `@${profile.username}` : "");
+  const name = profile?.display_name || profile?.username || "—";
   return (
-    <div style={{
-      background: "#1E1E1C", border: "0.5px solid rgba(255,255,255,0.1)",
-      borderRadius: 12, padding: "10px 12px", marginBottom: 8,
-    }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <UserIdentity profile={profile} size={32} variant="header" />
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <Pill onClick={() => onCompareWith(profile)} tone="default">{t.compareSub}</Pill>
-          <button
-            type="button"
-            onClick={() => setOpen((v) => !v)}
-            style={{
-              fontSize: 18, color: "#888780", background: "none", border: "none",
-              cursor: "pointer", lineHeight: 1, padding: "0 4px",
-            }}
-            aria-label={open ? "Collapse" : "Expand"}
-          >{open ? "▾" : "▸"}</button>
+    <button
+      type="button"
+      onClick={() => onCompareWith?.(profile)}
+      style={{
+        display: "flex", alignItems: "center", gap: 12,
+        padding: "10px 12px", marginBottom: 8, width: "100%",
+        background: "#1E1E1C", border: "0.5px solid rgba(255,255,255,0.1)",
+        borderRadius: 12, cursor: "pointer", textAlign: "left",
+      }}
+    >
+      <Avatar profile={profile} size={40} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontSize: 15, fontWeight: 600, color: "#F1EFE8",
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }}>{name}</div>
+        <div style={{
+          fontSize: 11, color: "#888780",
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }}>{subLine}</div>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+        <MatchPill score={stats?.compatScore ?? null} suffix={t.matchSuffix} />
+        <span style={{
+          padding: "5px 12px", borderRadius: 14, fontSize: 12,
+          background: "#3C1F13", color: "#F0997B",
+          border: "1px solid rgba(240,153,123,0.4)", whiteSpace: "nowrap",
+        }}>{t.compareSub}</span>
+      </div>
+    </button>
+  );
+}
+
+/** One row in the aggregated "Friends' top picks" section. */
+function TopPickRow({ pick }) {
+  const { t } = useLang();
+  const col = tasteColor(pick.avg);
+  return (
+    <div style={ROW_STYLE}>
+      <div style={FLAG_BOX_STYLE}>{flagFor(pick.cuisine, pick.name)}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontSize: 14, fontWeight: 500, color: "#F1EFE8",
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }}>{pick.name}</div>
+        <div style={{ fontSize: 11, color: "#888780", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {[pick.cuisine || null, `avg ${pick.avg.toFixed(2)}`].filter(Boolean).join(" · ")}
         </div>
       </div>
-
-      {open && (
-        <div style={{ marginTop: 10, paddingTop: 10, borderTop: "0.5px solid rgba(255,255,255,0.08)" }}>
-          {theirVisits == null ? (
-            <p style={{ fontSize: 12, color: "#888780", margin: 0 }}>…</p>
-          ) : (
-            <>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-                <span style={SECTION_LABEL_STYLE}>
-                  {t.compatibility}
-                </span>
-                {compat?.score != null ? (
-                  <span style={{ fontSize: 18, fontWeight: 600, color: compatColor }}>
-                    {compat.score}%
-                  </span>
-                ) : (
-                  <span style={{ fontSize: 11, color: "#888780" }}>{t.notEnoughSharedData}</span>
-                )}
-              </div>
-
-              <div style={{ ...SECTION_LABEL_STYLE, marginBottom: 4 }}>
-                {t.topPicks}
-              </div>
-              {!topPicks.length && (
-                <p style={{ fontSize: 12, color: "#888780", margin: "4px 0 0" }}>{t.noEntriesYet}</p>
-              )}
-              {topPicks.map((v) => (
-                <div key={v.id} style={{
-                  display: "flex", justifyContent: "space-between", alignItems: "center",
-                  padding: "4px 0", fontSize: 12,
-                }}>
-                  <div style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    <span style={{ color: "#F1EFE8" }}>{v.name}</span>
-                    {v.cuisine && (
-                      <span style={{ color: "#888780", marginLeft: 6 }}>· {v.cuisine}</span>
-                    )}
-                  </div>
-                  <span style={{ color: tasteColor(+v.taste), fontWeight: 500, marginLeft: 8 }}>
-                    {(+v.taste).toFixed(1)}
-                  </span>
-                </div>
-              ))}
-            </>
-          )}
-
-          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
-            <Pill onClick={() => onUnfriend(friendship.id)} tone="danger">
-              {t.unfriend}
-            </Pill>
-          </div>
+      <div style={{ textAlign: "right", flexShrink: 0 }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: col, lineHeight: 1.1 }}>
+          {pick.avg.toFixed(2)}
         </div>
-      )}
+        <div style={{ fontSize: 10, color: "#888780", marginTop: 2 }}>
+          {pick.friendCount} {t.friendsCountSuffix || "friends"}
+        </div>
+      </div>
     </div>
   );
 }
@@ -214,6 +241,10 @@ export function FriendsTab({ user, onCompareWith }) {
   const [outgoing, setOutgoing] = useState([]);
   const [busyById, setBusyById] = useState({});
   const [myVisits, setMyVisits] = useState([]);
+  /** `friendVisits` is `Map<friendUserId, visits[]>` — populated lazily after
+   *  the friends list resolves. We fetch in parallel; per-friend rows show
+   *  "—" until their slot fills in, which keeps the UI responsive. */
+  const [friendVisits, setFriendVisits] = useState({});
   /** `addError`: { targetId, message } | null. Inline so failures don't pop a modal. */
   const [addError, setAddError] = useState(null);
   const debounceRef = useRef(null);
@@ -238,6 +269,30 @@ export function FriendsTab({ user, onCompareWith }) {
     return () => { cancelled = true; };
   }, [user?.id]);
 
+  /** Eagerly fetch each accepted friend's restaurant visits in parallel. We
+   *  only re-fetch users we don't already have; a friend who appears, vanishes,
+   *  and re-appears keeps their cached visits without a round-trip. */
+  useEffect(() => {
+    if (!friends.length) return;
+    const missing = friends
+      .map((f) => f.otherUserId)
+      .filter((uid) => uid && !(uid in friendVisits));
+    if (missing.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const pairs = await Promise.all(
+        missing.map(async (uid) => [uid, await fetchRestaurantVisitsForUser(supabase, uid)]),
+      );
+      if (cancelled) return;
+      setFriendVisits((prev) => {
+        const next = { ...prev };
+        for (const [uid, v] of pairs) next[uid] = v;
+        return next;
+      });
+    })();
+    return () => { cancelled = true; };
+  }, [friends, friendVisits]);
+
   /** Debounced username prefix search. Empty string clears results. */
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -260,6 +315,37 @@ export function FriendsTab({ user, onCompareWith }) {
     for (const r of outgoing) m.set(r.otherUserId, { kind: "outgoing", row: r });
     return m;
   }, [friends, incoming, outgoing]);
+
+  /** Per-friend stats: compatibility %, ratings count, primary city. */
+  const friendStats = useMemo(() => {
+    const out = {};
+    for (const f of friends) {
+      const v = friendVisits[f.otherUserId];
+      if (!v) {
+        out[f.otherUserId] = { ratings: null, city: "", compatScore: null };
+        continue;
+      }
+      const compat = pairCompatibility(myVisits, v);
+      out[f.otherUserId] = {
+        ratings: v.length,
+        city: modeOf(v, "city"),
+        compatScore: compat?.score ?? null,
+      };
+    }
+    return out;
+  }, [friends, friendVisits, myVisits]);
+
+  /** Aggregated Friends' top picks: places visited by ≥2 friends rank above
+   *  same-avg single-friend picks (`aggregateFriendsTopPicks` already
+   *  tiebreaks on friendCount). Capped to the top 10 to keep the section
+   *  scannable; tap-through to the place is a future hook. */
+  const topPicks = useMemo(() => {
+    const fvb = friends
+      .map((f) => ({ userId: f.otherUserId, visits: friendVisits[f.otherUserId] }))
+      .filter((x) => Array.isArray(x.visits));
+    if (!fvb.length) return [];
+    return aggregateFriendsTopPicks(fvb).slice(0, 10);
+  }, [friends, friendVisits]);
 
   function setBusy(id, on) {
     setBusyById((m) => ({ ...m, [id]: on }));
@@ -400,19 +486,32 @@ export function FriendsTab({ user, onCompareWith }) {
         </div>
       )}
 
-      <div style={SECTION_LABEL_STYLE}>{t.friendsList}</div>
+      <div style={{ ...SECTION_LABEL_STYLE, display: "flex", justifyContent: "space-between" }}>
+        <span>{t.myFriends || t.friendsList}</span>
+        {friends.length > 0 && (
+          <span style={{ color: "#666663" }}>({friends.length})</span>
+        )}
+      </div>
       {!friends.length && (
         <p style={{ fontSize: 12, color: "#888780", margin: 0 }}>{t.noFriendsYet}</p>
       )}
       {friends.map((f) => (
-        <FriendCard
+        <FriendListRow
           key={f.id}
           friendship={f}
-          myVisits={myVisits}
+          stats={friendStats[f.otherUserId]}
           onCompareWith={onCompareWith}
-          onUnfriend={handleRemove}
         />
       ))}
+
+      {topPicks.length > 0 && (
+        <div style={{ marginTop: 18 }}>
+          <div style={SECTION_LABEL_STYLE}>{t.friendsTopPicks}</div>
+          {topPicks.map((p) => (
+            <TopPickRow key={p.placeId} pick={p} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
