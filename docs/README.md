@@ -12,7 +12,7 @@ Three layers, in increasing order of "what is true right now":
 - Want to know **how scoring works today**? Read `features/scoring.md`.
 - Want to know **why we got here / the history**? Skim `decisions/` — newer files override older ones.
 
-## How autoupdate works
+## How updates work
 
 Every page/feature doc has YAML frontmatter with a `scope:` list of source-file globs, e.g.:
 
@@ -27,16 +27,21 @@ last_reviewed: 2026-04-28
 ---
 ```
 
-Two layers keep this file in sync with the code:
+Docs are updated **after** code is committed and pushed, not during the code-change turn. The flow:
 
-1. **Cursor rule** ([`.cursor/rules/code-decisions.mdc`](../.cursor/rules/code-decisions.mdc)) — every substantive change must update any `pages/` or `features/` doc whose `scope` matches the changed files. The agent bumps `last_reviewed`, edits the relevant section, and adds a link under "Decisions" pointing at the new ADR in `decisions/`.
-2. **Cursor stop hook** ([`.cursor/hooks.json`](../.cursor/hooks.json) + [`scripts/docs-stale-check.mjs`](../scripts/docs-stale-check.mjs)) — at the end of each agent turn, runs `git diff --name-only HEAD` and parses the frontmatter of every doc. If any changed file matches a doc's `scope` and that doc itself wasn't touched, prints a reminder so the agent can update it before ending the turn.
+1. Ship the code change and `git push`.
+2. The agent asks once: "Want me to update the docs for this change?"
+3. On confirmation, the agent writes a concise ADR under `decisions/`, edits any `pages/` or `features/` doc whose `scope` matches the changed files (bumping `last_reviewed` and appending the ADR link under "Decisions"), and commits as a separate `docs: ...` commit.
 
-You can also run the check manually:
+This is governed by [`.cursor/rules/code-decisions.mdc`](../.cursor/rules/code-decisions.mdc). There is **no** per-turn stop-hook reminder — to keep code-change turns lean, doc edits are deferred and explicit.
+
+If you want to check manually whether docs have drifted from the working tree, run:
 
 ```bash
 npm run docs:check
 ```
+
+(Backed by [`scripts/docs-stale-check.mjs`](../scripts/docs-stale-check.mjs).)
 
 ## Adding a new page or feature doc
 
