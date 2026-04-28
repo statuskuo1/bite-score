@@ -17,8 +17,12 @@ const SUBS = [
  *
  * `compareTarget` lets one tab hand off a friend to Compare (e.g. "Compare with"
  * button on a friend card jumps into Compare with that friend pre-selected).
+ *
+ * `restaurantWeights` / `drinkWeights` / `sweetWeights` flow through to
+ * GlobalTab so its mean-then-BITE leaderboard reflects the viewer's own My
+ * Taste sliders. The other sub-tabs don't read weights today.
  */
-export function CommunityTab({ user }) {
+export function CommunityTab({ user, restaurantWeights, drinkWeights, sweetWeights }) {
   const { t } = useLang();
   const [active, setActive] = useState("global");
   const [compareTarget, setCompareTarget] = useState(null);
@@ -59,7 +63,14 @@ export function CommunityTab({ user }) {
       </div>
       <p style={{ fontSize: 12, color: "#888780", margin: "0 0 12px" }}>{hint}</p>
 
-      {active === "global" && <GlobalTab user={user} />}
+      {active === "global" && (
+        <GlobalTab
+          user={user}
+          restaurantWeights={restaurantWeights}
+          drinkWeights={drinkWeights}
+          sweetWeights={sweetWeights}
+        />
+      )}
       {active === "friends" && (
         <FriendsTab user={user} onCompareWith={jumpToCompare} />
       )}

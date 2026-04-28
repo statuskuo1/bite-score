@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLang } from "../../contexts/LangContext.jsx";
 import { supabase } from "../../config/supabaseClient.js";
 import {
   fetchAggregatedRestaurantPlaces,
   fetchAggregatedCafePlaces,
 } from "../../utils/visitPlacesApi.js";
+import { calcBiteOutOf10, calcCafeOutOf10 } from "../../utils/scoring.js";
 import { PlaceLeaderboardRow } from "./PlaceLeaderboardRow.jsx";
 
 const CATS = [
@@ -14,11 +15,19 @@ const CATS = [
 ];
 
 /**
- * Aggregated place leaderboard, one row per place. Avg taste sort, ties broken
- * by visit count. Min visits filter (default 1) keeps single-visit places off
- * the top until they get a second confirmation.
+ * Aggregated place leaderboard, one row per place. Score is BITE computed
+ * "mean-then-BITE": each raw input (taste/cost/portions/wait/repeat) is
+ * averaged across all visits, then BITE is applied once with the viewer's
+ * own weights. That makes the leaderboard personalized — bumping the My Taste
+ * sliders re-ranks Global without a refetch.
+ *
+ * Café tabs (drinks / sweets) use their own café weights, so the same place
+ * can land at different BITE under restaurants vs. drinks.
+ *
+ * Min-visits filter (default 1) keeps single-visit places off the top until
+ * they get a second confirmation.
  */
-export function GlobalTab({ user }) {
+export function GlobalTab({ user, restaurantWeights, drinkWeights, sweetWeights }) {
   const { t } = useLang();
   const [cat, setCat] = useState("restaurants");
   const [minVisits, setMinVisits] = useState(1);
@@ -49,8 +58,40 @@ export function GlobalTab({ user }) {
     return () => { cancelled = true; };
   }, [user?.id]);
 
-  const rows = (cat === "restaurants" ? restaurants : cat === "drinks" ? drinks : sweets)
-    .filter((p) => p.visitCount >= minVisits);
+  /** `repeatability` is integer 0–3 with a non-linear `rMult` lookup; round the
+   *  averaged value to the nearest int and clamp so it lands on a real bucket. */
+  function roundedRepeat(avgRepeat) {
+    if (avgRepeat == null || !Number.isFinite(avgRepeat)) return 0;
+    return Math.max(0, Math.min(3, Math.round(avgRepeat)));
+  }
+
+  function biteForPlace(place) {
+    if (!place || place.validCount < 1) return null;
+    const args = [
+      place.avgTaste,
+      place.avgCost,
+      place.avgPortions,
+      place.avgWait,
+      place.useRMajority,
+      roundedRepeat(place.avgRepeat),
+    ];
+    if (cat === "restaurants") return calcBiteOutOf10(...args, restaurantWeights);
+    if (cat === "drinks") return calcCafeOutOf10(...args, drinkWeights);
+    return calcCafeOutOf10(...args, sweetWeights);
+  }
+
+  /** Sort + filter is memo'd so weight changes re-rank without a refetch. */
+  const rows = useMemo(() => {
+    const base = cat === "restaurants" ? restaurants : cat === "drinks" ? drinks : sweets;
+    return base
+      .map((p) => ({ ...p, bite: biteForPlace(p) }))
+      .filter((p) => p.bite != null && p.visitCount >= minVisits)
+      .sort((a, b) => {
+        if (b.bite !== a.bite) return b.bite - a.bite;
+        return b.visitCount - a.visitCount;
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cat, minVisits, restaurants, drinks, sweets, restaurantWeights, drinkWeights, sweetWeights]);
 
   return (
     <div>
@@ -115,7 +156,11 @@ export function GlobalTab({ user }) {
       )}
 
       {!loading && rows.map((p) => (
-        <PlaceLeaderboardRow key={`${p.placeId}-${p.category || "rest"}`} place={p} />
+        <PlaceLeaderboardRow
+          key={`${p.placeId}-${p.category || "rest"}`}
+          place={p}
+          bite={p.bite}
+        />
       ))}
     </div>
   );
