@@ -109,6 +109,30 @@ export async function fetchEmailForUsername(client, username) {
 }
 
 /**
+ * Returns true when the identifier (email or username) matches an account whose
+ * only auth identity is OAuth (no `email` provider). Wraps the
+ * `account_uses_oauth_only` RPC from
+ * `supabase/migrations/20260506_auth_account_uses_oauth_only.sql`.
+ *
+ * Designed to be called only AFTER a failed signInWithPassword attempt — a
+ * `true` return uniquely means "stop trying passwords, this user must sign in
+ * with Google." Non-existent accounts return false to avoid enumeration.
+ *
+ * Resolves to false on RPC error so the caller falls back to the generic
+ * invalid-login message rather than masking a network problem.
+ */
+export async function accountUsesOauthOnly(client, identifier) {
+  const id = String(identifier ?? "").trim();
+  if (!id) return false;
+  const { data, error } = await client.rpc("account_uses_oauth_only", { p_identifier: id });
+  if (error) {
+    console.warn("[BITE] account_uses_oauth_only RPC failed:", error.message);
+    return false;
+  }
+  return data === true;
+}
+
+/**
  * Update own profile. Returns { ok, code, data }.
  *  - code "username_taken"    : another profile already owns this username (case-insensitive),
  *                               surfaced via a pre-check or a Postgres 23505 backstop.

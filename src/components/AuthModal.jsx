@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLang } from "../contexts/LangContext.jsx";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { supabase } from "../config/supabaseClient.js";
-import { fetchEmailForUsername, suggestAvailableUsernames, updateOwnProfile, validateUsername } from "../utils/profileApi.js";
+import { accountUsesOauthOnly, fetchEmailForUsername, suggestAvailableUsernames, updateOwnProfile, validateUsername } from "../utils/profileApi.js";
 
 /** Always the tab’s origin so local dev and Vercel previews return here; must be listed in Supabase → Auth → URL configuration → Redirect URLs. */
 const redirectBase = () => window.location.origin.replace(/\/$/, "");
@@ -161,6 +161,15 @@ export function AuthModal({ open, onClose }) {
       onClose();
     } catch (e) {
       console.error(e);
+      /** Supabase returns the same "Invalid login credentials" for wrong-password and no-password (Google-only)
+       *  accounts. Probe via RPC so we can show a friendly "use Google" hint instead of the generic message. */
+      if (/invalid login credentials/i.test(e?.message || "")) {
+        const oauthOnly = await accountUsesOauthOnly(supabase, trimmed);
+        if (oauthOnly) {
+          setErr(t.authUseGoogleInstead);
+          return;
+        }
+      }
       setErr(formatPasswordSignInError(e, t));
     } finally {
       setBusy(false);
