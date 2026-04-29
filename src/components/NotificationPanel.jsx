@@ -102,7 +102,7 @@ export function NotificationPanel({
   }, [onClose, sheetOpen]);
 
   const top = anchorPos?.top ?? 64;
-  const right = anchorPos?.right ?? 16;
+  const narrow = window.innerWidth < 480;
 
   return createPortal(
     <div
@@ -110,8 +110,8 @@ export function NotificationPanel({
       style={{
         position: "fixed",
         top,
-        right,
-        width: 320,
+        right: 16,
+        ...(narrow ? { left: 16 } : { width: 320 }),
         maxWidth: "calc(100vw - 32px)",
         maxHeight: Math.min(440, window.innerHeight - top - 24),
         overflowY: "auto",
