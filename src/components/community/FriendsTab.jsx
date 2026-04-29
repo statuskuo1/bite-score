@@ -257,43 +257,45 @@ function UnfollowConfirmDialog({ profile, isTasteBuds, busy, onConfirm, onCancel
   );
 }
 
-/** One Taste Bud row. Same compact layout as FollowingRow; MatchPill on the right. */
-function TasteBudRow({ entry, stats, onOpen, onUnfollowConfirm }) {
-  const { t } = useLang();
+/** Unified row for everyone you follow — Taste Buds (mutual) first, then non-mutual.
+ *  Taste Buds rows show green badge + Following pill + MatchPill.
+ *  Non-mutual rows show only the Following pill. */
+function FollowRow({ entry, stats, onOpen, onUnfollowConfirm, t }) {
   const profile = entry.otherProfile;
+  const { isMutual } = entry;
   return (
     <div style={{ ...ROW_STYLE }}>
       <button
         type="button"
-        onClick={() => onOpen?.(profile, "taste_buds")}
+        onClick={() => onOpen?.(profile, isMutual ? "taste_buds" : "i_follow")}
         style={{ flex: 1, minWidth: 0, background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0 }}
       >
         <UserIdentity profile={profile} size={28} />
       </button>
-      <Pill tone="muted" onClick={() => onUnfollowConfirm?.(profile)}>Following</Pill>
-      <MatchPill score={stats?.compatScore ?? null} suffix={t.matchSuffix} />
+      <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+        {isMutual && (
+          <StatusBadge
+            label={t.tasteBuds || "Taste Buds"}
+            bg="#1A2E0A" color="#97C459" border="rgba(151,196,89,0.4)"
+          />
+        )}
+        <button
+          type="button"
+          onClick={() => onUnfollowConfirm?.(profile, isMutual)}
+          style={{
+            fontSize: 10, fontWeight: 600, padding: "4px 10px", borderRadius: 20,
+            background: "rgba(155,169,213,0.1)", color: "#9BA9D5",
+            border: "1px solid rgba(155,169,213,0.3)",
+            cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+          }}
+        >
+          {t.following || "Following"}
+        </button>
+        {isMutual && (
+          <MatchPill score={stats?.compatScore ?? null} suffix={t.matchSuffix} />
+        )}
+      </div>
     </div>
-  );
-}
-
-/** Compact tap-to-open row used by the Following section (no inline action —
- *  Unfollow lives inside the mini profile sheet). */
-function FollowingRow({ entry, onOpen }) {
-  const profile = entry.otherProfile;
-  return (
-    <button
-      type="button"
-      onClick={() => onOpen?.(profile, "i_follow")}
-      style={{
-        ...ROW_STYLE,
-        width: "100%",
-        cursor: "pointer",
-        textAlign: "left",
-      }}
-    >
-      <UserIdentity profile={profile} size={28} />
-      <span style={{ fontSize: 16, color: "#666663", flexShrink: 0 }}>›</span>
-    </button>
   );
 }
 
@@ -507,7 +509,7 @@ export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowC
   const [openProfile, setOpenProfile] = useState(null);
   const [openRelation, setOpenRelation] = useState(null);
   const [searchUnfollowTarget, setSearchUnfollowTarget] = useState(null);
-  const [tasteBudUnfollowTarget, setTasteBudUnfollowTarget] = useState(null);
+  const [inlineUnfollowTarget, setInlineUnfollowTarget] = useState(null);
   /** New Followers section is collapsible. Default state derives from the
    *  current count (expanded if there are unseen followers, collapsed if 0).
    *  Tracked here so the user can manually collapse a non-empty list. */
@@ -632,11 +634,13 @@ export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowC
       .sort(byDisplayName);
   }, [followers]);
 
-  /** Alphabetical Taste Buds. Plain `.sort` mutates, so spread first. */
-  const tasteBudsSorted = useMemo(
-    () => [...tasteBuds].sort(byDisplayName),
-    [tasteBuds],
-  );
+  /** Merged following list: Taste Buds (mutual) alphabetically first, then
+   *  non-mutual Following alphabetically. No section headers. */
+  const mergedFollowingList = useMemo(() => {
+    const buds = [...tasteBuds].sort(byDisplayName);
+    const nonMutual = following.filter((f) => !f.isMutual).sort(byDisplayName);
+    return [...buds, ...nonMutual];
+  }, [tasteBuds, following]);
 
   /** Auto-collapse when the count flips to 0 / auto-expand when it returns.
    *  Manual toggles still win for the rest of the session. */
@@ -649,16 +653,7 @@ export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowC
     }
   }, [pendingFollowers.length]);
 
-  /** Non-mutual following — people I follow who haven't followed me back. */
-  const nonMutualFollowing = useMemo(
-    () => following.filter((f) => !f.isMutual).sort(byDisplayName),
-    [following],
-  );
-
-  /** Paginated tails for the three people-lists. No sort/filter UI on this
-   *  tab so the only natural reset is when the source array's size changes. */
-  const tasteBudsPage = usePaginatedList(tasteBudsSorted, String(tasteBudsSorted.length));
-  const followingPage = usePaginatedList(nonMutualFollowing, String(nonMutualFollowing.length));
+  const mergedPage = usePaginatedList(mergedFollowingList, String(mergedFollowingList.length));
   const pendingFollowersPage = usePaginatedList(pendingFollowers, String(pendingFollowers.length));
 
   function setBusy(id, on) {
@@ -827,53 +822,27 @@ export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowC
         </div>
       )}
 
-      {/* Taste Buds (mutual follows) */}
-      <div style={{ ...SECTION_LABEL_STYLE, display: "flex", justifyContent: "space-between" }}>
-        <span>{t.tasteBuds || "Taste Buds"}</span>
-        {tasteBuds.length > 0 && (
-          <span style={{ color: "#666663" }}>({tasteBuds.length})</span>
-        )}
-      </div>
-      {!tasteBuds.length && (
+      {/* Following (Taste Buds first, then non-mutual — no section headers) */}
+      {mergedFollowingList.length === 0 && (
         <p style={{ fontSize: 12, color: "#888780", margin: "0 0 16px" }}>
-          {t.noTasteBudsYet || "No taste buds yet. Follow someone — if they follow you back, you become Taste Buds!"}
+          {t.noFollowingYet || "Not following anyone yet. Search for someone above!"}
         </p>
       )}
-      {tasteBudsPage.visible.map((f) => (
-        <TasteBudRow
+      {mergedPage.visible.map((f) => (
+        <FollowRow
           key={f.id}
           entry={f}
-          stats={budStats[f.otherUserId]}
+          stats={f.isMutual ? budStats[f.otherUserId] : undefined}
           onOpen={openProfileSheet}
-          onUnfollowConfirm={(profile) => setTasteBudUnfollowTarget(profile)}
+          onUnfollowConfirm={(profile, isMutual) => setInlineUnfollowTarget({ profile, isMutual })}
+          t={t}
         />
       ))}
       <ShowMoreButton
-        remaining={tasteBudsPage.remaining}
-        pageSize={tasteBudsPage.pageSize}
-        onClick={tasteBudsPage.showMore}
+        remaining={mergedPage.remaining}
+        pageSize={mergedPage.pageSize}
+        onClick={mergedPage.showMore}
       />
-
-      {/* Following (I follow them, they haven't followed back) */}
-      {nonMutualFollowing.length > 0 && (
-        <div style={{ marginTop: 18, marginBottom: 16 }}>
-          <div style={SECTION_LABEL_STYLE}>
-            {t.following || "Following"}
-          </div>
-          {followingPage.visible.map((r) => (
-            <FollowingRow
-              key={r.id}
-              entry={r}
-              onOpen={openProfileSheet}
-            />
-          ))}
-          <ShowMoreButton
-            remaining={followingPage.remaining}
-            pageSize={followingPage.pageSize}
-            onClick={followingPage.showMore}
-          />
-        </div>
-      )}
 
       {/* Taste Buds' top picks */}
       {topPicks.length > 0 && (
@@ -912,16 +881,16 @@ export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowC
         />
       )}
 
-      {tasteBudUnfollowTarget && (
+      {inlineUnfollowTarget && (
         <UnfollowConfirmDialog
-          profile={tasteBudUnfollowTarget}
-          isTasteBuds
-          busy={!!busyById[tasteBudUnfollowTarget.id]}
+          profile={inlineUnfollowTarget.profile}
+          isTasteBuds={inlineUnfollowTarget.isMutual}
+          busy={!!busyById[inlineUnfollowTarget.profile.id]}
           onConfirm={async () => {
-            await handleUnfollow(tasteBudUnfollowTarget.id);
-            setTasteBudUnfollowTarget(null);
+            await handleUnfollow(inlineUnfollowTarget.profile.id);
+            setInlineUnfollowTarget(null);
           }}
-          onCancel={() => setTasteBudUnfollowTarget(null)}
+          onCancel={() => setInlineUnfollowTarget(null)}
         />
       )}
     </div>
