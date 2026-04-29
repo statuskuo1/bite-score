@@ -71,7 +71,6 @@ export default function App() {
   const [dbLoaded, setDbLoaded] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showWelcome, setShowWelcome] = useState(true);
-  const [faqOverrides, setFaqOverrides] = useState({});
   const [welcomeOverride, setWelcomeOverride] = useState({});
   /** Unseen-followers count drives the red badge on the Community tab in the
    *  bottom nav. Refreshed on auth + after every follow/unfollow action; the
@@ -213,12 +212,6 @@ export default function App() {
             const ql = sData.find((s) => s.key === "questLetters");
             if (ql) setQuestL(new Set(JSON.parse(ql.value)));
           }
-          const faqOverrides = {};
-          sData.filter((s) => s.key.startsWith("faq_override_")).forEach((s) => {
-            const idx = parseInt(s.key.replace("faq_override_", ""), 10);
-            faqOverrides[idx] = s.value;
-          });
-          if (Object.keys(faqOverrides).length > 0) setFaqOverrides(faqOverrides);
           const wo = {};
           sData.filter((s) => s.key.startsWith("welcome_")).forEach((s) => {
             wo[s.key.replace("welcome_", "")] = s.value;
@@ -951,7 +944,7 @@ export default function App() {
       )}
 
       {/* ── FAQ ── */}
-      {st.view==="faq"&&<FaqView faqOverrides={faqOverrides}/>}
+      {st.view==="faq"&&<FaqView/>}
 
       </>
       )}
