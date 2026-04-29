@@ -429,11 +429,6 @@ export function CompareTab({ user, initialTarget, onClearTarget, onFollowChange 
         </>
       )}
 
-      {isTasteBud && (
-        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
-          <Pill onClick={handleUnfollow} tone="danger">{t.unfollow || "Unfollow"}</Pill>
-        </div>
-      )}
     </div>
   );
 }
