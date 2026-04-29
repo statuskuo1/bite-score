@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLang } from "../contexts/LangContext.jsx";
 import { CAFE_ORDERS, CAFE_ICONS } from "../constants/cafeCatalog.js";
 import { INIT_CAFE } from "../data/initialData.js";
@@ -32,6 +32,101 @@ const FLAVOR_NOTES = [
   { value: "Spice", labelKey: "flavorSpice" },
   { value: "Smoky", labelKey: "flavorSmoky" },
 ];
+
+function FlavorDropdown({ activeNotes, onToggle, t }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handler(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const count = activeNotes.size;
+
+  return (
+    <div ref={ref} style={{position:"relative"}}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between",
+          padding:"9px 12px", background:"#1E1E1C",
+          border:"0.5px solid rgba(255,255,255,0.12)",
+          borderRadius:8,
+          borderBottomLeftRadius:open?0:8, borderBottomRightRadius:open?0:8,
+          cursor:"pointer",
+        }}
+      >
+        <span style={{fontSize:13, color:count===0?"#666663":"#F1EFE8"}}>
+          {count===0 ? "Select flavor notes" : `${count} selected`}
+        </span>
+        <span style={{fontSize:10, color:"#888780", display:"inline-block", transform:open?"rotate(180deg)":"none", transition:"transform 0.15s"}}>▼</span>
+      </button>
+
+      {open && (
+        <div style={{
+          position:"absolute", top:"100%", left:0, right:0, zIndex:60,
+          background:"#1E1E1C", border:"0.5px solid rgba(255,255,255,0.12)",
+          borderTop:"none", borderRadius:"0 0 8px 8px",
+          maxHeight:220, overflowY:"auto",
+        }}>
+          {FLAVOR_NOTES.map(n => {
+            const on = activeNotes.has(n.value);
+            return (
+              <div
+                key={n.value}
+                onClick={() => onToggle(n.value)}
+                style={{
+                  display:"flex", alignItems:"center", gap:10,
+                  padding:"10px 14px", cursor:"pointer",
+                  background:on?"rgba(240,153,123,0.06)":"transparent",
+                  borderBottom:"0.5px solid rgba(255,255,255,0.06)",
+                }}
+              >
+                <div style={{
+                  width:16, height:16, borderRadius:4, flexShrink:0,
+                  border:"1.5px solid "+(on?"#F0997B":"rgba(255,255,255,0.25)"),
+                  background:on?"#F0997B":"transparent",
+                  display:"flex", alignItems:"center", justifyContent:"center",
+                }}>
+                  {on && <span style={{color:"#141413", fontSize:10, lineHeight:1, fontWeight:700}}>✓</span>}
+                </div>
+                <span style={{fontSize:13, color:on?"#F0997B":"#C8C4BC"}}>{t[n.labelKey]}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {count > 0 && (
+        <div style={{display:"flex", flexWrap:"wrap", gap:6, marginTop:8}}>
+          {[...activeNotes].map(val => {
+            const note = FLAVOR_NOTES.find(n => n.value === val);
+            return (
+              <div key={val} style={{
+                display:"flex", alignItems:"center", gap:3,
+                padding:"3px 6px 3px 10px", borderRadius:20,
+                background:"#3C1F13", border:"1px solid rgba(240,153,123,0.35)",
+              }}>
+                <span style={{fontSize:12, color:"#F0997B"}}>{note ? t[note.labelKey] : val}</span>
+                <button
+                  type="button"
+                  onClick={e => { e.stopPropagation(); onToggle(val); }}
+                  style={{background:"none", border:"none", cursor:"pointer", color:"rgba(240,153,123,0.7)", fontSize:15, lineHeight:1, padding:"0 2px", display:"flex", alignItems:"center"}}
+                >×</button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addType,setAddType,existingCafes,existingCities,places,onPlaceCreated}) {
   const {t} = useLang();
@@ -109,18 +204,11 @@ export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addT
     );
   };
 
-  const flavorNoteLabel = (val) => {
-    const f = FLAVOR_NOTES.find(n=>n.value===val);
-    return f ? t[f.labelKey] : val;
-  };
   const toggleNote = (n) => {
     const cur = Array.isArray(f.flavorNotes) ? f.flavorNotes : [];
     inp("flavorNotes", cur.includes(n) ? cur.filter(x=>x!==n) : [...cur, n]);
   };
   const activeNotes = new Set(Array.isArray(f.flavorNotes) ? f.flavorNotes : []);
-  const flavorSummary = activeNotes.size === 0
-    ? t.optional ? `(${t.optional})` : "(none)"
-    : [...activeNotes].map(flavorNoteLabel).join(", ");
 
   const selectStyle = {...S.wb, appearance:"none", WebkitAppearance:"none", MozAppearance:"none", paddingRight:28, backgroundImage:"linear-gradient(45deg, transparent 50%, #888780 50%), linear-gradient(135deg, #888780 50%, transparent 50%)", backgroundPosition:"calc(100% - 14px) 50%, calc(100% - 9px) 50%", backgroundSize:"5px 5px, 5px 5px", backgroundRepeat:"no-repeat"};
 
@@ -217,22 +305,10 @@ export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addT
           <TastingSlider field="body" label={t.body} leftLabel={t.bodyLow} rightLabel={t.bodyHigh}/>
           <TastingSlider field="sweetness" label={t.sweetness} leftLabel={t.sweetnessLow} rightLabel={t.sweetnessHigh}/>
 
-          <details style={{marginTop:12}}>
-            <summary style={{cursor:"pointer",listStyle:"none",userSelect:"none",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",borderRadius:8,background:"#1E1E1C",border:"0.5px solid rgba(255,255,255,0.1)"}}>
-              <span style={{fontSize:12,color:activeNotes.size?"#F1EFE8":"#888780"}}>
-                <span style={{color:"#888780"}}>{t.flavorNotes}: </span>{flavorSummary}
-              </span>
-              <span style={{fontSize:11,color:"#888780"}}>▾</span>
-            </summary>
-            <div style={{display:"flex",flexWrap:"wrap",gap:6,padding:"10px 0 4px"}}>
-              {FLAVOR_NOTES.map(n=>{
-                const on = activeNotes.has(n.value);
-                return (
-                  <div key={n.value} onClick={()=>toggleNote(n.value)} style={{padding:"5px 12px",borderRadius:20,cursor:"pointer",fontSize:12,background:on?"#3C1F13":"#1E1E1C",border:"1px solid "+(on?"#F0997B":"rgba(255,255,255,0.1)"),color:on?"#F0997B":"#888780"}}>{t[n.labelKey]}</div>
-                );
-              })}
-            </div>
-          </details>
+          <div style={{marginTop:12}}>
+            <FieldLabel>{t.flavorNotes} <span style={{color:"#888780",fontWeight:400,fontSize:11}}>({t.optional||"optional"})</span></FieldLabel>
+            <FlavorDropdown activeNotes={activeNotes} onToggle={toggleNote} t={t}/>
+          </div>
 
           <div style={{marginTop:12}}>
             <FieldLabel>{t.beanRegion} <span style={{color:"#888780",fontWeight:400,fontSize:11}}>({t.optional||"optional"})</span></FieldLabel>
