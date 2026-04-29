@@ -115,53 +115,53 @@ function modeOf(rows, field) {
 }
 
 /**
- * Follow action button. States:
- *   - "none"       → Follow button
- *   - "they_follow" → Follow back button (they follow you, you don't follow them)
- *   - "i_follow"   → Following (with unfollow)
- *   - "taste_buds" → Taste Buds label + Compare + Unfollow
+ * Inline action shown on search result rows. Only Follow / Follow Back are
+ * interactive here — unfollow lives inside the MiniProfileSheet so it can't
+ * be triggered by accident. Already-following states show a static badge.
+ * Follow/Follow Back use stopPropagation so tapping them doesn't also open
+ * the profile sheet.
  */
-function FollowRowAction({ profile, relation, busy, onFollow, onUnfollow, onCompareWith, t }) {
+function SearchRowAction({ profile, relation, busy, onFollow, t }) {
   if (busy) return <span style={{ fontSize: 11, color: "#888780" }}>…</span>;
 
   switch (relation) {
     case "taste_buds":
       return (
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <span style={{
-            fontSize: 10, fontWeight: 600, padding: "4px 10px", borderRadius: 20,
-            background: "#1A2E0A", color: "#97C459",
-            border: "1px solid rgba(151,196,89,0.4)",
-          }}>
-            {t.tasteBuds || "Taste Buds"}
-          </span>
-          {onCompareWith && (
-            <Pill onClick={() => onCompareWith(profile)} tone="default">
-              {t.compareSub}
-            </Pill>
-          )}
-          <Pill onClick={() => onUnfollow(profile.id)} tone="danger">
-            {t.unfollow || "Unfollow"}
-          </Pill>
-        </div>
+        <span style={{
+          fontSize: 10, fontWeight: 600, padding: "4px 10px", borderRadius: 20,
+          background: "#1A2E0A", color: "#97C459",
+          border: "1px solid rgba(151,196,89,0.4)",
+          whiteSpace: "nowrap", flexShrink: 0,
+        }}>
+          {t.tasteBuds || "Taste Buds"}
+        </span>
       );
     case "i_follow":
       return (
-        <Pill onClick={() => onUnfollow(profile.id)} tone="muted">
+        <span style={{
+          fontSize: 10, fontWeight: 600, padding: "4px 10px", borderRadius: 20,
+          background: "rgba(155,169,213,0.1)", color: "#9BA9D5",
+          border: "1px solid rgba(155,169,213,0.3)",
+          whiteSpace: "nowrap", flexShrink: 0,
+        }}>
           {t.following || "Following"}
-        </Pill>
+        </span>
       );
     case "they_follow":
       return (
-        <Pill onClick={() => onFollow(profile.id)} tone="primary">
-          {t.followBack || "Follow back"}
-        </Pill>
+        <div onClick={(e) => e.stopPropagation()}>
+          <Pill onClick={() => onFollow(profile.id)} tone="primary">
+            {t.followBack || "Follow back"}
+          </Pill>
+        </div>
       );
     default:
       return (
-        <Pill onClick={() => onFollow(profile.id)} tone="primary">
-          {t.follow || "Follow"}
-        </Pill>
+        <div onClick={(e) => e.stopPropagation()}>
+          <Pill onClick={() => onFollow(profile.id)} tone="primary">
+            {t.follow || "Follow"}
+          </Pill>
+        </div>
       );
   }
 }
@@ -321,10 +321,16 @@ function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClose, onCo
   if (!profile) return null;
 
   const name = profile.display_name || profile.username || "—";
-  const isTasteBuds = relation === "taste_buds";
-  const badgeTone = isTasteBuds
-    ? { bg: "#1A2E0A", color: "#97C459", border: "rgba(151,196,89,0.4)", label: t.tasteBuds || "Taste Buds" }
-    : { bg: "#1F1A2E", color: "#9BA9D5", border: "rgba(155,169,213,0.4)", label: t.following || "Following" };
+  const canUnfollow = relation === "taste_buds" || relation === "i_follow";
+
+  const badge = (() => {
+    switch (relation) {
+      case "taste_buds": return { bg: "#1A2E0A", color: "#97C459", border: "rgba(151,196,89,0.4)", label: t.tasteBuds || "Taste Buds" };
+      case "i_follow":   return { bg: "#1F1A2E", color: "#9BA9D5", border: "rgba(155,169,213,0.4)", label: t.following || "Following" };
+      case "they_follow": return { bg: "#252523", color: "#888780", border: "rgba(255,255,255,0.15)", label: "Follows you" };
+      default: return null;
+    }
+  })();
 
   return (
     <div
@@ -349,7 +355,7 @@ function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClose, onCo
           boxShadow: "0 -8px 32px rgba(0,0,0,0.6)",
         }}
       >
-       <div onClick={onClose} style={{
+        <div onClick={onClose} style={{
           width: 36, height: 4, borderRadius: 2,
           background: "rgba(255,255,255,0.2)",
           margin: "0 auto 14px",
@@ -366,38 +372,20 @@ function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClose, onCo
             }}>
               {name}
             </div>
-            <div style={{
-  display: "flex", alignItems: "center", justifyContent: "space-between",
-  marginTop: 2,
-}}>
-  <div style={{
-    fontSize: 12, color: "#888780",
-    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-  }}>
-    @{profile.username || "–"}
-  </div>
-  <button
-    type="button"
-    disabled={busy}
-    onClick={() => onUnfollow?.(profile.id)}
-    style={{
-      fontSize: 11, color: "#A32D2D", background: "none",
-      border: "none", cursor: busy ? "not-allowed" : "pointer",
-      opacity: busy ? 0.6 : 1, padding: 0, flexShrink: 0,
-    }}
-  >
-    {busy ? "…" : (t.unfollow || "Unfollow")}
-  </button>
-</div>
-            <div style={{ marginTop: 6 }}>
-              <span style={{
-                fontSize: 10, fontWeight: 600, padding: "4px 10px", borderRadius: 20,
-                background: badgeTone.bg, color: badgeTone.color,
-                border: `1px solid ${badgeTone.border}`,
-              }}>
-                {badgeTone.label}
-              </span>
+            <div style={{ fontSize: 12, color: "#888780", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              @{profile.username || "–"}
             </div>
+            {badge && (
+              <div style={{ marginTop: 6 }}>
+                <span style={{
+                  fontSize: 10, fontWeight: 600, padding: "4px 10px", borderRadius: 20,
+                  background: badge.bg, color: badge.color,
+                  border: `1px solid ${badge.border}`,
+                }}>
+                  {badge.label}
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -427,21 +415,39 @@ function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClose, onCo
             {t.viewLog || "View log"}
           </button>
 
-          <button
-            type="button"
-            onClick={() => { onCompareWith?.(profile); onClose?.(); }}
-            style={{
-              padding: "12px 14px", borderRadius: 10,
-              background: "#3C1F13",
-              border: "1px solid rgba(240,153,123,0.4)",
-              color: "#F0997B", fontSize: 14, fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            {t.compareSub || "Compare"}
-          </button>
+          {relation === "taste_buds" && (
+            <button
+              type="button"
+              onClick={() => { onCompareWith?.(profile); onClose?.(); }}
+              style={{
+                padding: "12px 14px", borderRadius: 10,
+                background: "#3C1F13",
+                border: "1px solid rgba(240,153,123,0.4)",
+                color: "#F0997B", fontSize: 14, fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              {t.compareSub || "Compare"}
+            </button>
+          )}
 
-        
+          {canUnfollow && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onUnfollow?.(profile.id)}
+              style={{
+                padding: "12px 14px", borderRadius: 10,
+                background: "transparent",
+                border: "1px solid rgba(163,45,45,0.4)",
+                color: busy ? "#888780" : "#A32D2D", fontSize: 14, fontWeight: 500,
+                cursor: busy ? "not-allowed" : "pointer",
+                opacity: busy ? 0.6 : 1,
+              }}
+            >
+              {busy ? "…" : (t.unfollow || "Unfollow")}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -695,23 +701,24 @@ export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowC
             const errForRow = followError?.targetId === p.id ? followError.message : null;
             return (
               <div key={p.id}>
-                <div style={ROW_STYLE}>
-                  <UserIdentity profile={p} size={28} />
-                  <FollowRowAction
+                <button
+                  type="button"
+                  onClick={() => openProfileSheet(p, rel)}
+                  style={{ ...ROW_STYLE, width: "100%", cursor: "pointer", textAlign: "left" }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <UserIdentity profile={p} size={28} />
+                  </div>
+                  <SearchRowAction
                     profile={p}
                     relation={rel}
                     busy={busy}
                     onFollow={handleFollow}
-                    onUnfollow={handleUnfollow}
-                    onCompareWith={onCompareWith}
                     t={t}
                   />
-                </div>
+                </button>
                 {errForRow && (
-                  <p style={{
-                    fontSize: 11, color: "#A32D2D",
-                    margin: "-2px 0 8px 4px",
-                  }}>
+                  <p style={{ fontSize: 11, color: "#A32D2D", margin: "-2px 0 8px 4px" }}>
                     {errForRow}
                   </p>
                 )}
