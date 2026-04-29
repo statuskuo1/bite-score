@@ -284,14 +284,16 @@ export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addT
           pastOrdersAtCafe={pastOrdersAtCafe}
           popularAtCafe={popularAtCafe}
           pastOrdersForCategory={pastOrdersForCategory}
-          placeholder={t.anythingMemorable}
+          placeholder="Select an order"
         />
       </div>
 
       {f.category==="Coffee" && (
         <details style={{marginBottom:16}}>
-          <summary style={{cursor:"pointer",fontSize:12,color:"#888780",padding:"4px 0",userSelect:"none"}}>
-            {t.coffeeDetails} <span style={{fontWeight:400,opacity:0.6}}>({t.optional||"optional"})</span>
+          <summary style={{cursor:"pointer",userSelect:"none",listStyle:"none",display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:20,background:"#252523",border:"1px solid rgba(255,255,255,0.12)",fontSize:13,color:"#F1EFE8",fontWeight:500,width:"fit-content"}}>
+            {t.coffeeDetails}
+            <span style={{fontSize:11,color:"#888780",fontWeight:400}}>({t.optional||"optional"})</span>
+            <span style={{fontSize:10,color:"#888780"}}>▾</span>
           </summary>
           <div style={{marginTop:10}}>
             <FieldLabel>{t.roast}</FieldLabel>
@@ -313,7 +315,7 @@ export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addT
           <div style={{marginTop:12}}>
             <FieldLabel>{t.beanRegion}</FieldLabel>
             <select value={f.beanRegion||""} onChange={e=>inp("beanRegion", e.target.value)} style={selectStyle}>
-              <option value="">—</option>
+              <option value="">Select a region</option>
               {BEAN_ORIGINS.map(b => <option key={b} value={b}>{b}</option>)}
               {f.beanRegion && !BEAN_ORIGINS.includes(f.beanRegion) && (
                 <option value={f.beanRegion}>{f.beanRegion} (legacy)</option>
