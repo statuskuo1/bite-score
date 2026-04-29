@@ -258,18 +258,21 @@ function UnfollowConfirmDialog({ profile, isTasteBuds, busy, onConfirm, onCancel
 }
 
 /** One Taste Bud row. Same compact layout as FollowingRow; MatchPill on the right. */
-function TasteBudRow({ entry, stats, onOpen }) {
+function TasteBudRow({ entry, stats, onOpen, onUnfollowConfirm }) {
   const { t } = useLang();
   const profile = entry.otherProfile;
   return (
-    <button
-      type="button"
-      onClick={() => onOpen?.(profile, "taste_buds")}
-      style={{ ...ROW_STYLE, width: "100%", cursor: "pointer", textAlign: "left" }}
-    >
-      <UserIdentity profile={profile} size={28} />
+    <div style={{ ...ROW_STYLE }}>
+      <button
+        type="button"
+        onClick={() => onOpen?.(profile, "taste_buds")}
+        style={{ flex: 1, minWidth: 0, background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0 }}
+      >
+        <UserIdentity profile={profile} size={28} />
+      </button>
+      <Pill tone="muted" onClick={() => onUnfollowConfirm?.(profile)}>Following</Pill>
       <MatchPill score={stats?.compatScore ?? null} suffix={t.matchSuffix} />
-    </button>
+    </div>
   );
 }
 
@@ -504,6 +507,7 @@ export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowC
   const [openProfile, setOpenProfile] = useState(null);
   const [openRelation, setOpenRelation] = useState(null);
   const [searchUnfollowTarget, setSearchUnfollowTarget] = useState(null);
+  const [tasteBudUnfollowTarget, setTasteBudUnfollowTarget] = useState(null);
   /** New Followers section is collapsible. Default state derives from the
    *  current count (expanded if there are unseen followers, collapsed if 0).
    *  Tracked here so the user can manually collapse a non-empty list. */
@@ -841,6 +845,7 @@ export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowC
           entry={f}
           stats={budStats[f.otherUserId]}
           onOpen={openProfileSheet}
+          onUnfollowConfirm={(profile) => setTasteBudUnfollowTarget(profile)}
         />
       ))}
       <ShowMoreButton
@@ -904,6 +909,19 @@ export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowC
             setSearchUnfollowTarget(null);
           }}
           onCancel={() => setSearchUnfollowTarget(null)}
+        />
+      )}
+
+      {tasteBudUnfollowTarget && (
+        <UnfollowConfirmDialog
+          profile={tasteBudUnfollowTarget}
+          isTasteBuds
+          busy={!!busyById[tasteBudUnfollowTarget.id]}
+          onConfirm={async () => {
+            await handleUnfollow(tasteBudUnfollowTarget.id);
+            setTasteBudUnfollowTarget(null);
+          }}
+          onCancel={() => setTasteBudUnfollowTarget(null)}
         />
       )}
     </div>

@@ -42,6 +42,36 @@ function EyeOffIcon() {
   );
 }
 
+function PasswordInput({ value, onChange, onFocus, onBlur, onEnter, showPassword, onToggleShow, autoComplete = "current-password", showHelper = false }) {
+  return (
+    <div style={{ position: "relative", marginBottom: showHelper ? 4 : 14 }}>
+      <input
+        type={showPassword ? "text" : "password"}
+        autoComplete={autoComplete}
+        value={value}
+        onChange={onChange}
+        onFocus={onFocus}
+        onBlur={onBlur}
+        onKeyDown={(e) => e.key === "Enter" && onEnter?.()}
+        style={{ width: "100%", boxSizing: "border-box", fontSize: 14, paddingRight: 38 }}
+      />
+      <button
+        type="button"
+        onClick={onToggleShow}
+        style={{
+          position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+          background: "none", border: "none", cursor: "pointer", padding: 0,
+          color: "#888780", lineHeight: 0, display: "flex",
+        }}
+        tabIndex={-1}
+        aria-label={showPassword ? "Hide password" : "Show password"}
+      >
+        {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+      </button>
+    </div>
+  );
+}
+
 function GoogleIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -390,36 +420,6 @@ export function AuthModal({ open, onClose }) {
     }
   }
 
-  function PasswordInput({ onEnter, autoComplete = "current-password", showHelper = false }) {
-    return (
-      <div style={{ position: "relative", marginBottom: showHelper ? 4 : 14 }}>
-        <input
-          type={showPassword ? "text" : "password"}
-          autoComplete={autoComplete}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          onFocus={() => setPasswordFocused(true)}
-          onBlur={() => setPasswordFocused(false)}
-          onKeyDown={(e) => e.key === "Enter" && onEnter?.()}
-          style={{ width: "100%", boxSizing: "border-box", fontSize: 14, paddingRight: 38 }}
-        />
-        <button
-          type="button"
-          onClick={() => setShowPassword((v) => !v)}
-          style={{
-            position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
-            background: "none", border: "none", cursor: "pointer", padding: 0,
-            color: "#888780", lineHeight: 0, display: "flex",
-          }}
-          tabIndex={-1}
-          aria-label={showPassword ? "Hide password" : "Show password"}
-        >
-          {showPassword ? <EyeOffIcon /> : <EyeIcon />}
-        </button>
-      </div>
-    );
-  }
-
   const panel = {
     background: "#1E1E1C",
     borderRadius: 16,
@@ -731,7 +731,17 @@ export function AuthModal({ open, onClose }) {
               style={inputStyle}
             />
             <label style={labelStyle}>{t.authPasswordLabel}</label>
-            <PasswordInput onEnter={signUpWithPassword} autoComplete="new-password" showHelper />
+            <PasswordInput
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onFocus={() => setPasswordFocused(true)}
+              onBlur={() => setPasswordFocused(false)}
+              onEnter={signUpWithPassword}
+              showPassword={showPassword}
+              onToggleShow={() => setShowPassword((v) => !v)}
+              autoComplete="new-password"
+              showHelper
+            />
             {(passwordFocused || password.length > 0) && (
               <div style={{ fontSize: 11, color: password.length > 0 && password.length < 8 ? "#A32D2D" : "#666663", marginBottom: 12, lineHeight: 1.4 }}>
                 At least 8 characters
@@ -767,7 +777,15 @@ export function AuthModal({ open, onClose }) {
               style={inputStyle}
             />
             <label style={labelStyle}>{t.authPasswordLabel}</label>
-            <PasswordInput onEnter={signInWithPassword} />
+            <PasswordInput
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onFocus={() => setPasswordFocused(true)}
+              onBlur={() => setPasswordFocused(false)}
+              onEnter={signInWithPassword}
+              showPassword={showPassword}
+              onToggleShow={() => setShowPassword((v) => !v)}
+            />
             <button type="button" disabled={busy} onClick={signInWithPassword}
               style={{ ...btn, background: "#F0997B", color: "#141413" }}>
               {busy ? "…" : t.authSignInPassword}

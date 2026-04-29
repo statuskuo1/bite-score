@@ -133,13 +133,14 @@ export function NotificationPanel({ notifications, loading, onClose, onFollowBac
 
   useEffect(() => {
     function handler(e) {
+      if (openProfile) return; // profile overlay is on top — don't close panel
       if (panelRef.current && !panelRef.current.contains(e.target)) {
         onClose();
       }
     }
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [onClose]);
+  }, [onClose, openProfile]);
 
   return (
     <>
