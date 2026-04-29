@@ -293,18 +293,16 @@ function StatCell({ value, label }) {
  * Owns its own stats fetch so callers stay simple — they just hand us a
  * profile and a relation kind.
  *
- * View Log is a stub for the upcoming read-only leaderboard view; clicking
- * it surfaces an inline "Coming soon" hint instead of navigating.
+ * View Log closes the sheet and hands the profile back to the caller, which
+ * swaps in the read-only `UserLogView` for that user.
  */
-function MiniProfileSheet({ profile, relation, busy, onClose, onCompareWith, onUnfollow, t }) {
+function MiniProfileSheet({ profile, relation, busy, onClose, onCompareWith, onUnfollow, onViewLog, t }) {
   const [stats, setStats] = useState(null);
-  const [logHint, setLogHint] = useState(false);
 
   useEffect(() => {
     if (!profile?.id) { setStats(null); return; }
     let cancelled = false;
     setStats(null);
-    setLogHint(false);
     (async () => {
       const s = await fetchUserProfileStats(supabase, profile.id);
       if (!cancelled) setStats(s);
@@ -397,7 +395,7 @@ function MiniProfileSheet({ profile, relation, busy, onClose, onCompareWith, onU
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <button
             type="button"
-            onClick={() => setLogHint(true)}
+            onClick={() => { onViewLog?.(profile); onClose?.(); }}
             style={{
               padding: "12px 14px", borderRadius: 10,
               background: "transparent",
@@ -408,11 +406,6 @@ function MiniProfileSheet({ profile, relation, busy, onClose, onCompareWith, onU
           >
             {t.viewLog || "View log"}
           </button>
-          {logHint && (
-            <div style={{ fontSize: 11, color: "#888780", marginTop: -4, textAlign: "center" }}>
-              {t.comingSoon || "Coming soon"}
-            </div>
-          )}
 
           <button
             type="button"
@@ -449,7 +442,7 @@ function MiniProfileSheet({ profile, relation, busy, onClose, onCompareWith, onU
   );
 }
 
-export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowChange }) {
+export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowChange, onViewLog }) {
   const { t } = useLang();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
@@ -845,6 +838,7 @@ export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowC
           onClose={closeProfileSheet}
           onCompareWith={onCompareWith}
           onUnfollow={handleSheetUnfollow}
+          onViewLog={onViewLog}
           t={t}
         />
       )}

@@ -4,6 +4,7 @@ import { GlobalTab } from "./GlobalTab.jsx";
 import { FriendsTab } from "./FriendsTab.jsx";
 import { CompareTab } from "./CompareTab.jsx";
 import { GroupsTab } from "./GroupsTab.jsx";
+import { UserLogView } from "./UserLogView.jsx";
 
 const SUBS = [
   { key: "global", labelKey: "globalSub", hintKey: "communityHintGlobal", icon: "🌐" },
@@ -26,6 +27,10 @@ export function CommunityTab({ user, restaurantWeights, drinkWeights, sweetWeigh
   const { t } = useLang();
   const [active, setActive] = useState("global");
   const [compareTarget, setCompareTarget] = useState(null);
+  /** When set, the read-only `UserLogView` takes over the Community surface
+   *  until the user taps Back. The sub-tab strip and `active` selection are
+   *  preserved underneath so we land back on Friends on dismissal. */
+  const [userLogTarget, setUserLogTarget] = useState(null);
 
   function jumpToCompare(friendProfile) {
     setCompareTarget(friendProfile);
@@ -33,6 +38,17 @@ export function CommunityTab({ user, restaurantWeights, drinkWeights, sweetWeigh
   }
 
   const hint = t[SUBS.find((s) => s.key === active)?.hintKey] || "";
+
+  if (userLogTarget) {
+    return (
+      <UserLogView
+        user={user}
+        targetProfile={userLogTarget}
+        restaurantWeights={restaurantWeights}
+        onBack={() => setUserLogTarget(null)}
+      />
+    );
+  }
 
   return (
     <div>
@@ -86,7 +102,13 @@ export function CommunityTab({ user, restaurantWeights, drinkWeights, sweetWeigh
         />
       )}
       {active === "friends" && (
-        <FriendsTab user={user} onCompareWith={jumpToCompare} onMarkFollowersSeen={onMarkFollowersSeen} onFollowChange={onFollowChange} />
+        <FriendsTab
+          user={user}
+          onCompareWith={jumpToCompare}
+          onMarkFollowersSeen={onMarkFollowersSeen}
+          onFollowChange={onFollowChange}
+          onViewLog={setUserLogTarget}
+        />
       )}
       {active === "compare" && (
         <CompareTab user={user} initialTarget={compareTarget} onClearTarget={() => setCompareTarget(null)} onFollowChange={onFollowChange} />
