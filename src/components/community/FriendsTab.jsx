@@ -115,39 +115,61 @@ function modeOf(rows, field) {
   return best;
 }
 
+/** Small inline badge span — purely informational, no interaction. */
+function StatusBadge({ label, bg, color, border }) {
+  return (
+    <span style={{
+      fontSize: 10, fontWeight: 600, padding: "4px 10px", borderRadius: 20,
+      background: bg, color, border: `1px solid ${border}`,
+      whiteSpace: "nowrap", flexShrink: 0,
+    }}>
+      {label}
+    </span>
+  );
+}
+
 /**
- * Inline action shown on search result rows. Only Follow / Follow Back are
- * interactive here — unfollow lives inside the MiniProfileSheet so it can't
- * be triggered by accident. Already-following states show a static badge.
- * Follow/Follow Back use stopPropagation so tapping them doesn't also open
- * the profile sheet.
+ * Inline actions on search result rows.
+ *
+ * - none       → Follow button
+ * - they_follow → Follow Back button
+ * - i_follow   → tappable "Following" badge (opens unfollow confirm on click)
+ * - taste_buds → non-tappable "Taste Buds" info tag + tappable "Following" badge
+ *
+ * All interactive elements stopPropagation so the row's own onClick (open sheet)
+ * doesn't also fire.
  */
-function SearchRowAction({ profile, relation, busy, onFollow, t }) {
+function SearchRowAction({ profile, relation, busy, onFollow, onUnfollowConfirm, t }) {
   if (busy) return <span style={{ fontSize: 11, color: "#888780" }}>…</span>;
+
+  const followingBadge = (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onUnfollowConfirm(profile); }}
+      style={{
+        fontSize: 10, fontWeight: 600, padding: "4px 10px", borderRadius: 20,
+        background: "rgba(155,169,213,0.1)", color: "#9BA9D5",
+        border: "1px solid rgba(155,169,213,0.3)",
+        whiteSpace: "nowrap", flexShrink: 0, cursor: "pointer",
+      }}
+    >
+      {t.following || "Following"}
+    </button>
+  );
 
   switch (relation) {
     case "taste_buds":
       return (
-        <span style={{
-          fontSize: 10, fontWeight: 600, padding: "4px 10px", borderRadius: 20,
-          background: "#1A2E0A", color: "#97C459",
-          border: "1px solid rgba(151,196,89,0.4)",
-          whiteSpace: "nowrap", flexShrink: 0,
-        }}>
-          {t.tasteBuds || "Taste Buds"}
-        </span>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }} onClick={(e) => e.stopPropagation()}>
+          <StatusBadge
+            label={t.tasteBuds || "Taste Buds"}
+            bg="#1A2E0A" color="#97C459" border="rgba(151,196,89,0.4)"
+          />
+          {followingBadge}
+        </div>
       );
     case "i_follow":
-      return (
-        <span style={{
-          fontSize: 10, fontWeight: 600, padding: "4px 10px", borderRadius: 20,
-          background: "rgba(155,169,213,0.1)", color: "#9BA9D5",
-          border: "1px solid rgba(155,169,213,0.3)",
-          whiteSpace: "nowrap", flexShrink: 0,
-        }}>
-          {t.following || "Following"}
-        </span>
-      );
+      return followingBadge;
     case "they_follow":
       return (
         <div onClick={(e) => e.stopPropagation()}>
@@ -165,6 +187,74 @@ function SearchRowAction({ profile, relation, busy, onFollow, t }) {
         </div>
       );
   }
+}
+
+/** Confirmation dialog rendered on top of MiniProfileSheet (or inline in search).
+ *  `isTasteBuds` changes the message to warn about losing the mutual connection. */
+function UnfollowConfirmDialog({ profile, isTasteBuds, busy, onConfirm, onCancel }) {
+  const username = profile?.username ? `@${profile.username}` : profile?.display_name || "this person";
+  return (
+    <div
+      onClick={onCancel}
+      style={{
+        position: "fixed", inset: 0,
+        background: "rgba(0,0,0,0.72)",
+        zIndex: 400,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: "1.5rem",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "100%", maxWidth: 320,
+          background: "#1E1E1C",
+          borderRadius: 14,
+          border: "0.5px solid rgba(255,255,255,0.15)",
+          padding: "20px",
+          boxSizing: "border-box",
+          boxShadow: "0 8px 40px rgba(0,0,0,0.7)",
+        }}
+      >
+        <div style={{ fontSize: 14, color: "#F1EFE8", fontWeight: 600, marginBottom: 8 }}>
+          Unfollow {username}?
+        </div>
+        {isTasteBuds && (
+          <div style={{ fontSize: 13, color: "#888780", marginBottom: 16, lineHeight: 1.5 }}>
+            This will remove your Taste Buds connection.
+          </div>
+        )}
+        <div style={{ display: "flex", gap: 8, marginTop: isTasteBuds ? 0 : 16 }}>
+          <button
+            type="button"
+            onClick={onCancel}
+            style={{
+              flex: 1, padding: "10px 14px", borderRadius: 10,
+              background: "transparent", border: "0.5px solid rgba(255,255,255,0.2)",
+              color: "#C4C2BA", fontSize: 14, fontWeight: 500, cursor: "pointer",
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onConfirm}
+            style={{
+              flex: 1, padding: "10px 14px", borderRadius: 10,
+              background: "transparent", border: "1px solid rgba(163,45,45,0.5)",
+              color: busy ? "#888780" : "#A32D2D",
+              fontSize: 14, fontWeight: 600,
+              cursor: busy ? "not-allowed" : "pointer",
+              opacity: busy ? 0.6 : 1,
+            }}
+          >
+            {busy ? "…" : "Unfollow"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /** One always-visible Taste Bud card. Tap → opens the mini profile sheet
@@ -285,10 +375,8 @@ function FollowerRow({ entry, onFollow, busy, t }) {
  */
 function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClose, onCompareWith, onUnfollow, onViewLog, t }) {
   const [stats, setStats] = useState(null);
+  const [confirmUnfollow, setConfirmUnfollow] = useState(false);
 
-  /** Prefer cached visits when the parent already has them (Taste Buds —
-   *  loaded eagerly for compatibility scoring). For Following-only profiles
-   *  we fetch on demand. */
   useEffect(() => {
     if (!profile?.id) { setStats(null); return; }
     if (cachedVisits) { setStats(computeFoodStats(cachedVisits)); return; }
@@ -310,120 +398,120 @@ function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClose, onCo
 
   const name = profile.display_name || profile.username || "—";
   const canUnfollow = relation === "taste_buds" || relation === "i_follow";
+  const canCompare = relation === "taste_buds" || relation === "i_follow";
 
-  const badge = (() => {
-    switch (relation) {
-      case "taste_buds": return { bg: "#1A2E0A", color: "#97C459", border: "rgba(151,196,89,0.4)", label: t.tasteBuds || "Taste Buds" };
-      case "i_follow":   return { bg: "#1F1A2E", color: "#9BA9D5", border: "rgba(155,169,213,0.4)", label: t.following || "Following" };
-      case "they_follow": return { bg: "#252523", color: "#888780", border: "rgba(255,255,255,0.15)", label: "Follows you" };
-      default: return null;
-    }
-  })();
+  const badgesByRelation = {
+    taste_buds: { bg: "#1A2E0A", color: "#97C459", border: "rgba(151,196,89,0.4)", label: t.tasteBuds || "Taste Buds" },
+    i_follow:   { bg: "#1F1A2E", color: "#9BA9D5", border: "rgba(155,169,213,0.4)", label: t.following || "Following" },
+    they_follow: { bg: "#252523", color: "#888780", border: "rgba(255,255,255,0.15)", label: "Follows you" },
+  };
+  const badge = badgesByRelation[relation] ?? null;
 
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: "fixed", inset: 0,
-        background: "rgba(0,0,0,0.78)",
-        zIndex: 320,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "1.5rem",
-      }}
-    >
+    <>
       <div
-        onClick={(e) => e.stopPropagation()}
+        onClick={onClose}
         style={{
-          width: "100%", maxWidth: 360,
-          background: "#1E1E1C",
-          borderRadius: 16,
-          border: "0.5px solid rgba(255,255,255,0.15)",
-          padding: "1.35rem",
-          boxSizing: "border-box",
-          boxShadow: "0 8px 40px rgba(0,0,0,0.7)",
+          position: "fixed", inset: 0,
+          background: "rgba(0,0,0,0.78)",
+          zIndex: 320,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: "1.5rem",
         }}
       >
-
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
-          <button
-            type="button"
-            onClick={onClose}
-            style={{ fontSize: 22, color: "#888780", background: "none", border: "none", cursor: "pointer", lineHeight: 1, padding: 0 }}
-          >×</button>
-        </div>
-
-        {/* ── Centered avatar + name (mirrors AuthModal profile view) ── */}
-        <div style={{ textAlign: "center", marginBottom: 12 }}>
-          <div style={{ marginBottom: 8 }}>
-            <Avatar profile={profile} size={56} />
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            width: "100%", maxWidth: 360,
+            background: "#1E1E1C",
+            borderRadius: 16,
+            border: "0.5px solid rgba(255,255,255,0.15)",
+            padding: "1.35rem",
+            boxSizing: "border-box",
+            boxShadow: "0 8px 40px rgba(0,0,0,0.7)",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{ fontSize: 22, color: "#888780", background: "none", border: "none", cursor: "pointer", lineHeight: 1, padding: 0 }}
+            >×</button>
           </div>
-          <div style={{ fontSize: 16, fontWeight: 600, color: "#F1EFE8", lineHeight: 1.2 }}>
-            {name}
+
+          <div style={{ textAlign: "center", marginBottom: 12 }}>
+            <div style={{ marginBottom: 8 }}>
+              <Avatar profile={profile} size={56} />
+            </div>
+            <div style={{ fontSize: 16, fontWeight: 600, color: "#F1EFE8", lineHeight: 1.2 }}>
+              {name}
+            </div>
+            <div style={{ fontSize: 13, color: "#C4C2BA", marginTop: 3 }}>
+              @{profile.username || "–"}
+            </div>
+            {badge && (
+              <div style={{ marginTop: 8 }}>
+                {canUnfollow ? (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmUnfollow(true)}
+                    style={{
+                      fontSize: 10, fontWeight: 600, padding: "4px 10px", borderRadius: 20,
+                      background: badge.bg, color: badge.color,
+                      border: `1px solid ${badge.border}`,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {badge.label}
+                  </button>
+                ) : (
+                  <StatusBadge label={badge.label} bg={badge.bg} color={badge.color} border={badge.border} />
+                )}
+              </div>
+            )}
           </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 3 }}>
-            <span style={{ fontSize: 13, color: "#C4C2BA" }}>@{profile.username || "–"}</span>
-            {canUnfollow && (
+
+          <FoodStatsBlock stats={stats} style={{ marginBottom: 14 }} />
+
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              type="button"
+              onClick={() => { onViewLog?.(profile); onClose?.(); }}
+              style={{
+                flex: 1, padding: "12px 14px", borderRadius: 10,
+                background: "#3C1F13", border: "1px solid rgba(240,153,123,0.4)",
+                color: "#F0997B", fontSize: 14, fontWeight: 600, cursor: "pointer",
+              }}
+            >
+              {t.viewLog || "View log"}
+            </button>
+            {canCompare && (
               <button
                 type="button"
-                disabled={busy}
-                onClick={() => onUnfollow?.(profile.id)}
+                onClick={() => { onCompareWith?.(profile); onClose?.(); }}
                 style={{
-                  fontSize: 11, color: "#A32D2D", background: "none",
-                  border: "none", cursor: busy ? "not-allowed" : "pointer",
-                  opacity: busy ? 0.6 : 1, padding: 0,
+                  flex: 1, padding: "12px 14px", borderRadius: 10,
+                  background: "transparent", border: "0.5px solid rgba(255,255,255,0.2)",
+                  color: "#C4C2BA", fontSize: 14, fontWeight: 500, cursor: "pointer",
                 }}
               >
-                {busy ? "…" : (t.unfollow || "Unfollow")}
+                {t.compareSub || "Compare"}
               </button>
             )}
           </div>
-          {badge && (
-            <div style={{ marginTop: 6 }}>
-              <span style={{
-                fontSize: 10, fontWeight: 600, padding: "4px 10px", borderRadius: 20,
-                background: badge.bg, color: badge.color,
-                border: `1px solid ${badge.border}`,
-              }}>
-                {badge.label}
-              </span>
-            </div>
-          )}
-        </div>
-
-        <FoodStatsBlock stats={stats} style={{ marginBottom: 14 }} />
-
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            type="button"
-            onClick={() => { onViewLog?.(profile); onClose?.(); }}
-            style={{
-              flex: 1, padding: "12px 14px", borderRadius: 10,
-              background: "#3C1F13", border: "1px solid rgba(240,153,123,0.4)",
-              color: "#F0997B", fontSize: 14, fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            {t.viewLog || "View log"}
-          </button>
-          {relation === "taste_buds" && (
-            <button
-              type="button"
-              onClick={() => { onCompareWith?.(profile); onClose?.(); }}
-              style={{
-                flex: 1, padding: "12px 14px", borderRadius: 10,
-                background: "transparent", border: "0.5px solid rgba(255,255,255,0.2)",
-                color: "#C4C2BA", fontSize: 14, fontWeight: 500,
-                cursor: "pointer",
-              }}
-            >
-              {t.compareSub || "Compare"}
-            </button>
-          )}
         </div>
       </div>
-    </div>
+
+      {confirmUnfollow && (
+        <UnfollowConfirmDialog
+          profile={profile}
+          isTasteBuds={relation === "taste_buds"}
+          busy={busy}
+          onConfirm={() => { onUnfollow?.(profile.id); setConfirmUnfollow(false); }}
+          onCancel={() => setConfirmUnfollow(false)}
+        />
+      )}
+    </>
   );
 }
 
