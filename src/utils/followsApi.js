@@ -221,6 +221,23 @@ export async function listTasteBuds(client, userId) {
   return tasteBuds;
 }
 
+/**
+ * Returns a Set of user IDs that `userId` is currently following.
+ * Lightweight — selects only `following_id`, no profile hydration.
+ */
+export async function fetchFollowingIds(client, userId) {
+  if (!userId) return new Set();
+  const { data, error } = await client
+    .from("follows")
+    .select("following_id")
+    .eq("follower_id", userId);
+  if (error) {
+    console.warn("[BITE] fetchFollowingIds error:", error);
+    return new Set();
+  }
+  return new Set((data || []).map((r) => r.following_id));
+}
+
 // ── Unseen-followers badge ───────────────────────────────────────────────────
 
 /** New Followers expiry window (also used by the FriendsTab list filter so the

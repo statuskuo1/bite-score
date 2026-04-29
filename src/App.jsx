@@ -48,7 +48,7 @@ import { ResetPasswordModal } from "./components/ResetPasswordModal.jsx";
 import { WeightSliders } from "./components/WeightSliders.jsx";
 import { CommunityTab } from "./components/community/CommunityTab.jsx";
 import { SortFilterToolbar } from "./components/SortFilterToolbar.jsx";
-import { countUnseenFollowers, markFollowersSeen, followUser, unfollowUser, getRelation } from "./utils/followsApi.js";
+import { countUnseenFollowers, markFollowersSeen, followUser, unfollowUser, getRelation, fetchFollowingIds } from "./utils/followsApi.js";
 import { MiniProfileSheet } from "./components/community/MiniProfileSheet.jsx";
 import { countUnreadNotifications, fetchUnreadNotifications, markNotificationsRead } from "./utils/notificationsApi.js";
 import { usePaginatedList } from "./components/usePaginatedList.js";
@@ -116,6 +116,7 @@ export default function App() {
   const [showNotifPanel, setShowNotifPanel] = useState(false);
   const [notifAnchorPos, setNotifAnchorPos] = useState(null);
   const [notifications, setNotifications] = useState([]);
+  const [notifFollowingIds, setNotifFollowingIds] = useState(() => new Set());
   const [notifLoading, setNotifLoading] = useState(false);
   const notifContainerRef = useRef(null);
   const [notifSheetProfile, setNotifSheetProfile] = useState(null);
@@ -157,8 +158,12 @@ export default function App() {
     setShowNotifPanel(true);
     setNotifLoading(true);
     try {
-      const rows = await fetchUnreadNotifications(supabase, user.id);
+      const [rows, ids] = await Promise.all([
+        fetchUnreadNotifications(supabase, user.id),
+        fetchFollowingIds(supabase, user.id),
+      ]);
       setNotifications(rows);
+      setNotifFollowingIds(ids);
       await markNotificationsRead(supabase, user.id);
       setNotifCount(0);
     } finally {
@@ -178,8 +183,12 @@ export default function App() {
     try {
       // Wait for the Postgres trigger to fire before fetching.
       await new Promise((r) => setTimeout(r, 700));
-      const rows = await fetchUnreadNotifications(supabase, user.id);
+      const [rows, ids] = await Promise.all([
+        fetchUnreadNotifications(supabase, user.id),
+        fetchFollowingIds(supabase, user.id),
+      ]);
       setNotifications(rows);
+      setNotifFollowingIds(ids);
       await markNotificationsRead(supabase, user.id);
       setNotifCount(0);
     } catch (err) {
@@ -747,6 +756,7 @@ export default function App() {
                   onOpenProfile={handleOpenNotifProfile}
                   sheetOpen={!!notifSheetProfile}
                   anchorPos={notifAnchorPos}
+                  followingIds={notifFollowingIds}
                 />
               )}
             </div>

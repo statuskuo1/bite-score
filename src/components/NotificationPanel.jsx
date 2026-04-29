@@ -14,12 +14,12 @@ function relativeTime(ts) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile, alreadyFollowed, onMarkFollowed }) {
+function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile, alreadyFollowed, onMarkFollowed, followingIds }) {
   const [followed, setFollowed] = useState(false);
   const [isTasteBuds, setIsTasteBuds] = useState(notif.type === "taste_buds");
   const [busy, setBusy] = useState(false);
   const p = notif.fromProfile;
-  const isFollowed = followed || alreadyFollowed;
+  const isFollowed = followed || alreadyFollowed || (followingIds?.has(notif.from_user_id) ?? false);
 
   async function handleFollowBack() {
     if (busy || isFollowed) return;
@@ -88,7 +88,7 @@ function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile, alreadyFollow
 
 export function NotificationPanel({
   notifications, loading, onClose, onFollowBack, onRefetch,
-  onOpenProfile, sheetOpen, anchorPos,
+  onOpenProfile, sheetOpen, anchorPos, followingIds,
 }) {
   const { t } = useLang();
   const panelRef = useRef(null);
@@ -156,6 +156,7 @@ export function NotificationPanel({
             onOpenProfile={onOpenProfile}
             alreadyFollowed={followedIds.has(n.id)}
             onMarkFollowed={markFollowed}
+            followingIds={followingIds}
           />
         ))
       )}
