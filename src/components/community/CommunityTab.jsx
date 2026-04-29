@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useLang } from "../../contexts/LangContext.jsx";
 import { GlobalTab } from "./GlobalTab.jsx";
 import { FriendsTab } from "./FriendsTab.jsx";
@@ -187,7 +188,9 @@ function GroupsMockup() {
  */
 export function CommunityTab({ user, restaurantWeights, drinkWeights, sweetWeights, unseenFollowers = 0, onMarkFollowersSeen, onFollowChange, externalUserLogTarget, onExternalUserLogConsumed, externalCompareTarget, onExternalCompareConsumed, onSignIn }) {
   const { t } = useLang();
-  const [active, setActive] = useState("global");
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const active = pathname.split("/")[2] || "global";
   const [compareTarget, setCompareTarget] = useState(null);
   /** When set, the read-only `UserLogView` takes over the Community surface
    *  until the user taps Back. The sub-tab strip and `active` selection are
@@ -204,14 +207,13 @@ export function CommunityTab({ user, restaurantWeights, drinkWeights, sweetWeigh
   useEffect(() => {
     if (externalCompareTarget) {
       setCompareTarget(externalCompareTarget);
-      setActive("compare");
       onExternalCompareConsumed?.();
     }
   }, [externalCompareTarget]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function jumpToCompare(friendProfile) {
     setCompareTarget(friendProfile);
-    setActive("compare");
+    navigate("/community/compare");
   }
 
   const hint = t[SUBS.find((s) => s.key === active)?.hintKey] || "";
@@ -240,7 +242,7 @@ export function CommunityTab({ user, restaurantWeights, drinkWeights, sweetWeigh
             <button
               key={s.key}
               type="button"
-              onClick={() => setActive(s.key)}
+              onClick={() => navigate("/community/" + s.key)}
               style={{
                 flex: 1, padding: "6px 0", textAlign: "center", borderRadius: 8,
                 border: "none",

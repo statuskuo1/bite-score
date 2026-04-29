@@ -1,4 +1,5 @@
 import { useState, useReducer, useRef, useEffect, useCallback, useMemo } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { LangContext } from "./contexts/LangContext.jsx";
 import { useAuth } from "./contexts/AuthContext.jsx";
 import { T } from "./translations.js";
@@ -92,7 +93,13 @@ function omitPlayWelcomeAside(body) {
 
 export default function App() {
   const { user, authReady, username } = useAuth();
-  const [st, dispatch] = useReducer(reducer, { entries: [], view: "log" });
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const [st, dispatch] = useReducer(reducer, { entries: [] });
+
+  // ── URL-derived view state ────────────────────────────────────────────────
+  const logTab = pathname === "/log/drinks" ? "drinks" : pathname === "/log/sweets" ? "sweets" : "restaurants";
+  const [showSuggest, setShowSuggest] = useState(false);
   const [cafes, setCafes] = useState([]);
   /** Shared cross-user catalog for PlacePicker. Loaded once on auth boot. */
   const [restaurantPlaces, setRestaurantPlaces] = useState([]);
@@ -248,9 +255,20 @@ export default function App() {
       catch (e) { console.error("welcome dismissed save:", e); }
     }
   }
+
+  // Redirect / → /log (signed-in) or /community/global (guest).
+  useEffect(() => {
+    if (!authReady) return;
+    if (pathname === "/") navigate(user ? "/log" : "/community/global", { replace: true });
+  }, [authReady, pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // /community with no sub-path → /community/global.
+  useEffect(() => {
+    if (pathname === "/community") navigate("/community/global", { replace: true });
+  }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const [editR, setEditR] = useState(null);
   const [editC, setEditC] = useState(null);
-  const [logTab, setLogTab] = useState("restaurants");
   const [addType, setAddType] = useState("restaurant");
   const [sortBy, setSortBy] = useState("bite");
   const [sortAsc, setSortAsc] = useState(false);
@@ -764,10 +782,11 @@ export default function App() {
       {authReady && (
       <>
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:640,background:"#1A1A18",borderTop:"0.5px solid rgba(255,255,255,0.1)",display:"flex",justifyContent:"space-around",alignItems:"center",padding:"8px 0 max(8px,env(safe-area-inset-bottom))",zIndex:100}}>
-        {[["log","📋",t.myLog],["palette","😋",t.myTaste],["add","➕",t.add],["community","🌐",t.communityTab],["faq","❓",t.faq]].map(([v,icon,label])=>{
+        {[["log","/log","📋",t.myLog],["palette","/taste","😋",t.myTaste],["add","/add","➕",t.add],["community","/community/global","🌐",t.communityTab],["faq","/faq","❓",t.faq]].map(([v,to,icon,label])=>{
           const badge = v==="community" && unseenFollowers > 0 ? unseenFollowers : 0;
+          const active = v==="log"?pathname.startsWith("/log"):v==="community"?pathname.startsWith("/community"):pathname===to;
           return (
-            <button key={v} onClick={()=>{dispatch({type:"VIEW",view:v});setEditR(null);setEditC(null);window.scrollTo({top:0,behavior:"instant"});}} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",padding:"4px 8px",minWidth:56}}>
+            <button key={v} onClick={()=>{navigate(to);setEditR(null);setEditC(null);window.scrollTo({top:0,behavior:"instant"});}} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",padding:"4px 8px",minWidth:56}}>
               {v==="add"?(
                 <div style={{width:44,height:44,borderRadius:"50%",background:"#F0997B",border:"2px solid #F0997B",display:"flex",alignItems:"center",justifyContent:"center",marginTop:-8,marginBottom:2}}>
                   <span style={{fontSize:22,lineHeight:1,color:"#141413"}}>➕</span>
@@ -782,15 +801,15 @@ export default function App() {
                   )}
                 </span>
               )}
-              <span style={{fontSize:10,color:st.view===v?"#F0997B":"#888780",fontWeight:st.view===v?500:400,transition:"color 0.15s"}}>{label}</span>
-              {st.view===v&&v!=="add"&&<div style={{width:4,height:4,borderRadius:"50%",background:"#F0997B",marginTop:1}}/>}
+              <span style={{fontSize:10,color:active?"#F0997B":"#888780",fontWeight:active?500:400,transition:"color 0.15s"}}>{label}</span>
+              {active&&v!=="add"&&<div style={{width:4,height:4,borderRadius:"50%",background:"#F0997B",marginTop:1}}/>}
             </button>
           );
         })}
       </div>
 
       {/* ── My Log ── */}
-      {st.view==="log"&&!editR&&!editC&&!user&&(
+      {pathname.startsWith("/log")&&!editR&&!editC&&!user&&(
         <GuestPreview message="Sign in to start logging your own restaurant ratings" onSignIn={() => setShowAuthModal(true)}>
           <div>
             <div style={{display:"flex",background:"#252523",borderRadius:10,padding:3,gap:2,marginBottom:8}}>
@@ -808,19 +827,19 @@ export default function App() {
           </div>
         </GuestPreview>
       )}
-      {st.view==="log"&&!editR&&!editC&&user&&!dbLoaded&&(
+      {pathname.startsWith("/log")&&!editR&&!editC&&user&&!dbLoaded&&(
         <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:8}}>
           {[1,2,3,4,5].map(i=>(
             <div key={i} style={{background:"#1E1E1C",borderRadius:10,height:62,opacity:0.4+i*0.08,animation:"pulse 1.2s ease-in-out infinite"}}/>
           ))}
         </div>
       )}
-      {st.view==="log"&&!editR&&!editC&&user&&dbLoaded&&(
+      {pathname.startsWith("/log")&&!editR&&!editC&&user&&dbLoaded&&(
         <div>
           <div style={{marginBottom:12}}>
             <div style={{display:"flex",background:"#252523",borderRadius:10,padding:3,gap:2,marginBottom:8}}>
               {[["restaurants","🍽 "+t.restaurants],["drinks","☕ "+t.drinks],["sweets","🥐 "+t.sweets]].map(([v,l])=>(
-                <button key={v} onClick={()=>setLogTab(v)} style={{flex:1,padding:"6px 0",textAlign:"center",borderRadius:8,border:"none",background:logTab===v?"#3C1F13":"transparent",color:logTab===v?"#F0997B":"#888780",fontSize:11,fontWeight:logTab===v?700:500,cursor:"pointer",transition:"all 0.15s"}}>{l}</button>
+                <button key={v} onClick={()=>navigate(v==="restaurants"?"/log":"/log/"+v)} style={{flex:1,padding:"6px 0",textAlign:"center",borderRadius:8,border:"none",background:logTab===v?"#3C1F13":"transparent",color:logTab===v?"#F0997B":"#888780",fontSize:11,fontWeight:logTab===v?700:500,cursor:"pointer",transition:"all 0.15s"}}>{l}</button>
               ))}
             </div>
             {user&&<p style={{fontSize:12,color:"#888780",margin:0}}>{t.swipeHint}</p>}
@@ -994,7 +1013,7 @@ export default function App() {
         </div>
       )}
 
-      {st.view==="community"&&dbLoaded&&(
+      {pathname.startsWith("/community")&&dbLoaded&&(
         <CommunityTab
           user={user}
           restaurantWeights={weights}
@@ -1011,7 +1030,7 @@ export default function App() {
         />
       )}
 
-      {st.view==="log"&&editR&&<RestForm initial={editR} weights={weights} existingEntries={st.entries} existingCities={existingCities} places={restaurantPlaces}
+      {pathname.startsWith("/log")&&editR&&<RestForm initial={editR} weights={weights} existingEntries={st.entries} existingCities={existingCities} places={restaurantPlaces}
         onPlaceCreated={(p)=>upsertPlace(setRestaurantPlaces, p.id, p)}
         onSave={async e=>{
         let resolvedPlaceId = e.placeId;
@@ -1044,7 +1063,7 @@ export default function App() {
         dispatch({ type: "UPD", e: { ...e, placeId: resolvedPlaceId, ownerId: e.ownerId ?? user?.id ?? null } });
         setEditR(null);
       }} onCancel={()=>{setEditR(null);window.scrollTo({top:0,behavior:"smooth"});}}/>}
-      {st.view==="log"&&editC&&<CafeForm initial={editC} weights={editC?.category==="Sweets"?sweetWeights:drinkWeights}
+      {pathname.startsWith("/log")&&editC&&<CafeForm initial={editC} weights={editC?.category==="Sweets"?sweetWeights:drinkWeights}
         onPlaceCreated={(p)=>upsertPlace(setCafePlaces, p.id, p)}
         onSave={async e=>{
         if (e.city) lastCity.current = e.city;
@@ -1073,7 +1092,7 @@ export default function App() {
       }} onCancel={()=>{setEditC(null);window.scrollTo({top:0,behavior:"smooth"});}} existingCafes={cafes} existingCities={existingCities} places={cafePlaces}/>}
 
       {/* ── Add Rating ── */}
-      {st.view==="add"&&!user&&(
+      {pathname==="/add"&&!user&&(
         <GuestPreview message="Sign in to start logging your own ratings" onSignIn={() => setShowAuthModal(true)}>
           <RestForm
             initial={{...INIT_REST, city:"NYC"}}
@@ -1089,7 +1108,7 @@ export default function App() {
           />
         </GuestPreview>
       )}
-      {st.view==="add"&&user&&(
+      {pathname==="/add"&&user&&(
         <div>
           {addType==="restaurant"
             ?<RestForm initial={{...INIT_REST,city:lastCity.current}} weights={weights} existingEntries={st.entries} existingCities={existingCities} places={restaurantPlaces}
@@ -1119,16 +1138,15 @@ export default function App() {
                       .select(RESTAURANT_VISIT_SELECT)
                       .single();
                     if (error) console.error("restaurant insert error:", error);
-                    if (data)
-                      dispatch({
-                        type: "ADD",
-                        e: mapRestaurantVisitRow(data),
-                      });
+                    if (data) {
+                      dispatch({ type: "ADD", e: mapRestaurantVisitRow(data) });
+                      navigate("/log");
+                    }
                   } catch (err) {
                     console.error("restaurant insert threw:", err);
                   }
                 }}
-                onCancel={()=>dispatch({type:"VIEW",view:"log"})}
+                onCancel={()=>navigate("/log")}
                 addType={addType} setAddType={setAddType}
               />
             :<CafeForm initial={{...INIT_CAFE,city:lastCity.current}} weights={drinkWeights}
@@ -1136,15 +1154,14 @@ export default function App() {
                 onSave={async e=>{
                   if (e.city) lastCity.current = e.city;
                   await insertCafeEntry(e);
-                  dispatch({type:"VIEW",view:"log"});
-                  setLogTab(e.category==="Sweets"?"sweets":"drinks");
+                  navigate(e.category==="Sweets"?"/log/sweets":"/log/drinks");
                 }}
                 onSaveAndContinue={async e=>{
                   if (e.city) lastCity.current = e.city;
                   await insertCafeEntry(e);
                   window.scrollTo({top:0,behavior:"smooth"});
                 }}
-                onCancel={()=>dispatch({type:"VIEW",view:"log"})}
+                onCancel={()=>navigate("/log")}
                 addType={addType} setAddType={setAddType}
                 existingCafes={cafes}
                 existingCities={existingCities}
@@ -1154,13 +1171,13 @@ export default function App() {
         </div>
       )}
 
-      {st.view==="suggest"&&!user&&(
+      {pathname==="/taste"&&showSuggest&&!user&&(
         <GuestPreview message="Sign in to discover new cuisines based on your taste" onSignIn={() => setShowAuthModal(true)}>
           <SuggestView entries={GUEST_PALETTE_ENTRIES} weights={weights} onBack={()=>{}}/>
         </GuestPreview>
       )}
-      {st.view==="suggest"&&user&&<SuggestView entries={st.entries} weights={weights} onBack={()=>dispatch({type:"VIEW",view:"palette"})}/>}
-      {st.view==="palette"&&!user&&(
+      {pathname==="/taste"&&showSuggest&&user&&<SuggestView entries={st.entries} weights={weights} onBack={()=>setShowSuggest(false)}/>}
+      {pathname==="/taste"&&!showSuggest&&!user&&(
         <GuestPreview message="Sign in to see your personal taste profile" onSignIn={() => setShowAuthModal(true)}>
           <PaletteView
             entries={GUEST_PALETTE_ENTRIES}
@@ -1177,7 +1194,7 @@ export default function App() {
           />
         </GuestPreview>
       )}
-      {st.view==="palette"&&user&&(
+      {pathname==="/taste"&&!showSuggest&&user&&(
         <PaletteView
           entries={st.entries}
           cafes={cafes}
@@ -1189,12 +1206,12 @@ export default function App() {
           replaceSweetWeights={replaceSweetWeights}
           questL={questL}
           toggleQ={toggleQ}
-          onOpenSuggest={()=>dispatch({type:"VIEW",view:"suggest"})}
+          onOpenSuggest={()=>setShowSuggest(true)}
         />
       )}
 
       {/* ── FAQ ── */}
-      {st.view==="faq"&&<FaqView/>}
+      {pathname==="/faq"&&<FaqView/>}
 
       </>
       )}
@@ -1214,13 +1231,13 @@ export default function App() {
           setNotifSheetProfile(null);
           setShowNotifPanel(false);
           setExtUserLogTarget(profile);
-          dispatch({ type: "VIEW", view: "community" });
+          navigate("/community/global");
         }}
         onCompareWith={(profile) => {
           setNotifSheetProfile(null);
           setShowNotifPanel(false);
           setExtCompareTarget(profile);
-          dispatch({ type: "VIEW", view: "community" });
+          navigate("/community/compare");
         }}
         t={t}
       />
