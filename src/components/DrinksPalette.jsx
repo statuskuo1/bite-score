@@ -13,6 +13,7 @@ export function DrinksPalette({cafes,drinkWeights,replaceDrinkWeights}) {
   const total = drinks.length;
   const [editingW,setEditingW] = useState(false);
   const [draftW,setDraftW] = useState(()=>({...drinkWeights}));
+  const [drinkRoastMode, setDrinkRoastMode] = useState(false);
   useEffect(()=>{if(!editingW)setDraftW({...drinkWeights});},[drinkWeights,editingW]);
   const draftSum = draftW.taste + draftW.bpb + draftW.wait;
   const draftOk = draftSum === 100;
@@ -81,7 +82,6 @@ export function DrinksPalette({cafes,drinkWeights,replaceDrinkWeights}) {
   const best=scored[0];
 
   const hasEnoughData = total >= 3;
-  const [drinkRoastMode, setDrinkRoastMode] = useState(false);
 
   // Only derive milk line if enough logged milk data exists
   const hasMilkData = drinksWithMilk.length >= 3;

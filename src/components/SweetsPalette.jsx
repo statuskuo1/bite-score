@@ -13,6 +13,7 @@ export function SweetsPalette({cafes, sweetWeights, replaceSweetWeights}) {
 
   const [editingW,setEditingW] = useState(false);
   const [draftW,setDraftW] = useState(()=>({...sweetWeights}));
+  const [sweetsRoastMode, setSweetsRoastMode] = useState(false);
   useEffect(()=>{if(!editingW)setDraftW({...sweetWeights});},[sweetWeights,editingW]);
   const draftSum = draftW.taste + draftW.bpb + draftW.wait;
   const draftOk = draftSum === 100;
@@ -77,8 +78,6 @@ export function SweetsPalette({cafes, sweetWeights, replaceSweetWeights}) {
   const byBite=[...scored];
   const byTaste=[...sweets].sort((a,b)=>b.taste-a.taste);
   const underrated=byBite.find(e=>e.id!==byTaste[0]?.id);
-
-  const [sweetsRoastMode, setSweetsRoastMode] = useState(false);
 
   // PR lines
   const personality=+avgT>=8?"You have elite taste in pastries. Literally.":+avgT>=7?"You know a good croissant when you eat one.":+avgT>=6?"You are adventurous, for better or worse.":"You are either very picky or very unlucky.";
