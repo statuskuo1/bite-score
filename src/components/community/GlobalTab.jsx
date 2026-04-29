@@ -56,7 +56,6 @@ export function GlobalTab({ user, restaurantWeights, drinkWeights, sweetWeights 
   const [tiers, setTiers] = useState(new Set());
 
   useEffect(() => {
-    if (!user?.id) return;
     let cancelled = false;
     setLoading(true);
     (async () => {
@@ -75,7 +74,7 @@ export function GlobalTab({ user, restaurantWeights, drinkWeights, sweetWeights 
       }
     })();
     return () => { cancelled = true; };
-  }, [user?.id]);
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** `repeatability` is integer 0–3 with a non-linear `rMult` lookup; round the
    *  averaged value to the nearest int and clamp so it lands on a real bucket. */

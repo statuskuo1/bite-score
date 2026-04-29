@@ -53,6 +53,34 @@ import { countUnreadNotifications, fetchUnreadNotifications, markNotificationsRe
 import { usePaginatedList } from "./components/usePaginatedList.js";
 import { ShowMoreButton } from "./components/ShowMoreButton.jsx";
 import { NotificationPanel } from "./components/NotificationPanel.jsx";
+import { GuestLogView } from "./components/GuestLogView.jsx";
+
+const GUEST_PALETTE_ENTRIES = [
+  {id:"gp1",name:"Lilia",             cuisine:"Italian",        letter:"I",city:"NYC",taste:9.2,cost:120,portions:2,wait:20,repeatability:3,useR:true,notes:""},
+  {id:"gp2",name:"Don Angie",         cuisine:"Italian",        letter:"I",city:"NYC",taste:8.8,cost:95, portions:2,wait:15,repeatability:3,useR:true,notes:""},
+  {id:"gp3",name:"Lucali",            cuisine:"Italian",        letter:"I",city:"NYC",taste:9.5,cost:55, portions:2,wait:45,repeatability:3,useR:true,notes:""},
+  {id:"gp4",name:"Ugly Bagel",        cuisine:"American",       letter:"A",city:"NYC",taste:8.5,cost:22, portions:1,wait:10,repeatability:2,useR:true,notes:""},
+  {id:"gp5",name:"Superiority Burger",cuisine:"American",       letter:"A",city:"NYC",taste:8.1,cost:18, portions:1,wait:12,repeatability:2,useR:true,notes:""},
+  {id:"gp6",name:"Raku",              cuisine:"Japanese",       letter:"J",city:"NYC",taste:8.7,cost:75, portions:1,wait:25,repeatability:3,useR:true,notes:""},
+  {id:"gp7",name:"Xi'an Famous",      cuisine:"Chinese",        letter:"C",city:"NYC",taste:8.2,cost:28, portions:1,wait:8, repeatability:2,useR:true,notes:""},
+  {id:"gp8",name:"Sammy's Halal",     cuisine:"Middle Eastern", letter:"M",city:"NYC",taste:7.8,cost:14, portions:1,wait:5, repeatability:2,useR:true,notes:""},
+];
+
+function GuestPreview({ message, onSignIn, children }) {
+  return (
+    <div>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, background:"#1E1E1C", border:"0.5px solid rgba(255,255,255,0.12)", borderRadius:12, padding:"14px 18px", marginBottom:16 }}>
+        <p style={{ fontSize:13, color:"#C4C2BA", margin:0, lineHeight:1.5 }}>{message}</p>
+        <button type="button" onClick={onSignIn} style={{ padding:"8px 20px", borderRadius:8, border:"none", background:"#F0997B", color:"#141413", fontSize:13, fontWeight:600, cursor:"pointer", flexShrink:0 }}>
+          Sign In
+        </button>
+      </div>
+      <div style={{ opacity:0.3, pointerEvents:"none", userSelect:"none" }}>
+        {children}
+      </div>
+    </div>
+  );
+}
 
 /** Drops optional paragraphs from welcome body (DB or defaults): play-mode aside; sign-in/cloud disclaimer (EN+ZH) so languages stay aligned when overrides differ. */
 function omitPlayWelcomeAside(body) {
@@ -95,15 +123,10 @@ export default function App() {
    *  docs/decisions/2026-04-28-stash-mandarin-localization.md. */
   const lang = "en";
   const t = T.en;
-  const needsAuth = authReady && !user;
 
   useEffect(() => {
     if (user) setShowAuthModal(false);
   }, [user]);
-
-  useEffect(() => {
-    if (authReady && !user) setShowAuthModal(true);
-  }, [authReady, user]);
 
   const refreshUnseenFollowers = useCallback(async () => {
     if (!user?.id) { setUnseenFollowers(0); return; }
@@ -212,11 +235,16 @@ export default function App() {
   const welcomeBodyDisplay = omitPlayWelcomeAside((welcomeUseDbCopy && welcomeOverride[lang+"_body"]) || t.welcome2);
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!authReady || !user?.id) return;
     try {
       if (localStorage.getItem(`bite_welcomeDismissed_${user.id}`)) setShowWelcome(false);
     } catch (e) { /* ignore */ }
-  }, [user?.id]);
+  }, [authReady, user?.id]);
+
+  // Send guests to Global (the only fully-accessible tab) on initial load or sign-out.
+  useEffect(() => {
+    if (authReady && !user) dispatch({ type: "VIEW", view: "community" });
+  }, [authReady, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function dismissWelcome() {
     setShowWelcome(false);
@@ -711,31 +739,7 @@ export default function App() {
         </p>
       )}
 
-      {needsAuth && (
-        <div style={{ marginTop: 24, marginBottom: 16 }}>
-          <p style={{ fontSize: 20, fontWeight: 600, color: "#F1EFE8", margin: "0 0 12px", lineHeight: 1.35 }}>{t.signInGateTitle}</p>
-          <p style={{ fontSize: 14, color: "#888780", margin: "0 0 22px", lineHeight: 1.65 }}>{t.signInGateBody}</p>
-          <button
-            type="button"
-            onClick={() => setShowAuthModal(true)}
-            style={{
-              width: "100%",
-              padding: "14px 18px",
-              borderRadius: 12,
-              border: "none",
-              background: "#F0997B",
-              color: "#141413",
-              fontSize: 15,
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            {t.signInGateButton}
-          </button>
-        </div>
-      )}
-
-      {user && showWelcome && dbLoaded && (
+      {authReady && showWelcome && dbLoaded && (
         <div onClick={()=>dismissWelcome()} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:"1.5rem"}}>
           <div onClick={e=>e.stopPropagation()} style={{background:"#1E1E1C",borderRadius:16,padding:"1.5rem",maxWidth:360,width:"100%",border:"0.5px solid rgba(255,255,255,0.15)"}}>
             <div style={{fontSize:24,marginBottom:12,textAlign:"center",cursor:"default",userSelect:"none"}}>👋</div>
@@ -762,7 +766,7 @@ export default function App() {
         </div>
       )}
 
-      {user && (
+      {authReady && (
       <>
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:640,background:"#1A1A18",borderTop:"0.5px solid rgba(255,255,255,0.1)",display:"flex",justifyContent:"space-around",alignItems:"center",padding:"8px 0 max(8px,env(safe-area-inset-bottom))",zIndex:100}}>
         {[["log","📋",t.myLog],["palette","😋",t.myTaste],["add","➕",t.add],["community","🌐",t.communityTab],["faq","❓",t.faq]].map(([v,icon,label])=>{
@@ -791,14 +795,17 @@ export default function App() {
       </div>
 
       {/* ── My Log ── */}
-      {st.view==="log"&&!editR&&!editC&&!dbLoaded&&(
+      {st.view==="log"&&!editR&&!editC&&!user&&(
+        <GuestLogView weights={weights} drinkWeights={drinkWeights} sweetWeights={sweetWeights} onSignIn={() => setShowAuthModal(true)} />
+      )}
+      {st.view==="log"&&!editR&&!editC&&user&&!dbLoaded&&(
         <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:8}}>
           {[1,2,3,4,5].map(i=>(
             <div key={i} style={{background:"#1E1E1C",borderRadius:10,height:62,opacity:0.4+i*0.08,animation:"pulse 1.2s ease-in-out infinite"}}/>
           ))}
         </div>
       )}
-      {st.view==="log"&&!editR&&!editC&&dbLoaded&&(
+      {st.view==="log"&&!editR&&!editC&&user&&dbLoaded&&(
         <div>
           <div style={{marginBottom:12}}>
             <div style={{display:"flex",background:"#252523",borderRadius:10,padding:3,gap:2,marginBottom:8}}>
@@ -990,6 +997,7 @@ export default function App() {
           onExternalUserLogConsumed={() => setExtUserLogTarget(null)}
           externalCompareTarget={extCompareTarget}
           onExternalCompareConsumed={() => setExtCompareTarget(null)}
+          onSignIn={() => setShowAuthModal(true)}
         />
       )}
 
@@ -1055,7 +1063,23 @@ export default function App() {
       }} onCancel={()=>{setEditC(null);window.scrollTo({top:0,behavior:"smooth"});}} existingCafes={cafes} existingCities={existingCities} places={cafePlaces}/>}
 
       {/* ── Add Rating ── */}
-      {st.view==="add"&&(
+      {st.view==="add"&&!user&&(
+        <GuestPreview message="Sign in to start logging your own ratings" onSignIn={() => setShowAuthModal(true)}>
+          <RestForm
+            initial={{...INIT_REST, city:"NYC"}}
+            weights={weights}
+            existingEntries={[]}
+            existingCities={[]}
+            places={[]}
+            onPlaceCreated={()=>{}}
+            onSave={()=>{}}
+            onCancel={()=>{}}
+            addType="restaurant"
+            setAddType={()=>{}}
+          />
+        </GuestPreview>
+      )}
+      {st.view==="add"&&user&&(
         <div>
           {addType==="restaurant"
             ?<RestForm initial={{...INIT_REST,city:lastCity.current}} weights={weights} existingEntries={st.entries} existingCities={existingCities} places={restaurantPlaces}
@@ -1120,8 +1144,30 @@ export default function App() {
         </div>
       )}
 
-      {st.view==="suggest"&&<SuggestView entries={st.entries} weights={weights} onBack={()=>dispatch({type:"VIEW",view:"palette"})}/>}
-      {st.view==="palette"&&(
+      {st.view==="suggest"&&!user&&(
+        <GuestPreview message="Sign in to discover new cuisines based on your taste" onSignIn={() => setShowAuthModal(true)}>
+          <SuggestView entries={GUEST_PALETTE_ENTRIES} weights={weights} onBack={()=>{}}/>
+        </GuestPreview>
+      )}
+      {st.view==="suggest"&&user&&<SuggestView entries={st.entries} weights={weights} onBack={()=>dispatch({type:"VIEW",view:"palette"})}/>}
+      {st.view==="palette"&&!user&&(
+        <GuestPreview message="Sign in to see your personal taste profile" onSignIn={() => setShowAuthModal(true)}>
+          <PaletteView
+            entries={GUEST_PALETTE_ENTRIES}
+            cafes={[]}
+            weights={weights}
+            replaceRestaurantWeights={()=>{}}
+            drinkWeights={drinkWeights}
+            replaceDrinkWeights={()=>{}}
+            sweetWeights={sweetWeights}
+            replaceSweetWeights={()=>{}}
+            questL={new Set()}
+            toggleQ={()=>{}}
+            onOpenSuggest={()=>{}}
+          />
+        </GuestPreview>
+      )}
+      {st.view==="palette"&&user&&(
         <PaletteView
           entries={st.entries}
           cafes={cafes}

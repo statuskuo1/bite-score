@@ -13,6 +13,134 @@ const SUBS = [
   { key: "groups", labelKey: "groupsSub", hintKey: "communityHintGroups", icon: "🎉" },
 ];
 
+function GuestPreview({ message, onSignIn, children }) {
+  return (
+    <div>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, background:"#1E1E1C", border:"0.5px solid rgba(255,255,255,0.12)", borderRadius:12, padding:"14px 18px", marginBottom:16 }}>
+        <p style={{ fontSize:13, color:"#C4C2BA", margin:0, lineHeight:1.5 }}>{message}</p>
+        <button type="button" onClick={onSignIn} style={{ padding:"8px 20px", borderRadius:8, border:"none", background:"#F0997B", color:"#141413", fontSize:13, fontWeight:600, cursor:"pointer", flexShrink:0 }}>
+          Sign In
+        </button>
+      </div>
+      <div style={{ opacity:0.3, pointerEvents:"none", userSelect:"none" }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function FriendsMockup() {
+  const FRIENDS = [
+    { init:"A", color:"#5B9BD5", name:"Alex Chen",    handle:"alexc",    badge:"Taste Buds", compat:91 },
+    { init:"J", color:"#97C459", name:"Jordan Kim",   handle:"jordank",  badge:"Following",  compat:78 },
+    { init:"M", color:"#EF9F27", name:"Maya Patel",   handle:"mayap",    badge:"Taste Buds", compat:65 },
+  ];
+  const rowStyle = { display:"flex", alignItems:"center", gap:10, padding:"8px 10px", marginBottom:6, background:"#1E1E1C", border:"0.5px solid rgba(255,255,255,0.08)", borderRadius:10 };
+  const sectionLabel = { fontSize:11, color:"#F0997B", textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:600, marginBottom:6 };
+  return (
+    <div>
+      <input readOnly placeholder="Search by @username" style={{ width:"100%", boxSizing:"border-box", marginBottom:16 }} />
+      <div style={sectionLabel}>Following · 3</div>
+      {FRIENDS.map(f => (
+        <div key={f.handle} style={rowStyle}>
+          <div style={{ width:28, height:28, borderRadius:"50%", background:f.color, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:700, color:"#141413", flexShrink:0 }}>{f.init}</div>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontSize:13, color:"#F1EFE8", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{f.name}</div>
+            <div style={{ fontSize:11, color:"#888780" }}>@{f.handle}</div>
+          </div>
+          <div style={{ display:"flex", gap:4, flexShrink:0 }}>
+            <span style={{ fontSize:11, padding:"2px 8px", borderRadius:20, background:"#3C1F13", color:"#F0997B", border:"0.5px solid rgba(240,153,123,0.3)" }}>{f.badge}</span>
+            <span style={{ fontSize:11, padding:"2px 8px", borderRadius:20, background:"rgba(91,155,213,0.12)", color:"#5B9BD5", border:"0.5px solid rgba(91,155,213,0.25)" }}>{f.compat}% match</span>
+          </div>
+        </div>
+      ))}
+      <div style={{ ...sectionLabel, marginTop:20 }}>Followers · 5</div>
+      {[
+        { init:"S", color:"#888780", name:"Sam Rivera",   handle:"samr" },
+        { init:"K", color:"#888780", name:"Kai Tanaka",   handle:"kait" },
+      ].map(f => (
+        <div key={f.handle} style={rowStyle}>
+          <div style={{ width:28, height:28, borderRadius:"50%", background:f.color, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:700, color:"#141413", flexShrink:0 }}>{f.init}</div>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontSize:13, color:"#F1EFE8" }}>{f.name}</div>
+            <div style={{ fontSize:11, color:"#888780" }}>@{f.handle}</div>
+          </div>
+          <span style={{ fontSize:12, padding:"5px 12px", borderRadius:8, background:"#252523", color:"#888780", border:"0.5px solid rgba(255,255,255,0.1)" }}>Follow back</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function CompareMockup() {
+  const sectionLabel = { fontSize:11, color:"#F0997B", textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:600, marginBottom:8 };
+  return (
+    <div>
+      <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", background:"#1E1E1C", borderRadius:10, marginBottom:16, border:"0.5px solid rgba(255,255,255,0.08)" }}>
+        <div style={{ width:28, height:28, borderRadius:"50%", background:"#5B9BD5", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:700, color:"#141413" }}>A</div>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:13, color:"#F1EFE8" }}>Alex Chen</div>
+          <div style={{ fontSize:11, color:"#888780" }}>@alexc · Taste Buds</div>
+        </div>
+        <span style={{ fontSize:13, color:"#888780" }}>▼</span>
+      </div>
+      <div style={{ background:"#1E1E1C", border:"0.5px solid rgba(255,255,255,0.08)", borderRadius:12, padding:"20px 16px", textAlign:"center", marginBottom:16 }}>
+        <div style={{ fontSize:42, fontWeight:700, color:"#97C459", marginBottom:4 }}>87%</div>
+        <div style={{ fontSize:13, color:"#C4C2BA", marginBottom:12 }}>Strong alignment — you both love bold, high-value spots</div>
+        <div style={{ display:"flex", justifyContent:"center", gap:6, flexWrap:"wrap" }}>
+          {["🇮🇹 Italian", "🇯🇵 Japanese"].map(c => (
+            <span key={c} style={{ fontSize:12, padding:"4px 10px", borderRadius:16, background:"#252523", color:"#C4C2BA" }}>{c}</span>
+          ))}
+        </div>
+      </div>
+      <div style={sectionLabel}>Both Been</div>
+      {[
+        { flag:"🇮🇹", name:"Lilia",  mine:9.2, theirs:8.9 },
+        { flag:"🇯🇵", name:"Raku",   mine:8.7, theirs:9.1 },
+        { flag:"🍕",   name:"Lucali", mine:9.5, theirs:9.3 },
+      ].map(r => (
+        <div key={r.name} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 10px", marginBottom:6, background:"#1E1E1C", border:"0.5px solid rgba(255,255,255,0.08)", borderRadius:10 }}>
+          <div style={{ width:36, height:36, borderRadius:8, background:"#252523", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 }}>{r.flag}</div>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:13, color:"#F1EFE8", fontWeight:500 }}>{r.name}</div>
+            <div style={{ fontSize:11, color:"#888780" }}>You {r.mine} · Alex {r.theirs}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function GroupsMockup() {
+  const GROUPS = [
+    { name:"NYC Food Crew", count:4, colors:["#5B9BD5","#97C459","#EF9F27","#F0997B"] },
+    { name:"Ramen Heads",   count:2, colors:["#5B9BD5","#EF9F27"] },
+  ];
+  return (
+    <div>
+      <button style={{ width:"100%", padding:"10px", background:"transparent", color:"#F0997B", border:"1px dashed rgba(240,153,123,0.4)", borderRadius:10, fontSize:14, marginBottom:16, cursor:"pointer" }}>
+        + Create Group
+      </button>
+      {GROUPS.map(g => (
+        <div key={g.name} style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 14px", marginBottom:8, background:"#1E1E1C", border:"0.5px solid rgba(255,255,255,0.08)", borderRadius:12, cursor:"pointer" }}>
+          <div style={{ display:"flex" }}>
+            {g.colors.map((c, i) => (
+              <div key={i} style={{ width:28, height:28, borderRadius:"50%", background:c, border:"2px solid #1E1E1C", marginLeft:i>0?-8:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, color:"#141413" }}>
+                {String.fromCharCode(65+i)}
+              </div>
+            ))}
+          </div>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:14, color:"#F1EFE8", fontWeight:500 }}>{g.name}</div>
+            <div style={{ fontSize:11, color:"#888780" }}>{g.count} members</div>
+          </div>
+          <span style={{ fontSize:16, color:"#888780" }}>›</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /**
  * Community sub-tab router.
  *
@@ -23,7 +151,7 @@ const SUBS = [
  * GlobalTab so its mean-then-BITE leaderboard reflects the viewer's own My
  * Taste sliders. The other sub-tabs don't read weights today.
  */
-export function CommunityTab({ user, restaurantWeights, drinkWeights, sweetWeights, unseenFollowers = 0, onMarkFollowersSeen, onFollowChange, externalUserLogTarget, onExternalUserLogConsumed, externalCompareTarget, onExternalCompareConsumed }) {
+export function CommunityTab({ user, restaurantWeights, drinkWeights, sweetWeights, unseenFollowers = 0, onMarkFollowersSeen, onFollowChange, externalUserLogTarget, onExternalUserLogConsumed, externalCompareTarget, onExternalCompareConsumed, onSignIn }) {
   const { t } = useLang();
   const [active, setActive] = useState("global");
   const [compareTarget, setCompareTarget] = useState(null);
@@ -116,7 +244,13 @@ export function CommunityTab({ user, restaurantWeights, drinkWeights, sweetWeigh
           sweetWeights={sweetWeights}
         />
       )}
-      {active === "friends" && (
+
+      {active === "friends" && !user && (
+        <GuestPreview message="Sign in to follow friends and see who's eating where" onSignIn={onSignIn}>
+          <FriendsMockup />
+        </GuestPreview>
+      )}
+      {active === "friends" && user && (
         <FriendsTab
           user={user}
           onCompareWith={jumpToCompare}
@@ -125,10 +259,22 @@ export function CommunityTab({ user, restaurantWeights, drinkWeights, sweetWeigh
           onViewLog={setUserLogTarget}
         />
       )}
-      {active === "compare" && (
+
+      {active === "compare" && !user && (
+        <GuestPreview message="Sign in to compare your taste with friends" onSignIn={onSignIn}>
+          <CompareMockup />
+        </GuestPreview>
+      )}
+      {active === "compare" && user && (
         <CompareTab user={user} initialTarget={compareTarget} onClearTarget={() => setCompareTarget(null)} onFollowChange={onFollowChange} />
       )}
-      {active === "groups" && <GroupsTab user={user} />}
+
+      {active === "groups" && !user && (
+        <GuestPreview message="Sign in to create and join food groups" onSignIn={onSignIn}>
+          <GroupsMockup />
+        </GuestPreview>
+      )}
+      {active === "groups" && user && <GroupsTab user={user} />}
     </div>
   );
 }
