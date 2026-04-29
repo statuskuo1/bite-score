@@ -24,7 +24,6 @@ import { INIT_REST, INIT_CAFE } from "./data/initialData.js";
 import { reducer } from "./state/logReducer.js";
 import {
   calcBiteOutOf10,
-  meanRestaurantBiteOutOf10,
   calcCafeOutOf10,
   scoreColor,
   scoreLabel,
@@ -684,16 +683,6 @@ export default function App() {
                 pageSize={restaurantGroupsPage.pageSize}
                 onClick={restaurantGroupsPage.showMore}
               />
-              {sortedR.length>0&&(
-                <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginTop:16}}>
-                  {[[t.entries,String(sortedR.length)],[t.avgBite,(()=>{const m=meanRestaurantBiteOutOf10(sortedR,weights);return m!=null?`${m.toFixed(2)}/10`:"—";})()]].map(([l,v])=>(
-                    <div key={l} style={{background:"#1E1E1C",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:8,padding:"10px 12px"}}>
-                      <div style={S.sm}>{l}</div>
-                      <div style={{fontSize:20,fontWeight:500,color:"#F1EFE8"}}>{v}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           )}
 
@@ -763,16 +752,6 @@ export default function App() {
                 pageSize={drinkGroupsPage.pageSize}
                 onClick={drinkGroupsPage.showMore}
               />
-              {sortedDrinks.length>0&&(
-                <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginTop:16}}>
-                  {[[t.entries,String(sortedDrinks.length)],[t.avgBite,(sortedDrinks.reduce((a,e)=>a+(calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,drinkWeights)??0),0)/sortedDrinks.length).toFixed(2)]].map(([l,v])=>(
-                    <div key={l} style={{background:"#1E1E1C",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:8,padding:"10px 12px"}}>
-                      <div style={S.sm}>{l}</div>
-                      <div style={{fontSize:20,fontWeight:500,color:"#F1EFE8"}}>{v}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           )}
 
@@ -813,16 +792,6 @@ export default function App() {
                 pageSize={sweetGroupsPage.pageSize}
                 onClick={sweetGroupsPage.showMore}
               />
-              {sortedSweets.length>0&&(
-                <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginTop:16}}>
-                  {[[t.entries,String(sortedSweets.length)],[t.avgBite,(sortedSweets.reduce((a,e)=>a+(calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,sweetWeights)??0),0)/sortedSweets.length).toFixed(2)]].map(([l,v])=>(
-                    <div key={l} style={{background:"#1E1E1C",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:8,padding:"10px 12px"}}>
-                      <div style={S.sm}>{l}</div>
-                      <div style={{fontSize:20,fontWeight:500,color:"#F1EFE8"}}>{v}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           )}
         </div>
