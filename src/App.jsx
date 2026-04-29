@@ -207,6 +207,18 @@ export default function App() {
             } catch (e) {
               console.error("quest letters localStorage:", e);
             }
+            try {
+              const rw = localStorage.getItem(`bite_restaurantWeights_${user.id}`);
+              if (rw) setWeights(JSON.parse(rw));
+            } catch (e) { console.error("restaurant weights load:", e); }
+            try {
+              const dw = localStorage.getItem(`bite_drinkWeights_${user.id}`);
+              if (dw) setDrinkWeights(JSON.parse(dw));
+            } catch (e) { console.error("drink weights load:", e); }
+            try {
+              const sw = localStorage.getItem(`bite_sweetWeights_${user.id}`);
+              if (sw) setSweetWeights(JSON.parse(sw));
+            } catch (e) { console.error("sweet weights load:", e); }
           }
           if (!questHandled) {
             const ql = sData.find((s) => s.key === "questLetters");
@@ -234,19 +246,34 @@ export default function App() {
   /** Each slider 0–100; BITE uses relative mix (see `restaurantWeightRatios` in scoring). */
   function updW(k, v) {
     const nv = Math.round(Math.min(100, Math.max(0, +v)));
-    setWeights((w) => ({ ...w, [k]: nv }));
+    const next = { ...weights, [k]: nv };
+    setWeights(next);
+    if (user?.id) {
+      try { localStorage.setItem(`bite_restaurantWeights_${user.id}`, JSON.stringify(next)); }
+      catch (e) { console.error("restaurant weights save:", e); }
+    }
   }
 
   function resetWeights(defaults) {
-    setWeights({ ...defaults });
+    const next = { ...defaults };
+    setWeights(next);
+    if (user?.id) {
+      try { localStorage.setItem(`bite_restaurantWeights_${user.id}`, JSON.stringify(next)); }
+      catch (e) { console.error("restaurant weights save:", e); }
+    }
   }
 
   function replaceRestaurantWeights(next) {
-    setWeights({
+    const clamped = {
       taste: Math.round(Math.min(100, Math.max(0, Number(next.taste) || 0))),
       bpb: Math.round(Math.min(100, Math.max(0, Number(next.bpb) || 0))),
       wait: Math.round(Math.min(100, Math.max(0, Number(next.wait) || 0))),
-    });
+    };
+    setWeights(clamped);
+    if (user?.id) {
+      try { localStorage.setItem(`bite_restaurantWeights_${user.id}`, JSON.stringify(clamped)); }
+      catch (e) { console.error("restaurant weights save:", e); }
+    }
   }
 
   /** Drinks / sweets weights: same edit-then-Save pattern as restaurants (see PaletteView). */
@@ -257,8 +284,22 @@ export default function App() {
       wait:  Math.round(Math.min(100, Math.max(0, Number(next.wait)  || 0))),
     };
   }
-  function replaceDrinkWeights(next){ setDrinkWeights(clampWeights(next)); }
-  function replaceSweetWeights(next){ setSweetWeights(clampWeights(next)); }
+  function replaceDrinkWeights(next) {
+    const clamped = clampWeights(next);
+    setDrinkWeights(clamped);
+    if (user?.id) {
+      try { localStorage.setItem(`bite_drinkWeights_${user.id}`, JSON.stringify(clamped)); }
+      catch (e) { console.error("drink weights save:", e); }
+    }
+  }
+  function replaceSweetWeights(next) {
+    const clamped = clampWeights(next);
+    setSweetWeights(clamped);
+    if (user?.id) {
+      try { localStorage.setItem(`bite_sweetWeights_${user.id}`, JSON.stringify(clamped)); }
+      catch (e) { console.error("sweet weights save:", e); }
+    }
+  }
 
   function toggleQ(l) {
     const letterCovered = new Set(st.entries.map((e) => (e.letter || e.cuisine?.[0])?.toUpperCase()));
