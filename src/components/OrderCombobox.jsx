@@ -52,18 +52,24 @@ export function OrderCombobox({
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
-      <input
-        value={value}
-        onChange={(e) => { onChange(e.target.value); setShow(true); }}
-        onFocus={() => setShow(true)}
-        placeholder={placeholder}
-        style={{
-          width:"100%", boxSizing:"border-box",
-          background:"#1E1E1C", border:"0.5px solid rgba(255,255,255,0.12)",
-          borderRadius:8, padding:"9px 12px",
-          fontSize:13, color:"#F1EFE8", outline:"none",
-        }}
-      />
+      <div style={{ position: "relative" }}>
+        <input
+          value={value}
+          onChange={(e) => { onChange(e.target.value); setShow(true); }}
+          onFocus={() => setShow(true)}
+          placeholder={placeholder}
+          style={{
+            width:"100%", boxSizing:"border-box",
+            background:"#1E1E1C", border:"0.5px solid rgba(255,255,255,0.12)",
+            borderRadius:8, padding:"9px 12px", paddingRight:36,
+            fontSize:13, color:"#F1EFE8", outline:"none",
+          }}
+        />
+        <span style={{
+          position:"absolute", right:12, top:"50%", transform:"translateY(-50%)",
+          fontSize:10, color:"#888780", pointerEvents:"none", lineHeight:1,
+        }}>▼</span>
+      </div>
       {show && suggestions.length > 0 && (
         <div
           style={{
