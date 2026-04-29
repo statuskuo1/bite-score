@@ -1,4 +1,4 @@
-import { useState, useReducer, useRef, useEffect } from "react";
+import { useState, useReducer, useRef, useEffect, useCallback } from "react";
 import { LangContext } from "./contexts/LangContext.jsx";
 import { useAuth } from "./contexts/AuthContext.jsx";
 import { T } from "./translations.js";
@@ -47,6 +47,7 @@ import { AuthModal } from "./components/AuthModal.jsx";
 import { ResetPasswordModal } from "./components/ResetPasswordModal.jsx";
 import { WeightSliders } from "./components/WeightSliders.jsx";
 import { CommunityTab } from "./components/community/CommunityTab.jsx";
+import { countUnseenFollowers, markFollowersSeen } from "./utils/followsApi.js";
 
 /** Drops optional paragraphs from welcome body (DB or defaults): play-mode aside; sign-in/cloud disclaimer (EN+ZH) so languages stay aligned when overrides differ. */
 function omitPlayWelcomeAside(body) {
@@ -70,6 +71,10 @@ export default function App() {
   const [showWelcome, setShowWelcome] = useState(true);
   const [faqOverrides, setFaqOverrides] = useState({});
   const [welcomeOverride, setWelcomeOverride] = useState({});
+  /** Unseen-followers count drives the red badge on the Community tab in the
+   *  bottom nav. Refreshed on auth + after every follow/unfollow action; the
+   *  Friends sub-tab additionally calls markFollowersSeen on mount to clear it. */
+  const [unseenFollowers, setUnseenFollowers] = useState(0);
   /** Mandarin localization is temporarily stashed while EN gets polish.
    *  `T.zh` and components' `lang === "zh"` branches are intentionally preserved
    *  so reviving = restore lang state + UI toggles. See
@@ -85,6 +90,23 @@ export default function App() {
   useEffect(() => {
     if (authReady && !user) setShowAuthModal(true);
   }, [authReady, user]);
+
+  const refreshUnseenFollowers = useCallback(async () => {
+    if (!user?.id) { setUnseenFollowers(0); return; }
+    const n = await countUnseenFollowers(supabase, user.id);
+    setUnseenFollowers(n);
+  }, [user?.id]);
+
+  /** Friends sub-tab calls this when it mounts; we stamp the seen-at and
+   *  immediately recount so the badge clears without needing to wait for the
+   *  next refresh trigger. */
+  const handleMarkFollowersSeen = useCallback(async () => {
+    if (!user?.id) return;
+    await markFollowersSeen(supabase, user.id);
+    await refreshUnseenFollowers();
+  }, [user?.id, refreshUnseenFollowers]);
+
+  useEffect(() => { refreshUnseenFollowers(); }, [refreshUnseenFollowers]);
 
   /** Bundled `translations.js` by default. Supabase `welcome_*` only when hosting sets `VITE_WELCOME_USE_SUPABASE=true` (opt-in). */
   const welcomeUseDbCopy = import.meta.env.VITE_WELCOME_USE_SUPABASE === 'true';
@@ -471,19 +493,29 @@ export default function App() {
       {user && (
       <>
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:640,background:"#1A1A18",borderTop:"0.5px solid rgba(255,255,255,0.1)",display:"flex",justifyContent:"space-around",alignItems:"center",padding:"8px 0 max(8px,env(safe-area-inset-bottom))",zIndex:100}}>
-        {[["log","📋",t.myLog],["palette","😋",t.myTaste],["add","➕",t.add],["community","🌐",t.communityTab],["faq","❓",t.faq]].map(([v,icon,label])=>(
-          <button key={v} onClick={()=>{dispatch({type:"VIEW",view:v});setEditR(null);setEditC(null);window.scrollTo({top:0,behavior:"instant"});}} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",padding:"4px 8px",minWidth:56}}>
-            {v==="add"?(
-              <div style={{width:44,height:44,borderRadius:"50%",background:"#F0997B",border:"2px solid #F0997B",display:"flex",alignItems:"center",justifyContent:"center",marginTop:-8,marginBottom:2}}>
-                <span style={{fontSize:22,lineHeight:1,color:"#141413"}}>➕</span>
-              </div>
-            ):(
-              <span style={{fontSize:20,lineHeight:1}}>{icon}</span>
-            )}
-            <span style={{fontSize:10,color:st.view===v?"#F0997B":"#888780",fontWeight:st.view===v?500:400,transition:"color 0.15s"}}>{label}</span>
-            {st.view===v&&v!=="add"&&<div style={{width:4,height:4,borderRadius:"50%",background:"#F0997B",marginTop:1}}/>}
-          </button>
-        ))}
+        {[["log","📋",t.myLog],["palette","😋",t.myTaste],["add","➕",t.add],["community","🌐",t.communityTab],["faq","❓",t.faq]].map(([v,icon,label])=>{
+          const badge = v==="community" && unseenFollowers > 0 ? unseenFollowers : 0;
+          return (
+            <button key={v} onClick={()=>{dispatch({type:"VIEW",view:v});setEditR(null);setEditC(null);window.scrollTo({top:0,behavior:"instant"});}} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",padding:"4px 8px",minWidth:56}}>
+              {v==="add"?(
+                <div style={{width:44,height:44,borderRadius:"50%",background:"#F0997B",border:"2px solid #F0997B",display:"flex",alignItems:"center",justifyContent:"center",marginTop:-8,marginBottom:2}}>
+                  <span style={{fontSize:22,lineHeight:1,color:"#141413"}}>➕</span>
+                </div>
+              ):(
+                <span style={{fontSize:20,lineHeight:1,position:"relative",display:"inline-block"}}>
+                  {icon}
+                  {badge>0 && (
+                    <span style={{position:"absolute",top:-4,right:-10,minWidth:16,height:16,padding:"0 4px",borderRadius:8,background:"#E85A5A",color:"#FFF",fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1,boxSizing:"border-box",border:"1.5px solid #1A1A18"}}>
+                      {badge>99 ? "99+" : badge}
+                    </span>
+                  )}
+                </span>
+              )}
+              <span style={{fontSize:10,color:st.view===v?"#F0997B":"#888780",fontWeight:st.view===v?500:400,transition:"color 0.15s"}}>{label}</span>
+              {st.view===v&&v!=="add"&&<div style={{width:4,height:4,borderRadius:"50%",background:"#F0997B",marginTop:1}}/>}
+            </button>
+          );
+        })}
       </div>
 
       {/* ── My Log ── */}
@@ -759,6 +791,9 @@ export default function App() {
           restaurantWeights={weights}
           drinkWeights={drinkWeights}
           sweetWeights={sweetWeights}
+          unseenFollowers={unseenFollowers}
+          onMarkFollowersSeen={handleMarkFollowersSeen}
+          onFollowChange={refreshUnseenFollowers}
         />
       )}
 

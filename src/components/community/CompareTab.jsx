@@ -150,7 +150,7 @@ function DiscoverRow({ row, subLine, badgeText, badgeTone }) {
 const DISCOVER_TONE = { bg: "rgba(91,155,213,0.14)", color: "#5B9BD5", border: "rgba(91,155,213,0.4)" };
 const RECOMMEND_TONE = { bg: "rgba(151,196,89,0.14)", color: "#97C459", border: "rgba(151,196,89,0.4)" };
 
-export function CompareTab({ user, initialTarget, onClearTarget }) {
+export function CompareTab({ user, initialTarget, onClearTarget, onFollowChange }) {
   const { t } = useLang();
   const [buds, setBuds] = useState([]);
   const [target, setTarget] = useState(initialTarget || null);
@@ -217,6 +217,7 @@ export function CompareTab({ user, initialTarget, onClearTarget }) {
   async function handleUnfollow() {
     if (!user?.id || !target?.id) return;
     await unfollowUser(supabase, user.id, target.id);
+    onFollowChange?.();
     clearTarget();
   }
 

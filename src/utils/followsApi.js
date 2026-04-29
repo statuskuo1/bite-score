@@ -211,3 +211,133 @@ export async function listTasteBuds(client, userId) {
   const { tasteBuds } = await listFollows(client, userId);
   return tasteBuds;
 }
+
+/**
+ * Counts that power the mini profile sheet on the Friends tab:
+ *   - `ratings`   = restaurant_visits + cafe_visits owned by the user
+ *   - `followers` = users who follow this user
+ *   - `following` = users this user follows
+ *   - `tasteBuds` = mutual follow count (intersection of the two)
+ *
+ * Each query is independent — partial failures degrade to `null` for that
+ * counter so the sheet can render placeholders rather than blocking.
+ */
+export async function fetchUserProfileStats(client, userId) {
+  const empty = { ratings: null, followers: null, following: null, tasteBuds: null };
+  if (!userId) return empty;
+
+  async function safeCount(promise, label) {
+    const { count, error } = await promise;
+    if (error) {
+      console.warn(`[BITE] fetchUserProfileStats ${label}:`, error);
+      return null;
+    }
+    return count || 0;
+  }
+
+  const [restaurantCount, cafeCount, followerCount, followingRows, followerRows] = await Promise.all([
+    safeCount(
+      client.from("restaurant_visits").select("id", { count: "exact", head: true }).eq("user_id", userId),
+      "restaurantCount",
+    ),
+    safeCount(
+      client.from("cafe_visits").select("id", { count: "exact", head: true }).eq("user_id", userId),
+      "cafeCount",
+    ),
+    safeCount(
+      client.from("follows").select("id", { count: "exact", head: true }).eq("following_id", userId),
+      "followerCount",
+    ),
+    // For taste-buds we need the actual id sets to intersect; reuse those
+    // arrays for the `following` count too to avoid an extra round-trip.
+    client.from("follows").select("following_id").eq("follower_id", userId),
+    client.from("follows").select("follower_id").eq("following_id", userId),
+  ]);
+
+  const ratings = restaurantCount == null && cafeCount == null
+    ? null
+    : (restaurantCount || 0) + (cafeCount || 0);
+
+  let following = null;
+  let tasteBuds = null;
+  if (!followingRows.error && !followerRows.error) {
+    const iFollow = new Set((followingRows.data || []).map((r) => r.following_id));
+    const theyFollowMe = new Set((followerRows.data || []).map((r) => r.follower_id));
+    following = iFollow.size;
+    let mutual = 0;
+    for (const id of iFollow) if (theyFollowMe.has(id)) mutual += 1;
+    tasteBuds = mutual;
+  } else {
+    if (followingRows.error) console.warn("[BITE] fetchUserProfileStats following:", followingRows.error);
+    if (followerRows.error) console.warn("[BITE] fetchUserProfileStats followers:", followerRows.error);
+  }
+
+  return {
+    ratings,
+    followers: followerCount,
+    following,
+    tasteBuds,
+  };
+}
+
+// ── Unseen-followers badge ───────────────────────────────────────────────────
+
+/** New Followers expiry window (also used by the FriendsTab list filter so the
+ *  badge count and visible rows always agree). */
+export const NEW_FOLLOWERS_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Count follows arriving AFTER `profiles.followers_last_seen_at`, ignoring
+ * anything older than the New Followers window so the badge can't stay sticky
+ * on dormant accounts. Returns 0 on any failure so a transient network blip
+ * never produces a phantom badge.
+ */
+export async function countUnseenFollowers(client, userId) {
+  if (!userId) return 0;
+
+  const { data: profile, error: profileErr } = await client
+    .from("profiles")
+    .select("followers_last_seen_at")
+    .eq("id", userId)
+    .maybeSingle();
+  if (profileErr) {
+    console.warn("[BITE] countUnseenFollowers profile error:", profileErr);
+    return 0;
+  }
+  const seenAt = profile?.followers_last_seen_at;
+  const sevenDaysAgo = new Date(Date.now() - NEW_FOLLOWERS_WINDOW_MS).toISOString();
+
+  let q = client
+    .from("follows")
+    .select("id", { count: "exact", head: true })
+    .eq("following_id", userId)
+    .gt("created_at", sevenDaysAgo);
+  // Without a recorded timestamp (shouldn't happen post-migration, but defend
+  // anyway) fall back to "every follow inside the window is unseen" rather
+  // than swallowing rows.
+  if (seenAt) q = q.gt("created_at", seenAt);
+
+  const { count, error } = await q;
+  if (error) {
+    console.warn("[BITE] countUnseenFollowers error:", error);
+    return 0;
+  }
+  return count || 0;
+}
+
+/**
+ * Stamp `followers_last_seen_at = now()` for the caller. Called when the
+ * Friends sub-tab opens; clears the badge.
+ */
+export async function markFollowersSeen(client, userId) {
+  if (!userId) return { ok: false };
+  const { error } = await client
+    .from("profiles")
+    .update({ followers_last_seen_at: new Date().toISOString() })
+    .eq("id", userId);
+  if (error) {
+    console.warn("[BITE] markFollowersSeen error:", error);
+    return { ok: false };
+  }
+  return { ok: true };
+}

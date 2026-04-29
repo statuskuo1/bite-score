@@ -117,6 +117,7 @@ export const T = {
     communityHintCompare:"What you've eaten together — and what to try next.",
     communityHintGroups:"Find restaurants the whole group will love.",
     searchByUsername:"Search by username",
+    following:"Following",
     addFriend:"Add",pendingRequest:"Pending",acceptRequest:"Accept",declineRequest:"Decline",
     cancelRequest:"Cancel",unfriend:"Unfriend",
     addFriendFailed:"Couldn't send request — try again.",cannotAddSelf:"You can't add yourself.",

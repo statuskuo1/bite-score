@@ -22,7 +22,7 @@ const SUBS = [
  * GlobalTab so its mean-then-BITE leaderboard reflects the viewer's own My
  * Taste sliders. The other sub-tabs don't read weights today.
  */
-export function CommunityTab({ user, restaurantWeights, drinkWeights, sweetWeights }) {
+export function CommunityTab({ user, restaurantWeights, drinkWeights, sweetWeights, unseenFollowers = 0, onMarkFollowersSeen, onFollowChange }) {
   const { t } = useLang();
   const [active, setActive] = useState("global");
   const [compareTarget, setCompareTarget] = useState(null);
@@ -42,6 +42,7 @@ export function CommunityTab({ user, restaurantWeights, drinkWeights, sweetWeigh
       }}>
         {SUBS.map((s) => {
           const on = active === s.key;
+          const badge = s.key === "friends" && unseenFollowers > 0 ? unseenFollowers : 0;
           return (
             <button
               key={s.key}
@@ -56,7 +57,20 @@ export function CommunityTab({ user, restaurantWeights, drinkWeights, sweetWeigh
                 cursor: "pointer", transition: "all 0.15s",
               }}
             >
-              {s.icon} {t[s.labelKey] || s.key}
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                {s.icon} {t[s.labelKey] || s.key}
+                {badge > 0 && (
+                  <span style={{
+                    minWidth: 16, height: 16, padding: "0 4px",
+                    borderRadius: 8, background: "#E85A5A",
+                    color: "#FFF", fontSize: 10, fontWeight: 700,
+                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                    lineHeight: 1, boxSizing: "border-box",
+                  }}>
+                    {badge > 99 ? "99+" : badge}
+                  </span>
+                )}
+              </span>
             </button>
           );
         })}
@@ -72,10 +86,10 @@ export function CommunityTab({ user, restaurantWeights, drinkWeights, sweetWeigh
         />
       )}
       {active === "friends" && (
-        <FriendsTab user={user} onCompareWith={jumpToCompare} />
+        <FriendsTab user={user} onCompareWith={jumpToCompare} onMarkFollowersSeen={onMarkFollowersSeen} onFollowChange={onFollowChange} />
       )}
       {active === "compare" && (
-        <CompareTab user={user} initialTarget={compareTarget} onClearTarget={() => setCompareTarget(null)} />
+        <CompareTab user={user} initialTarget={compareTarget} onClearTarget={() => setCompareTarget(null)} onFollowChange={onFollowChange} />
       )}
       {active === "groups" && <GroupsTab user={user} />}
     </div>
