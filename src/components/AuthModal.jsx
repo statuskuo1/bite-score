@@ -24,6 +24,24 @@ function formatPasswordSignUpError(e, t) {
   return msg;
 }
 
+function EyeIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </svg>
+  );
+}
+
+function EyeOffIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+      <line x1="1" y1="1" x2="23" y2="23"/>
+    </svg>
+  );
+}
+
 function GoogleIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -43,7 +61,8 @@ export function AuthModal({ open, onClose }) {
   const [isCreateMode, setIsCreateMode] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [resetSent, setResetSent] = useState(false);
@@ -102,7 +121,8 @@ export function AuthModal({ open, onClose }) {
     setErr("");
     setResetSent(false);
     setPassword("");
-    setConfirmPassword("");
+    setShowPassword(false);
+    setPasswordFocused(false);
   }, [open, isCreateMode]);
 
   useEffect(() => {
@@ -156,7 +176,7 @@ export function AuthModal({ open, onClose }) {
     setResetSent(false);
     setEmail("");
     setPassword("");
-    setConfirmPassword("");
+    setShowPassword(false);
   }
 
   async function signGoogle() {
@@ -218,7 +238,7 @@ export function AuthModal({ open, onClose }) {
     if (!trimmed) { setErr(t.authEmailRequired); return; }
     if (!trimmed.includes("@")) { setErr(t.authSignUpEmailRequired); return; }
     if (!password) { setErr(t.authPasswordRequired); return; }
-    if (password !== confirmPassword) { setErr("Passwords don't match."); return; }
+    if (password.length < 8) { setErr("Password must be at least 8 characters."); return; }
     setBusy(true);
     try {
       const { data, error } = await supabase.auth.signUp({
@@ -228,7 +248,6 @@ export function AuthModal({ open, onClose }) {
       });
       if (error) throw error;
       setPassword("");
-      setConfirmPassword("");
       if (data?.session) { onClose(); return; }
       setPendingVerificationEmail(trimmed);
       setResendCooldown(30);
@@ -361,7 +380,6 @@ export function AuthModal({ open, onClose }) {
       await supabase.auth.signOut();
       setEmail("");
       setPassword("");
-      setConfirmPassword("");
       setResetSent(false);
       onClose();
     } catch (e) {
@@ -370,6 +388,36 @@ export function AuthModal({ open, onClose }) {
     } finally {
       setBusy(false);
     }
+  }
+
+  function PasswordInput({ onEnter, autoComplete = "current-password", showHelper = false }) {
+    return (
+      <div style={{ position: "relative", marginBottom: showHelper ? 4 : 14 }}>
+        <input
+          type={showPassword ? "text" : "password"}
+          autoComplete={autoComplete}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          onFocus={() => setPasswordFocused(true)}
+          onBlur={() => setPasswordFocused(false)}
+          onKeyDown={(e) => e.key === "Enter" && onEnter?.()}
+          style={{ width: "100%", boxSizing: "border-box", fontSize: 14, paddingRight: 38 }}
+        />
+        <button
+          type="button"
+          onClick={() => setShowPassword((v) => !v)}
+          style={{
+            position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+            background: "none", border: "none", cursor: "pointer", padding: 0,
+            color: "#888780", lineHeight: 0, display: "flex",
+          }}
+          tabIndex={-1}
+          aria-label={showPassword ? "Hide password" : "Show password"}
+        >
+          {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+        </button>
+      </div>
+    );
   }
 
   const panel = {
@@ -683,22 +731,12 @@ export function AuthModal({ open, onClose }) {
               style={inputStyle}
             />
             <label style={labelStyle}>{t.authPasswordLabel}</label>
-            <input
-              type="password"
-              autoComplete="new-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              style={inputStyle}
-            />
-            <label style={labelStyle}>Confirm password</label>
-            <input
-              type="password"
-              autoComplete="new-password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && signUpWithPassword()}
-              style={{ ...inputStyle, marginBottom: 14 }}
-            />
+            <PasswordInput onEnter={signUpWithPassword} autoComplete="new-password" showHelper />
+            {(passwordFocused || password.length > 0) && (
+              <div style={{ fontSize: 11, color: password.length > 0 && password.length < 8 ? "#A32D2D" : "#666663", marginBottom: 12, lineHeight: 1.4 }}>
+                At least 8 characters
+              </div>
+            )}
             <button type="button" disabled={busy} onClick={signUpWithPassword}
               style={{ ...btn, background: "#F0997B", color: "#141413" }}>
               {busy ? "…" : t.authSignUpPassword}
@@ -729,14 +767,7 @@ export function AuthModal({ open, onClose }) {
               style={inputStyle}
             />
             <label style={labelStyle}>{t.authPasswordLabel}</label>
-            <input
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && signInWithPassword()}
-              style={{ ...inputStyle, marginBottom: 14 }}
-            />
+            <PasswordInput onEnter={signInWithPassword} />
             <button type="button" disabled={busy} onClick={signInWithPassword}
               style={{ ...btn, background: "#F0997B", color: "#141413" }}>
               {busy ? "…" : t.authSignInPassword}
