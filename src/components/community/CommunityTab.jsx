@@ -111,6 +111,40 @@ function CompareMockup() {
   );
 }
 
+function GlobalMockup() {
+  const ROWS = [
+    { flag:"🇮🇹", name:"Lilia",             cuisine:"Italian",        city:"NYC", bite:"9.14", label:"Exceptional",  color:"#97C459" },
+    { flag:"🍕",   name:"Lucali",            cuisine:"Italian",        city:"NYC", bite:"8.82", label:"Exceptional",  color:"#97C459" },
+    { flag:"🇯🇵", name:"Raku",              cuisine:"Japanese",       city:"NYC", bite:"8.47", label:"Worth It",     color:"#5B9BD5" },
+    { flag:"🇮🇹", name:"Don Angie",         cuisine:"Italian",        city:"NYC", bite:"8.31", label:"Worth It",     color:"#5B9BD5" },
+    { flag:"🇺🇸", name:"Ugly Bagel",        cuisine:"American",       city:"NYC", bite:"7.95", label:"Solid Pick",   color:"#EF9F27" },
+    { flag:"🇺🇸", name:"Superiority Burger",cuisine:"American",       city:"NYC", bite:"7.62", label:"Solid Pick",   color:"#EF9F27" },
+    { flag:"🇨🇳", name:"Xi'an Famous",      cuisine:"Chinese",        city:"NYC", bite:"7.28", label:"Decent",       color:"#888780" },
+  ];
+  return (
+    <div>
+      <div style={{ display:"flex", background:"#252523", borderRadius:10, padding:3, gap:2, marginBottom:12 }}>
+        {[["restaurants","🍽 Restaurants"],["drinks","☕ Drinks"],["sweets","🥐 Sweets"]].map(([v,l])=>(
+          <button key={v} style={{ flex:1, padding:"6px 0", textAlign:"center", borderRadius:8, border:"none", background:v==="restaurants"?"#3C1F13":"transparent", color:v==="restaurants"?"#F0997B":"#888780", fontSize:11, fontWeight:v==="restaurants"?700:500, cursor:"pointer" }}>{l}</button>
+        ))}
+      </div>
+      {ROWS.map(r => (
+        <div key={r.name} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", marginBottom:6, background:"#1E1E1C", border:"0.5px solid rgba(255,255,255,0.08)", borderRadius:10 }}>
+          <div style={{ width:36, height:36, borderRadius:8, background:"#252523", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 }}>{r.flag}</div>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontSize:13, color:"#F1EFE8", fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.name}</div>
+            <div style={{ fontSize:11, color:"#888780" }}>{r.cuisine} · {r.city}</div>
+          </div>
+          <div style={{ textAlign:"right", flexShrink:0 }}>
+            <div style={{ fontSize:15, fontWeight:700, color:r.color }}>{r.bite}</div>
+            <div style={{ fontSize:10, color:r.color, opacity:0.8 }}>{r.label}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function GroupsMockup() {
   const GROUPS = [
     { name:"NYC Food Crew", count:4, colors:["#5B9BD5","#97C459","#EF9F27","#F0997B"] },
@@ -236,7 +270,12 @@ export function CommunityTab({ user, restaurantWeights, drinkWeights, sweetWeigh
       </div>
       <p style={{ fontSize: 12, color: "#888780", margin: "0 0 12px" }}>{hint}</p>
 
-      {active === "global" && (
+      {active === "global" && !user && (
+        <GuestPreview message="Sign in to see the live community leaderboard" onSignIn={onSignIn}>
+          <GlobalMockup />
+        </GuestPreview>
+      )}
+      {active === "global" && user && (
         <GlobalTab
           user={user}
           restaurantWeights={restaurantWeights}

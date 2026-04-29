@@ -53,8 +53,6 @@ import { countUnreadNotifications, fetchUnreadNotifications, markNotificationsRe
 import { usePaginatedList } from "./components/usePaginatedList.js";
 import { ShowMoreButton } from "./components/ShowMoreButton.jsx";
 import { NotificationPanel } from "./components/NotificationPanel.jsx";
-import { GuestLogView } from "./components/GuestLogView.jsx";
-
 const GUEST_PALETTE_ENTRIES = [
   {id:"gp1",name:"Lilia",             cuisine:"Italian",        letter:"I",city:"NYC",taste:9.2,cost:120,portions:2,wait:20,repeatability:3,useR:true,notes:""},
   {id:"gp2",name:"Don Angie",         cuisine:"Italian",        letter:"I",city:"NYC",taste:8.8,cost:95, portions:2,wait:15,repeatability:3,useR:true,notes:""},
@@ -796,7 +794,22 @@ export default function App() {
 
       {/* ── My Log ── */}
       {st.view==="log"&&!editR&&!editC&&!user&&(
-        <GuestLogView weights={weights} drinkWeights={drinkWeights} sweetWeights={sweetWeights} onSignIn={() => setShowAuthModal(true)} />
+        <GuestPreview message="Sign in to start logging your own restaurant ratings" onSignIn={() => setShowAuthModal(true)}>
+          <div>
+            <div style={{display:"flex",background:"#252523",borderRadius:10,padding:3,gap:2,marginBottom:8}}>
+              {[["restaurants","🍽 Restaurants"],["drinks","☕ Drinks"],["sweets","🥐 Sweets"]].map(([v,l])=>(
+                <button key={v} style={{flex:1,padding:"6px 0",textAlign:"center",borderRadius:8,border:"none",background:v==="restaurants"?"#3C1F13":"transparent",color:v==="restaurants"?"#F0997B":"#888780",fontSize:11,fontWeight:v==="restaurants"?700:500,cursor:"pointer"}}>{l}</button>
+              ))}
+            </div>
+            <div style={{borderBottom:"0.5px solid rgba(255,255,255,0.08)",marginBottom:12}}/>
+            {GUEST_PALETTE_ENTRIES.map(e=>{
+              const sc=calcBiteOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights);
+              return(
+                <RestRow key={e.id} e={e} display={{val:sc!=null?sc.toFixed(2):"—",label:scoreLabel(sc,t),color:scoreColor(sc)}} user={null} weights={weights}/>
+              );
+            })}
+          </div>
+        </GuestPreview>
       )}
       {st.view==="log"&&!editR&&!editC&&user&&!dbLoaded&&(
         <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:8}}>
