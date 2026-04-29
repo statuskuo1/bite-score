@@ -176,16 +176,12 @@ export default function App() {
   async function refetchNotifications() {
     if (!user?.id) return;
     try {
+      // Wait for the Postgres trigger to fire before fetching.
+      await new Promise((r) => setTimeout(r, 700));
       const rows = await fetchUnreadNotifications(supabase, user.id);
-      if (rows.length > 0) {
-        setNotifications((prev) => {
-          const seen = new Set(prev.map((n) => n.id));
-          const fresh = rows.filter((r) => !seen.has(r.id));
-          return fresh.length > 0 ? [...fresh, ...prev] : prev;
-        });
-        await markNotificationsRead(supabase, user.id);
-        setNotifCount(0);
-      }
+      setNotifications(rows);
+      await markNotificationsRead(supabase, user.id);
+      setNotifCount(0);
     } catch (err) {
       console.error("refetch notifications:", err);
     }

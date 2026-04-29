@@ -14,18 +14,20 @@ function relativeTime(ts) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile }) {
+function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile, alreadyFollowed, onMarkFollowed }) {
   const [followed, setFollowed] = useState(false);
   const [isTasteBuds, setIsTasteBuds] = useState(notif.type === "taste_buds");
   const [busy, setBusy] = useState(false);
   const p = notif.fromProfile;
+  const isFollowed = followed || alreadyFollowed;
 
   async function handleFollowBack() {
-    if (busy || followed) return;
+    if (busy || isFollowed) return;
     setBusy(true);
     try {
       const res = await onFollowBack(notif.from_user_id);
       setFollowed(true);
+      onMarkFollowed?.(notif.id);
       if (res?.isMutual) setIsTasteBuds(true);
       await onRefetch?.();
     } finally {
@@ -68,7 +70,7 @@ function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile }) {
         </div>
       </div>
 
-      {notif.type === "follow" && !followed && (
+      {notif.type === "follow" && !isFollowed && (
         <div style={{ flexShrink: 0 }}>
           {busy ? (
             <span style={{ fontSize: 11, color: "#888780" }}>…</span>
@@ -77,7 +79,7 @@ function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile }) {
           )}
         </div>
       )}
-      {notif.type === "follow" && followed && !isTasteBuds && (
+      {notif.type === "follow" && isFollowed && !isTasteBuds && (
         <span style={{ fontSize: 11, color: "#888780", flexShrink: 0 }}>Following</span>
       )}
     </div>
@@ -90,6 +92,11 @@ export function NotificationPanel({
 }) {
   const { t } = useLang();
   const panelRef = useRef(null);
+  const [followedIds, setFollowedIds] = useState(() => new Set());
+
+  function markFollowed(id) {
+    setFollowedIds((prev) => new Set([...prev, id]));
+  }
 
   useEffect(() => {
     function handler(e) {
@@ -147,6 +154,8 @@ export function NotificationPanel({
             onFollowBack={onFollowBack}
             onRefetch={onRefetch}
             onOpenProfile={onOpenProfile}
+            alreadyFollowed={followedIds.has(n.id)}
+            onMarkFollowed={markFollowed}
           />
         ))
       )}
