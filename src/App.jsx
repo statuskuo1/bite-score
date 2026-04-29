@@ -47,9 +47,11 @@ import { ResetPasswordModal } from "./components/ResetPasswordModal.jsx";
 import { WeightSliders } from "./components/WeightSliders.jsx";
 import { CommunityTab } from "./components/community/CommunityTab.jsx";
 import { SortFilterToolbar } from "./components/SortFilterToolbar.jsx";
-import { countUnseenFollowers, markFollowersSeen } from "./utils/followsApi.js";
+import { countUnseenFollowers, markFollowersSeen, followUser } from "./utils/followsApi.js";
+import { countUnreadNotifications, fetchUnreadNotifications, markNotificationsRead } from "./utils/notificationsApi.js";
 import { usePaginatedList } from "./components/usePaginatedList.js";
 import { ShowMoreButton } from "./components/ShowMoreButton.jsx";
+import { NotificationPanel } from "./components/NotificationPanel.jsx";
 
 /** Drops optional paragraphs from welcome body (DB or defaults): play-mode aside; sign-in/cloud disclaimer (EN+ZH) so languages stay aligned when overrides differ. */
 function omitPlayWelcomeAside(body) {
@@ -76,6 +78,11 @@ export default function App() {
    *  bottom nav. Refreshed on auth + after every follow/unfollow action; the
    *  Friends sub-tab additionally calls markFollowersSeen on mount to clear it. */
   const [unseenFollowers, setUnseenFollowers] = useState(0);
+  const [notifCount, setNotifCount] = useState(0);
+  const [showNotifPanel, setShowNotifPanel] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [notifLoading, setNotifLoading] = useState(false);
+  const notifContainerRef = useRef(null);
   /** Mandarin localization is temporarily stashed while EN gets polish.
    *  `T.zh` and components' `lang === "zh"` branches are intentionally preserved
    *  so reviving = restore lang state + UI toggles. See
@@ -98,6 +105,47 @@ export default function App() {
     setUnseenFollowers(n);
   }, [user?.id]);
 
+  const refreshNotifCount = useCallback(async () => {
+    if (!user?.id) { setNotifCount(0); return; }
+    const n = await countUnreadNotifications(supabase, user.id);
+    setNotifCount(n);
+  }, [user?.id]);
+
+  useEffect(() => { refreshNotifCount(); }, [refreshNotifCount]);
+
+  async function openNotifPanel() {
+    if (showNotifPanel) { setShowNotifPanel(false); return; }
+    setShowNotifPanel(true);
+    setNotifLoading(true);
+    try {
+      const rows = await fetchUnreadNotifications(supabase, user.id);
+      setNotifications(rows);
+      await markNotificationsRead(supabase, user.id);
+      setNotifCount(0);
+    } finally {
+      setNotifLoading(false);
+    }
+  }
+
+  async function handleNotifFollowBack(targetId) {
+    if (!user?.id) return { ok: false };
+    const res = await followUser(supabase, user.id, targetId);
+    await refreshUnseenFollowers();
+    return res;
+  }
+
+  // Click-outside to close notification panel.
+  useEffect(() => {
+    if (!showNotifPanel) return;
+    function handler(e) {
+      if (notifContainerRef.current && !notifContainerRef.current.contains(e.target)) {
+        setShowNotifPanel(false);
+      }
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showNotifPanel]);
+
   /** Friends sub-tab calls this when it mounts; we stamp the seen-at and
    *  immediately recount so the badge clears without needing to wait for the
    *  next refresh trigger. */
@@ -108,6 +156,10 @@ export default function App() {
   }, [user?.id, refreshUnseenFollowers]);
 
   useEffect(() => { refreshUnseenFollowers(); }, [refreshUnseenFollowers]);
+  /** Re-check both follower badge and notif count after any follow action. */
+  const refreshSocialCounts = useCallback(async () => {
+    await Promise.all([refreshUnseenFollowers(), refreshNotifCount()]);
+  }, [refreshUnseenFollowers, refreshNotifCount]);
 
   /** Bundled `translations.js` by default. Supabase `welcome_*` only when hosting sets `VITE_WELCOME_USE_SUPABASE=true` (opt-in). */
   const welcomeUseDbCopy = import.meta.env.VITE_WELCOME_USE_SUPABASE === 'true';
@@ -555,6 +607,39 @@ export default function App() {
           </div>
         </div>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          {user && (
+            <div ref={notifContainerRef} style={{ position: "relative" }}>
+              <button
+                type="button"
+                onClick={openNotifPanel}
+                style={{ fontSize: 18, background: "none", border: "none", cursor: "pointer", padding: "4px 6px", position: "relative", lineHeight: 1, color: "#F1EFE8" }}
+                title="Notifications"
+              >
+                🔔
+                {notifCount > 0 && (
+                  <span style={{
+                    position: "absolute", top: 0, right: 0,
+                    minWidth: 16, height: 16, padding: "0 3px",
+                    borderRadius: 8, background: "#E85A5A",
+                    color: "#FFF", fontSize: 10, fontWeight: 700,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    lineHeight: 1, boxSizing: "border-box",
+                    border: "1.5px solid #141413",
+                  }}>
+                    {notifCount > 99 ? "99+" : notifCount}
+                  </span>
+                )}
+              </button>
+              {showNotifPanel && (
+                <NotificationPanel
+                  notifications={notifications}
+                  loading={notifLoading}
+                  onClose={() => setShowNotifPanel(false)}
+                  onFollowBack={handleNotifFollowBack}
+                />
+              )}
+            </div>
+          )}
           <button type="button" onClick={()=>setShowAuthModal(true)} style={{fontSize:11,fontWeight:500,padding:"5px 12px",borderRadius:20,border:"1.5px solid rgba(255,255,255,0.2)",background:user?"#3C1F13":"transparent",color:user?"#F0997B":"#888780",cursor:"pointer",letterSpacing:"0.03em",flexShrink:0,maxWidth:120,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={user?.email||t.signIn}>{user?(username||user.email?.split("@")[0]||t.account):t.signIn}</button>
         </div>
       </div>
@@ -839,7 +924,7 @@ export default function App() {
           sweetWeights={sweetWeights}
           unseenFollowers={unseenFollowers}
           onMarkFollowersSeen={handleMarkFollowersSeen}
-          onFollowChange={refreshUnseenFollowers}
+          onFollowChange={refreshSocialCounts}
         />
       )}
 
