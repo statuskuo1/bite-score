@@ -3,6 +3,8 @@ import { useLang } from "../contexts/LangContext.jsx";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { supabase } from "../config/supabaseClient.js";
 import { accountUsesOauthOnly, fetchEmailForUsername, suggestAvailableUsernames, updateOwnProfile, validateUsername } from "../utils/profileApi.js";
+import { listFollows } from "../utils/followsApi.js";
+import { computeFoodStats, fetchRestaurantVisitsForUser } from "../utils/visitPlacesApi.js";
 
 /** Always the tab’s origin so local dev and Vercel previews return here; must be listed in Supabase → Auth → URL configuration → Redirect URLs. */
 const redirectBase = () => window.location.origin.replace(/\/$/, "");
@@ -47,6 +49,27 @@ export function AuthModal({ open, onClose }) {
   /** Available alternatives shown as chips when saveError === "username_taken". */
   const [suggestions, setSuggestions] = useState([]);
   const usernameInputRef = useRef(null);
+
+  const [socialCounts, setSocialCounts] = useState({ followers: 0, following: 0, tasteBuds: 0 });
+  const [foodStats, setFoodStats] = useState({ restaurants: 0, cuisines: 0, cities: 0, regions: 0 });
+
+  useEffect(() => {
+    if (!open || !user?.id) return;
+    let cancelled = false;
+    Promise.all([
+      listFollows(supabase, user.id),
+      fetchRestaurantVisitsForUser(supabase, user.id),
+    ]).then(([follows, visits]) => {
+      if (cancelled) return;
+      setSocialCounts({
+        followers: follows.followers.length,
+        following: follows.following.length,
+        tasteBuds: follows.tasteBuds.length,
+      });
+      setFoodStats(computeFoodStats(visits));
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [open, user?.id]);
 
   /** Seed drafts from the live profile every time the modal opens or the profile changes. */
   useEffect(() => {
@@ -378,7 +401,8 @@ export function AuthModal({ open, onClose }) {
 
         {session && user ? (
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+            {/* ── Avatar + username header ── */}
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
               {profile?.avatar_url ? (
                 <img
                   src={profile.avatar_url}
@@ -412,7 +436,37 @@ export function AuthModal({ open, onClose }) {
               </div>
             </div>
 
-            <label style={{ fontSize: 11, color: "#888780", display: "block", marginBottom: 6 }}>{t.profileUsernameLabel}</label>
+            {/* ── Social stats ── */}
+            <div style={{ fontSize: 12, color: "#888780", marginBottom: 12 }}>
+              <span>{socialCounts.followers} followers</span>
+              <span style={{ margin: "0 5px", opacity: 0.4 }}>·</span>
+              <span>{socialCounts.following} following</span>
+              <span style={{ margin: "0 5px", opacity: 0.4 }}>·</span>
+              <span>{socialCounts.tasteBuds} taste buds</span>
+            </div>
+
+            {/* ── Food stats ── */}
+            <div style={{
+              background: "#141413", borderRadius: 10,
+              padding: "10px 12px", marginBottom: 14,
+              display: "flex", flexDirection: "column", gap: 6,
+            }}>
+              {[
+                { emoji: "🍽", label: "Restaurants rated", val: String(foodStats.restaurants), color: "#F0997B" },
+                { emoji: "🌍", label: "Cuisines tried", val: `${foodStats.cuisines} / 135`, color: "#97C459" },
+                { emoji: "📍", label: "Cities explored", val: String(foodStats.cities), color: "#5B9BD5" },
+                { emoji: "🗺", label: "Regions explored", val: `${foodStats.regions} / 17`, color: "#EF9F27" },
+              ].map(({ emoji, label, val, color }) => (
+                <div key={label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 13, width: 20, textAlign: "center", flexShrink: 0 }}>{emoji}</span>
+                  <span style={{ flex: 1, fontSize: 12, color: "#888780" }}>{label}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color }}>{val}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* ── Editable fields ── */}
+            <label style={{ fontSize: 10, color: "#888780", display: "block", marginBottom: 4 }}>{t.profileUsernameLabel}</label>
             <input
               ref={usernameInputRef}
               type="text"
@@ -421,16 +475,17 @@ export function AuthModal({ open, onClose }) {
               onChange={(e) => { setUsernameDraft(e.target.value.toLowerCase()); setSaveError(null); setSaveOk(false); setSuggestions([]); }}
               maxLength={30}
               style={{
-                width: "100%", boxSizing: "border-box", marginBottom: 4, fontSize: 14,
+                width: "100%", boxSizing: "border-box", marginBottom: 3, fontSize: 13,
+                padding: "6px 10px",
                 borderColor: usernameInlineErr ? "#A32D2D" : undefined,
               }}
             />
-            <div style={{ fontSize: 11, color: usernameInlineErr ? "#A32D2D" : "#666663", marginBottom: saveError === "username_taken" && suggestions.length > 0 ? 6 : 12, lineHeight: 1.4 }}>
+            <div style={{ fontSize: 10, color: usernameInlineErr ? "#A32D2D" : "#666663", marginBottom: saveError === "username_taken" && suggestions.length > 0 ? 5 : 10, lineHeight: 1.4 }}>
               {usernameInlineErr || t.profileUsernameHelp}
             </div>
             {saveError === "username_taken" && suggestions.length > 0 && (
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
-                <span style={{ fontSize: 11, color: "#888780" }}>{t.profileUsernameSuggest}</span>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
+                <span style={{ fontSize: 10, color: "#888780" }}>{t.profileUsernameSuggest}</span>
                 {suggestions.map((s) => (
                   <button
                     key={s}
@@ -442,9 +497,9 @@ export function AuthModal({ open, onClose }) {
                       usernameInputRef.current?.focus();
                     }}
                     style={{
-                      padding: "4px 10px",
+                      padding: "3px 8px",
                       borderRadius: 14,
-                      fontSize: 12,
+                      fontSize: 11,
                       background: "#3C1F13",
                       color: "#F0997B",
                       border: "1px solid rgba(240,153,123,0.4)",
@@ -457,19 +512,19 @@ export function AuthModal({ open, onClose }) {
               </div>
             )}
 
-            <label style={{ fontSize: 11, color: "#888780", display: "block", marginBottom: 6 }}>{t.profileDisplayNameLabel}</label>
+            <label style={{ fontSize: 10, color: "#888780", display: "block", marginBottom: 4 }}>{t.profileDisplayNameLabel}</label>
             <input
               type="text"
               autoComplete="off"
               value={displayNameDraft}
               onChange={(e) => { setDisplayNameDraft(e.target.value); setSaveOk(false); }}
               maxLength={120}
-              style={{ width: "100%", boxSizing: "border-box", marginBottom: 4, fontSize: 14 }}
+              style={{ width: "100%", boxSizing: "border-box", marginBottom: 3, fontSize: 13, padding: "6px 10px" }}
             />
-            <div style={{ fontSize: 11, color: "#666663", marginBottom: 14, lineHeight: 1.4 }}>{t.profileDisplayNameHelp}</div>
+            <div style={{ fontSize: 10, color: "#666663", marginBottom: 10, lineHeight: 1.4 }}>{t.profileDisplayNameHelp}</div>
 
-            <label style={{ fontSize: 11, color: "#888780", display: "block", marginBottom: 6 }}>{t.profileEmailLabel}</label>
-            <div style={{ fontSize: 13, color: "#C4C2BA", marginBottom: 16, wordBreak: "break-all" }}>
+            <label style={{ fontSize: 10, color: "#888780", display: "block", marginBottom: 3 }}>{t.profileEmailLabel}</label>
+            <div style={{ fontSize: 12, color: "#C4C2BA", marginBottom: 14, wordBreak: "break-all" }}>
               {user.email || "—"}
             </div>
 
