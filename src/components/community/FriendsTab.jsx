@@ -363,36 +363,48 @@ function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClose, onCo
           padding: "8px 0",
         }} />
 
-        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
-          <Avatar profile={profile} size={56} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{
-              fontSize: 18, fontWeight: 600, color: "#F1EFE8",
-              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-            }}>
-              {name}
-            </div>
-            <div style={{ fontSize: 12, color: "#888780", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              @{profile.username || "–"}
-            </div>
-            {badge && (
-              <div style={{ marginTop: 6 }}>
-                <span style={{
-                  fontSize: 10, fontWeight: 600, padding: "4px 10px", borderRadius: 20,
-                  background: badge.bg, color: badge.color,
-                  border: `1px solid ${badge.border}`,
-                }}>
-                  {badge.label}
-                </span>
-              </div>
+        {/* ── Centered avatar + name (mirrors AuthModal profile view) ── */}
+        <div style={{ textAlign: "center", marginBottom: 12 }}>
+          <div style={{ marginBottom: 8 }}>
+            <Avatar profile={profile} size={56} />
+          </div>
+          <div style={{ fontSize: 16, fontWeight: 600, color: "#F1EFE8", lineHeight: 1.2 }}>
+            {name}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 3 }}>
+            <span style={{ fontSize: 13, color: "#C4C2BA" }}>@{profile.username || "–"}</span>
+            {canUnfollow && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onUnfollow?.(profile.id)}
+                style={{
+                  fontSize: 11, color: "#A32D2D", background: "none",
+                  border: "none", cursor: busy ? "not-allowed" : "pointer",
+                  opacity: busy ? 0.6 : 1, padding: 0,
+                }}
+              >
+                {busy ? "…" : (t.unfollow || "Unfollow")}
+              </button>
             )}
           </div>
+          {badge && (
+            <div style={{ marginTop: 6 }}>
+              <span style={{
+                fontSize: 10, fontWeight: 600, padding: "4px 10px", borderRadius: 20,
+                background: badge.bg, color: badge.color,
+                border: `1px solid ${badge.border}`,
+              }}>
+                {badge.label}
+              </span>
+            </div>
+          )}
         </div>
 
         <div style={{
           display: "flex", alignItems: "stretch",
           background: "#141413", border: "0.5px solid rgba(255,255,255,0.08)",
-          borderRadius: 12, padding: "12px 4px", marginBottom: 16,
+          borderRadius: 12, padding: "12px 4px", marginBottom: 14,
         }}>
           <StatCell value={stats?.restaurants} label={t.restaurantsRated || "Restaurants rated"} />
           <StatCell value={stats?.cuisines} label={t.cuisinesTried || "Cuisines tried"} />
@@ -400,52 +412,31 @@ function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClose, onCo
           <StatCell value={stats?.regions} label={t.regionsExplored || "Regions explored"} />
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8 }}>
           <button
             type="button"
             onClick={() => { onViewLog?.(profile); onClose?.(); }}
             style={{
-              padding: "12px 14px", borderRadius: 10,
-              background: "transparent",
-              border: "1px solid rgba(255,255,255,0.15)",
-              color: "#F1EFE8", fontSize: 14, fontWeight: 500,
+              flex: 1, padding: "12px 14px", borderRadius: 10,
+              background: "#3C1F13", border: "1px solid rgba(240,153,123,0.4)",
+              color: "#F0997B", fontSize: 14, fontWeight: 600,
               cursor: "pointer",
             }}
           >
             {t.viewLog || "View log"}
           </button>
-
           {relation === "taste_buds" && (
             <button
               type="button"
               onClick={() => { onCompareWith?.(profile); onClose?.(); }}
               style={{
-                padding: "12px 14px", borderRadius: 10,
-                background: "#3C1F13",
-                border: "1px solid rgba(240,153,123,0.4)",
-                color: "#F0997B", fontSize: 14, fontWeight: 600,
+                flex: 1, padding: "12px 14px", borderRadius: 10,
+                background: "transparent", border: "0.5px solid rgba(255,255,255,0.2)",
+                color: "#C4C2BA", fontSize: 14, fontWeight: 500,
                 cursor: "pointer",
               }}
             >
               {t.compareSub || "Compare"}
-            </button>
-          )}
-
-          {canUnfollow && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => onUnfollow?.(profile.id)}
-              style={{
-                padding: "12px 14px", borderRadius: 10,
-                background: "transparent",
-                border: "1px solid rgba(163,45,45,0.4)",
-                color: busy ? "#888780" : "#A32D2D", fontSize: 14, fontWeight: 500,
-                cursor: busy ? "not-allowed" : "pointer",
-                opacity: busy ? 0.6 : 1,
-              }}
-            >
-              {busy ? "…" : (t.unfollow || "Unfollow")}
             </button>
           )}
         </div>
