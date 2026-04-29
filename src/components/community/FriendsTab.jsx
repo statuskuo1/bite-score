@@ -328,11 +328,17 @@ function TopPickRow({ pick }) {
 }
 
 /** One row for a non-mutual follower (they follow me, I don't follow back). */
-function FollowerRow({ entry, onFollow, busy, t }) {
+function FollowerRow({ entry, onFollow, onOpen, busy, t }) {
   const profile = entry.otherProfile;
   return (
     <div style={ROW_STYLE}>
-      <UserIdentity profile={profile} size={28} />
+      <button
+        type="button"
+        onClick={() => onOpen?.(profile, "they_follow")}
+        style={{ flex: 1, minWidth: 0, background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0 }}
+      >
+        <UserIdentity profile={profile} size={28} />
+      </button>
       {busy ? (
         <span style={{ fontSize: 11, color: "#888780" }}>…</span>
       ) : (
@@ -829,6 +835,7 @@ export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowC
                   key={r.id}
                   entry={r}
                   onFollow={handleFollow}
+                  onOpen={openProfileSheet}
                   busy={!!busyById[r.otherUserId]}
                   t={t}
                 />
