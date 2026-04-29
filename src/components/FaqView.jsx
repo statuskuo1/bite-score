@@ -71,8 +71,9 @@ export function FaqView() {
         </FaqItem>
 
         <FaqItem q="What's a Taste Bud?">
-          When you follow someone and they follow you back, you become Taste Buds. You can view
-          each other's full log, compare your ratings, and discover restaurants through each other.
+          When you mutually follow each other, you become Taste Buds. (Since Instagram won't give
+          you this feature, I will.) You can view each other's full log, compare your ratings, and
+          discover restaurants through each other.
         </FaqItem>
 
         <FaqItem q="Can others see my ratings?">
