@@ -14,6 +14,7 @@ import { FieldLabel } from "./FieldLabel.jsx";
 import { FormScoreHeader } from "./FormScoreHeader.jsx";
 import { BEAN_ORIGINS } from "../constants/coffeeConstants.js";
 import { CityInput } from "./CityInput.jsx";
+import { SelectField } from "./SelectField.jsx";
 
 
 const ROAST_LEVELS = [
@@ -210,13 +211,6 @@ export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addT
   };
   const activeNotes = new Set(Array.isArray(f.flavorNotes) ? f.flavorNotes : []);
 
-  const selectStyle = {
-    width:"100%", boxSizing:"border-box",
-    appearance:"none", WebkitAppearance:"none", MozAppearance:"none",
-    backgroundColor:"#1E1E1C", border:"0.5px solid rgba(255,255,255,0.12)",
-    borderRadius:8, padding:"9px 12px", paddingRight:36,
-    fontSize:13, color:"#F1EFE8", outline:"none",
-  };
 
   return (
     <div style={{...S.card,marginBottom:12}}>
@@ -320,19 +314,17 @@ export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addT
 
           <div style={{marginTop:12}}>
             <FieldLabel>{t.beanRegion}</FieldLabel>
-            <div style={{position:"relative"}}>
-              <select value={f.beanRegion||""} onChange={e=>inp("beanRegion", e.target.value)} style={selectStyle}>
-                <option value="">Select a region</option>
-                {BEAN_ORIGINS.map(b => <option key={b} value={b}>{b}</option>)}
-                {f.beanRegion && !BEAN_ORIGINS.includes(f.beanRegion) && (
-                  <option value={f.beanRegion}>{f.beanRegion} (legacy)</option>
-                )}
-              </select>
-              <span style={{
-                position:"absolute", right:12, top:"50%", transform:"translateY(-50%)",
-                fontSize:10, color:"#888780", pointerEvents:"none", lineHeight:1,
-              }}>▼</span>
-            </div>
+            <SelectField
+              value={f.beanRegion || ""}
+              onChange={v => inp("beanRegion", v)}
+              options={[
+                ...BEAN_ORIGINS.map(b => ({ value: b, label: b })),
+                ...(f.beanRegion && !BEAN_ORIGINS.includes(f.beanRegion)
+                  ? [{ value: f.beanRegion, label: `${f.beanRegion} (legacy)` }]
+                  : []),
+              ]}
+              placeholder="Select a region"
+            />
           </div>
         </details>
       )}

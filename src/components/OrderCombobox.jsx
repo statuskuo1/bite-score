@@ -52,8 +52,14 @@ export function OrderCombobox({
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
+      {/* Class selector beats the global element selector, so these !important rules win. */}
+      <style>{`
+        .bite-order-input { font-size: 13px !important; color: #F1EFE8 !important; }
+        .bite-order-input::placeholder { color: #666663 !important; font-size: 13px !important; }
+      `}</style>
       <div style={{ position: "relative" }}>
         <input
+          className="bite-order-input"
           value={value}
           onChange={(e) => { onChange(e.target.value); setShow(true); }}
           onFocus={() => setShow(true)}
@@ -62,7 +68,7 @@ export function OrderCombobox({
             width:"100%", boxSizing:"border-box",
             background:"#1E1E1C", border:"0.5px solid rgba(255,255,255,0.12)",
             borderRadius:8, padding:"9px 12px", paddingRight:36,
-            fontSize:13, color:"#F1EFE8", outline:"none",
+            outline:"none",
           }}
         />
         <span style={{
