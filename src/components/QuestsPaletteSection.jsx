@@ -22,6 +22,7 @@ export function QuestSheetBody({ entries, questL, toggleQ, onSuggestClick }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
           <span style={{ fontSize: 16, fontWeight: 500, color: "#F1EFE8" }}>{t.aZQuest}</span>
         </div>
+        <p style={{ fontSize: 11, color: "#888780", margin: "0 0 10px" }}>Tap a letter after logging a cuisine to mark it complete.</p>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(36px,1fr))", gap: 6 }}>
           {ALPHABET.map((l) => {
             const isQ = questL.has(l);

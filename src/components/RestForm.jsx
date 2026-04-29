@@ -25,6 +25,7 @@ export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,exi
   }
   return (
     <div style={{...S.card,marginBottom:12}}>
+      <SectionLabel>{t.theBasics}</SectionLabel>
       <FormScoreHeader
         addType={addType}
         setAddType={setAddType}
@@ -32,7 +33,6 @@ export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,exi
         scoreColor={scoreColor(score)}
         scoreLabel={scoreLabel(score,t)}
       />
-      <SectionLabel>{t.theBasics}</SectionLabel>
       <div style={{marginBottom:16}}>
         <FieldLabel>{t.city||"City"} *</FieldLabel>
         <CityInput value={f.city||""} onChange={val=>inp("city",val)} existingCities={existingCities} /> 

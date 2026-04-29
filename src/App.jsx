@@ -133,7 +133,7 @@ export default function App() {
   const canProceedWelcome = restaurantWeightsSum === 100;
   const [drinkWeights, setDrinkWeights] = useState({taste:70,bpb:20,wait:10});
   const [sweetWeights, setSweetWeights] = useState({taste:70,bpb:20,wait:10});
-  const [questL, setQuestL] = useState(new Set(["T","M","S","U","C","D","Y","K"]));
+  const [questL, setQuestL] = useState(new Set());
   const [cafeSortBy, setCafeSortBy] = useState("bite");
   const [cafeSortAsc, setCafeSortAsc] = useState(false);
   const [cafeFilterMilk, setCafeFilterMilk] = useState("");

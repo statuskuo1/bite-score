@@ -127,6 +127,7 @@ export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addT
 
   return (
     <div style={{...S.card,marginBottom:12}}>
+      <SectionLabel>{t.theBasics}</SectionLabel>
       <FormScoreHeader
         addType={addType}
         setAddType={setAddType}
@@ -134,8 +135,6 @@ export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addT
         scoreColor={cafeScoreColor(score)}
         scoreLabel={cafeScoreLabel(score,t)}
       />
-
-      <SectionLabel>{t.theBasics}</SectionLabel>
       <div style={{marginBottom:16}}>
         <FieldLabel>{t.city||"City"} *</FieldLabel>
         <CityInput value={f.city||""} onChange={val=>inp("city",val)} existingCities={existingCities} />
