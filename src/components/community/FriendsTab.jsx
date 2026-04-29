@@ -257,43 +257,18 @@ function UnfollowConfirmDialog({ profile, isTasteBuds, busy, onConfirm, onCancel
   );
 }
 
-/** One always-visible Taste Bud card. Tap → opens the mini profile sheet
- *  (Compare lives in there now alongside View Log + Unfollow). */
+/** One Taste Bud row. Same compact layout as FollowingRow; MatchPill on the right. */
 function TasteBudRow({ entry, stats, onOpen }) {
   const { t } = useLang();
   const profile = entry.otherProfile;
-  const subParts = [];
-  if (stats?.ratings != null) {
-    subParts.push(`${stats.ratings} ${t.ratingsLabel || "ratings"}`);
-  }
-  if (stats?.city) subParts.push(stats.city);
-  const subLine = subParts.length ? subParts.join(" · ") : (profile?.username ? `@${profile.username}` : "");
-  const name = profile?.display_name || profile?.username || "—";
   return (
     <button
       type="button"
       onClick={() => onOpen?.(profile, "taste_buds")}
-      style={{
-        display: "flex", alignItems: "center", gap: 12,
-        padding: "10px 12px", marginBottom: 8, width: "100%",
-        background: "#1E1E1C", border: "0.5px solid rgba(255,255,255,0.1)",
-        borderRadius: 12, cursor: "pointer", textAlign: "left",
-      }}
+      style={{ ...ROW_STYLE, width: "100%", cursor: "pointer", textAlign: "left" }}
     >
-      <Avatar profile={profile} size={40} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{
-          fontSize: 15, fontWeight: 600, color: "#F1EFE8",
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-        }}>{name}</div>
-        <div style={{
-          fontSize: 11, color: "#888780",
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-        }}>{subLine}</div>
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-        <MatchPill score={stats?.compatScore ?? null} suffix={t.matchSuffix} />
-      </div>
+      <UserIdentity profile={profile} size={28} />
+      <MatchPill score={stats?.compatScore ?? null} suffix={t.matchSuffix} />
     </button>
   );
 }
