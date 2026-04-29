@@ -173,6 +173,24 @@ export default function App() {
     return res;
   }
 
+  async function refetchNotifications() {
+    if (!user?.id) return;
+    try {
+      const rows = await fetchUnreadNotifications(supabase, user.id);
+      if (rows.length > 0) {
+        setNotifications((prev) => {
+          const seen = new Set(prev.map((n) => n.id));
+          const fresh = rows.filter((r) => !seen.has(r.id));
+          return fresh.length > 0 ? [...fresh, ...prev] : prev;
+        });
+        await markNotificationsRead(supabase, user.id);
+        setNotifCount(0);
+      }
+    } catch (err) {
+      console.error("refetch notifications:", err);
+    }
+  }
+
   async function handleOpenNotifProfile(profile) {
     if (!profile?.id) return;
     setNotifSheetBusy(true);
@@ -729,6 +747,7 @@ export default function App() {
                   loading={notifLoading}
                   onClose={() => setShowNotifPanel(false)}
                   onFollowBack={handleNotifFollowBack}
+                  onRefetch={refetchNotifications}
                   onOpenProfile={handleOpenNotifProfile}
                   sheetOpen={!!notifSheetProfile}
                   anchorPos={notifAnchorPos}

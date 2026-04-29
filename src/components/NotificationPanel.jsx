@@ -14,7 +14,7 @@ function relativeTime(ts) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-function NotifRow({ notif, onFollowBack, onOpenProfile }) {
+function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile }) {
   const [followed, setFollowed] = useState(false);
   const [isTasteBuds, setIsTasteBuds] = useState(notif.type === "taste_buds");
   const [busy, setBusy] = useState(false);
@@ -27,6 +27,7 @@ function NotifRow({ notif, onFollowBack, onOpenProfile }) {
       const res = await onFollowBack(notif.from_user_id);
       setFollowed(true);
       if (res?.isMutual) setIsTasteBuds(true);
+      await onRefetch?.();
     } finally {
       setBusy(false);
     }
@@ -84,7 +85,7 @@ function NotifRow({ notif, onFollowBack, onOpenProfile }) {
 }
 
 export function NotificationPanel({
-  notifications, loading, onClose, onFollowBack,
+  notifications, loading, onClose, onFollowBack, onRefetch,
   onOpenProfile, sheetOpen, anchorPos,
 }) {
   const { t } = useLang();
@@ -144,6 +145,7 @@ export function NotificationPanel({
             key={n.id}
             notif={n}
             onFollowBack={onFollowBack}
+            onRefetch={onRefetch}
             onOpenProfile={onOpenProfile}
           />
         ))
