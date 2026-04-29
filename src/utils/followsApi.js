@@ -66,34 +66,16 @@ export async function followUser(client, followerId, followingId) {
     return { ok: false, code: "network" };
   }
 
-  // Detect mutual follow (taste_buds) and insert appropriate notifications.
-  // Failures are non-fatal — don't let them break the follow action.
-  try {
-    const { data: reverse } = await client
-      .from("follows")
-      .select("id")
-      .eq("follower_id", followingId)
-      .eq("following_id", followerId)
-      .maybeSingle();
+  // Notifications are handled by the on_follow_created DB trigger (SECURITY DEFINER).
+  // We only query for the reverse follow here to return isMutual for the UI.
+  const { data: reverse } = await client
+    .from("follows")
+    .select("id")
+    .eq("follower_id", followingId)
+    .eq("following_id", followerId)
+    .maybeSingle();
 
-    if (reverse) {
-      // Mutual — both users get a taste_buds notification.
-      await client.from("notifications").insert([
-        { user_id: followerId,  from_user_id: followingId, type: "taste_buds" },
-        { user_id: followingId, from_user_id: followerId,  type: "taste_buds" },
-      ]);
-      return { ok: true, code: "ok", data, isMutual: true };
-    } else {
-      // One-way — notify the person being followed.
-      await client.from("notifications").insert({
-        user_id: followingId, from_user_id: followerId, type: "follow",
-      });
-    }
-  } catch (e) {
-    console.warn("[BITE] followUser notifications:", e.message);
-  }
-
-  return { ok: true, code: "ok", data, isMutual: false };
+  return { ok: true, code: "ok", data, isMutual: !!reverse };
 }
 
 /**
