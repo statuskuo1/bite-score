@@ -5,6 +5,7 @@ import {
   fetchAggregatedRestaurantPlaces,
   fetchAggregatedCafePlaces,
 } from "../../utils/visitPlacesApi.js";
+import { globalCache, GLOBAL_TTL_MS } from "../../utils/sessionCache.js";
 import {
   calcBiteOutOf10,
   calcCafeOutOf10,
@@ -56,6 +57,17 @@ export function GlobalTab({ user, restaurantWeights, drinkWeights, sweetWeights 
   const [tiers, setTiers] = useState(new Set());
 
   useEffect(() => {
+    // Use cached data if it belongs to the same user and is within TTL.
+    if (
+      globalCache.userId === user?.id &&
+      Date.now() - globalCache.fetchedAt < GLOBAL_TTL_MS
+    ) {
+      setRestaurants(globalCache.restaurants);
+      setDrinks(globalCache.drinks);
+      setSweets(globalCache.sweets);
+      return;
+    }
+
     let cancelled = false;
     setLoading(true);
     (async () => {
@@ -69,6 +81,11 @@ export function GlobalTab({ user, restaurantWeights, drinkWeights, sweetWeights 
         setRestaurants(r);
         setDrinks(d);
         setSweets(s);
+        globalCache.restaurants = r;
+        globalCache.drinks = d;
+        globalCache.sweets = s;
+        globalCache.fetchedAt = Date.now();
+        globalCache.userId = user?.id;
       } finally {
         if (!cancelled) setLoading(false);
       }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../../config/supabaseClient.js";
 import { fetchRestaurantVisitsForUser, computeFoodStats } from "../../utils/visitPlacesApi.js";
+import { profileStatsCache } from "../../utils/sessionCache.js";
 import { Avatar } from "./Avatar.jsx";
 import { FoodStatsBlock } from "../FoodStatsBlock.jsx";
 
@@ -109,12 +110,25 @@ export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClos
 
   useEffect(() => {
     if (!profile?.id) { setStats(null); return; }
-    if (cachedVisits) { setStats(computeFoodStats(cachedVisits)); return; }
+    if (cachedVisits) {
+      const s = computeFoodStats(cachedVisits);
+      setStats(s);
+      profileStatsCache.set(profile.id, s);
+      return;
+    }
+    if (profileStatsCache.has(profile.id)) {
+      setStats(profileStatsCache.get(profile.id));
+      return;
+    }
     let cancelled = false;
     setStats(null);
     (async () => {
       const v = await fetchRestaurantVisitsForUser(supabase, profile.id);
-      if (!cancelled) setStats(computeFoodStats(v));
+      const s = computeFoodStats(v);
+      if (!cancelled) {
+        setStats(s);
+        profileStatsCache.set(profile.id, s);
+      }
     })();
     return () => { cancelled = true; };
   }, [profile?.id, cachedVisits]);

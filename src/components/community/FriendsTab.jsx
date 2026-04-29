@@ -9,6 +9,9 @@ import {
   NEW_FOLLOWERS_WINDOW_MS,
 } from "../../utils/followsApi.js";
 import { fetchRestaurantVisitsForUser } from "../../utils/visitPlacesApi.js";
+import {
+  followsCache, myRestVisitsCache, getUserVisitsCache, FOLLOWS_TTL_MS,
+} from "../../utils/sessionCache.js";
 import { pairCompatibility, aggregateFriendsTopPicks } from "../../utils/compatibility.js";
 import { tasteColor } from "../../utils/scoring.js";
 import { FLAGS } from "../../constants/cuisineConstants.js";
@@ -278,8 +281,12 @@ export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowC
   const [followers, setFollowers] = useState([]);
   const [tasteBuds, setTasteBuds] = useState([]);
   const [busyById, setBusyById] = useState({});
-  const [myVisits, setMyVisits] = useState([]);
-  const [budVisits, setBudVisits] = useState({});
+  const [myVisits, setMyVisits] = useState(() =>
+    myRestVisitsCache.userId === user?.id ? myRestVisitsCache.data : [],
+  );
+  const [budVisits, setBudVisits] = useState(() =>
+    Object.fromEntries(getUserVisitsCache(user?.id)),
+  );
   const [followError, setFollowError] = useState(null);
   const [openProfile, setOpenProfile] = useState(null);
   const [openRelation, setOpenRelation] = useState(null);
@@ -297,9 +304,27 @@ export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowC
     setFollowing(result.following);
     setFollowers(result.followers);
     setTasteBuds(result.tasteBuds);
+    followsCache.following = result.following;
+    followsCache.followers = result.followers;
+    followsCache.tasteBuds = result.tasteBuds;
+    followsCache.fetchedAt = Date.now();
+    followsCache.userId = user?.id;
   }, [user?.id]);
 
-  useEffect(() => { reload(); }, [reload]);
+  // On mount, use cached follows if fresh; otherwise fetch.
+  useEffect(() => {
+    if (!user?.id) return;
+    if (
+      followsCache.userId === user?.id &&
+      Date.now() - followsCache.fetchedAt < FOLLOWS_TTL_MS
+    ) {
+      setFollowing(followsCache.following);
+      setFollowers(followsCache.followers);
+      setTasteBuds(followsCache.tasteBuds);
+      return;
+    }
+    reload();
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Opening this sub-tab clears the unseen-followers badge in the bottom nav.
    *  Runs on every mount of FriendsTab (CommunityTab unmounts inactive subs). */
@@ -309,10 +334,15 @@ export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowC
 
   useEffect(() => {
     if (!user?.id) return;
+    if (myRestVisitsCache.userId === user?.id) return; // already hydrated from initializer
     let cancelled = false;
     (async () => {
       const v = await fetchRestaurantVisitsForUser(supabase, user.id);
-      if (!cancelled) setMyVisits(v);
+      if (!cancelled) {
+        setMyVisits(v);
+        myRestVisitsCache.data = v;
+        myRestVisitsCache.userId = user?.id;
+      }
     })();
     return () => { cancelled = true; };
   }, [user?.id]);
@@ -320,9 +350,21 @@ export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowC
   /** Eagerly fetch each Taste Bud's restaurant visits for compatibility scores. */
   useEffect(() => {
     if (!tasteBuds.length) return;
+    const uvCache = getUserVisitsCache(user?.id);
     const missing = tasteBuds
       .map((f) => f.otherUserId)
-      .filter((uid) => uid && !(uid in budVisits));
+      .filter((uid) => uid && !(uid in budVisits) && !uvCache.has(uid));
+    // Hydrate from module-level cache for buds we already have stored.
+    const cached = tasteBuds
+      .map((f) => f.otherUserId)
+      .filter((uid) => uid && !(uid in budVisits) && uvCache.has(uid));
+    if (cached.length > 0) {
+      setBudVisits((prev) => {
+        const next = { ...prev };
+        for (const uid of cached) next[uid] = uvCache.get(uid);
+        return next;
+      });
+    }
     if (missing.length === 0) return;
     let cancelled = false;
     (async () => {
@@ -332,12 +374,15 @@ export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowC
       if (cancelled) return;
       setBudVisits((prev) => {
         const next = { ...prev };
-        for (const [uid, v] of pairs) next[uid] = v;
+        for (const [uid, v] of pairs) {
+          next[uid] = v;
+          uvCache.set(uid, v);
+        }
         return next;
       });
     })();
     return () => { cancelled = true; };
-  }, [tasteBuds, budVisits]);
+  }, [tasteBuds, budVisits]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Debounced username prefix search. */
   useEffect(() => {

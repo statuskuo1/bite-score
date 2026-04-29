@@ -3,6 +3,7 @@ import { useLang } from "../../contexts/LangContext.jsx";
 import { supabase } from "../../config/supabaseClient.js";
 import { listTasteBuds, unfollowUser } from "../../utils/followsApi.js";
 import { fetchRestaurantVisitsForUser } from "../../utils/visitPlacesApi.js";
+import { myRestVisitsCache, getUserVisitsCache } from "../../utils/sessionCache.js";
 import { pairCompatibility, restaurantOverlap } from "../../utils/compatibility.js";
 import { tasteColor } from "../../utils/scoring.js";
 import { FLAGS } from "../../constants/cuisineConstants.js";
@@ -154,8 +155,13 @@ export function CompareTab({ user, initialTarget, onClearTarget, onFollowChange 
   const { t } = useLang();
   const [buds, setBuds] = useState([]);
   const [target, setTarget] = useState(initialTarget || null);
-  const [myVisits, setMyVisits] = useState([]);
-  const [theirVisits, setTheirVisits] = useState([]);
+  const [myVisits, setMyVisits] = useState(() =>
+    myRestVisitsCache.userId === user?.id ? myRestVisitsCache.data : [],
+  );
+  const [theirVisits, setTheirVisits] = useState(() => {
+    const uv = getUserVisitsCache(user?.id);
+    return initialTarget?.id && uv.has(initialTarget.id) ? uv.get(initialTarget.id) : [];
+  });
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -170,27 +176,39 @@ export function CompareTab({ user, initialTarget, onClearTarget, onFollowChange 
 
   useEffect(() => {
     if (!user?.id) return;
+    if (myRestVisitsCache.userId === user?.id) return; // already hydrated from initializer
     let cancelled = false;
     (async () => {
       const v = await fetchRestaurantVisitsForUser(supabase, user.id);
-      if (!cancelled) setMyVisits(v);
+      if (!cancelled) {
+        setMyVisits(v);
+        myRestVisitsCache.data = v;
+        myRestVisitsCache.userId = user?.id;
+      }
     })();
     return () => { cancelled = true; };
   }, [user?.id]);
 
   useEffect(() => {
     if (!target?.id) { setTheirVisits([]); return; }
+    const uv = getUserVisitsCache(user?.id);
+    if (uv.has(target.id)) {
+      setTheirVisits(uv.get(target.id));
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     (async () => {
       const v = await fetchRestaurantVisitsForUser(supabase, target.id);
       if (!cancelled) {
         setTheirVisits(v);
+        uv.set(target.id, v);
         setLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, [target?.id]);
+  }, [target?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (initialTarget && initialTarget.id !== target?.id) {
