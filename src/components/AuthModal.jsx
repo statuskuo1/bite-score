@@ -431,10 +431,10 @@ export function AuthModal({ open, onClose }) {
                   {((profile?.display_name || usernameTrim || username || user.email || "?")).charAt(0).toUpperCase()}
                 </div>
               )}
-              <div style={{ fontSize: 15, fontWeight: 600, color: "#F1EFE8", lineHeight: 1.2 }}>
+              <div style={{ fontSize: 16, fontWeight: 600, color: "#F1EFE8", lineHeight: 1.2 }}>
                 {profile?.display_name || username || user.email?.split("@")[0] || "—"}
               </div>
-              <div style={{ fontSize: 12, color: "#888780", marginTop: 2 }}>
+              <div style={{ fontSize: 13, color: "#C4C2BA", marginTop: 3 }}>
                 @{username || "—"}
               </div>
             </div>
@@ -442,7 +442,7 @@ export function AuthModal({ open, onClose }) {
             {!editMode ? (
               <>
                 {/* ── Social stats ── */}
-                <div style={{ textAlign: "center", fontSize: 12, color: "#888780", marginBottom: 14 }}>
+                <div style={{ textAlign: "center", fontSize: 13, color: "#C4C2BA", marginBottom: 14 }}>
                   <span>{socialCounts.followers} followers</span>
                   <span style={{ margin: "0 5px", opacity: 0.4 }}>·</span>
                   <span>{socialCounts.following} following</span>
@@ -463,9 +463,9 @@ export function AuthModal({ open, onClose }) {
                     { emoji: "🗺", label: "Regions explored", val: `${foodStats.regions} / 17`, color: "#EF9F27" },
                   ].map(({ emoji, label, val, color }) => (
                     <div key={label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ fontSize: 13, width: 20, textAlign: "center", flexShrink: 0 }}>{emoji}</span>
-                      <span style={{ flex: 1, fontSize: 12, color: "#888780" }}>{label}</span>
-                      <span style={{ fontSize: 13, fontWeight: 600, color }}>{val}</span>
+                      <span style={{ fontSize: 14, width: 20, textAlign: "center", flexShrink: 0 }}>{emoji}</span>
+                      <span style={{ flex: 1, fontSize: 13, color: "#C4C2BA" }}>{label}</span>
+                      <span style={{ fontSize: 14, fontWeight: 600, color }}>{val}</span>
                     </div>
                   ))}
                 </div>
@@ -486,7 +486,7 @@ export function AuthModal({ open, onClose }) {
                     type="button"
                     disabled={busy}
                     onClick={signOut}
-                    style={{ ...btn, flex: 1, marginBottom: 0, background: "transparent", color: "#888780", border: "0.5px solid rgba(255,255,255,0.15)" }}
+                    style={{ ...btn, flex: 1, marginBottom: 0, background: "transparent", color: "#C4C2BA", border: "0.5px solid rgba(255,255,255,0.2)" }}
                   >
                     {t.signOut}
                   </button>
@@ -496,7 +496,7 @@ export function AuthModal({ open, onClose }) {
               <>
                 {/* ── Edit form ── */}
                 <div style={{ background: "#141413", borderRadius: 10, padding: "12px", marginBottom: 12 }}>
-                  <label style={{ fontSize: 10, color: "#888780", display: "block", marginBottom: 4 }}>{t.profileUsernameLabel}</label>
+                  <label style={{ fontSize: 11, color: "#C4C2BA", display: "block", marginBottom: 4 }}>{t.profileUsernameLabel}</label>
                   <input
                     ref={usernameInputRef}
                     type="text"
@@ -529,7 +529,7 @@ export function AuthModal({ open, onClose }) {
                     </div>
                   )}
 
-                  <label style={{ fontSize: 10, color: "#888780", display: "block", marginBottom: 4 }}>{t.profileDisplayNameLabel}</label>
+                  <label style={{ fontSize: 11, color: "#C4C2BA", display: "block", marginBottom: 4 }}>{t.profileDisplayNameLabel}</label>
                   <input
                     type="text"
                     autoComplete="off"
@@ -540,8 +540,8 @@ export function AuthModal({ open, onClose }) {
                   />
                   <div style={{ fontSize: 10, color: "#666663", marginBottom: 10, lineHeight: 1.4 }}>{t.profileDisplayNameHelp}</div>
 
-                  <label style={{ fontSize: 10, color: "#888780", display: "block", marginBottom: 3 }}>{t.profileEmailLabel}</label>
-                  <div style={{ fontSize: 12, color: "#C4C2BA", wordBreak: "break-all" }}>{user.email || "—"}</div>
+                  <label style={{ fontSize: 11, color: "#C4C2BA", display: "block", marginBottom: 3 }}>{t.profileEmailLabel}</label>
+                  <div style={{ fontSize: 13, color: "#F1EFE8", wordBreak: "break-all" }}>{user.email || "—"}</div>
                 </div>
 
                 {/* ── Edit action buttons ── */}
@@ -549,7 +549,7 @@ export function AuthModal({ open, onClose }) {
                   <button
                     type="button"
                     onClick={() => { setEditMode(false); setSaveError(null); setSuggestions([]); setUsernameDraft(profile?.username ?? username ?? ""); setDisplayNameDraft(profile?.display_name ?? ""); }}
-                    style={{ ...btn, flex: 1, marginBottom: 0, background: "transparent", color: "#888780", border: "0.5px solid rgba(255,255,255,0.15)" }}
+                    style={{ ...btn, flex: 1, marginBottom: 0, background: "transparent", color: "#C4C2BA", border: "0.5px solid rgba(255,255,255,0.2)" }}
                   >
                     Cancel
                   </button>
