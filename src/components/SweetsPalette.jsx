@@ -137,7 +137,7 @@ export function SweetsPalette({cafes, sweetWeights, replaceSweetWeights}) {
           const topType=typeEntries[0];
           const best2=scored[0];
           const avgBiteSweets=total?(sweets.reduce((a,e)=>a+(calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,sweetWeights)??0),0)/total).toFixed(2):"—";
-          const avgCostSweets=total?"$"+(sweets.reduce((a,e)=>a+e.cost,0)/total).toFixed(2):"—";
+          const avgCostSweets=total?"$"+(sweets.reduce((a,e)=>a+(e.cost/(e.portions||1)),0)/total).toFixed(2):"—";
 
           const S2=160,CX2=80,CY2=80,R2=68,RI2=44;
           let ang2=-Math.PI/2;

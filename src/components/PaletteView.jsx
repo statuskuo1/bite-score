@@ -63,7 +63,7 @@ export function PaletteView({
     setEditingW(false);
   }
   const avgT=total?(entries.reduce((a,e)=>a+e.taste,0)/total).toFixed(1):"0";
-  const avgC=total?(entries.reduce((a,e)=>a+e.cost,0)/total).toFixed(0):"0";
+  const avgC=total?(entries.reduce((a,e)=>a+(e.cost/(e.portions||1)),0)/total).toFixed(0):"0";
   const groupedEntries = Object.values(entries.reduce((acc,e)=>{if(!acc[e.name])acc[e.name]=[];acc[e.name].push(e);return acc;},{}));
   const topB = groupedEntries.map(grp=>({name:grp[0].name,avg:grp.reduce((a,e)=>a+(calcBiteOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights)??0),0)/grp.length})).sort((a,b)=>b.avg-a.avg)[0];
 

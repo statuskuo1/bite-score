@@ -17,7 +17,7 @@ export function CafeGroupRow({ group, cafeSortBy, onEdit, onDelete, user, weight
     .filter((s) => s != null);
   const avgScore = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
   const avgTaste = group.reduce((a, e) => a + e.taste, 0) / visits;
-  const avgCost = group.reduce((a, e) => a + e.cost, 0) / visits;
+  const avgCost = group.reduce((a, e) => a + (e.cost / (e.portions || 1)), 0) / visits;
   const avgWait = group.reduce((a, e) => a + e.wait, 0) / visits;
   const avgRepeat = Math.round(group.reduce((a, e) => a + e.repeatability, 0) / visits);
   const avgPortions = group.reduce((a, e) => a + (+e.portions || 1), 0) / visits;

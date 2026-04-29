@@ -64,7 +64,7 @@ export function DrinksPalette({cafes,drinkWeights,replaceDrinkWeights}) {
   );
 
   const avgT=(drinks.reduce((a,e)=>a+e.taste,0)/total).toFixed(1);
-  const avgC=(drinks.reduce((a,e)=>a+e.cost,0)/total).toFixed(2);
+  const avgC=(drinks.reduce((a,e)=>a+(e.cost/(e.portions||1)),0)/total).toFixed(2);
 
   const orderCounts={};drinks.forEach(e=>{const k=e.order||e.category;orderCounts[k]=(orderCounts[k]||0)+1;});
   const topOrder=Object.entries(orderCounts).sort((a,b)=>b[1]-a[1])[0];
@@ -134,7 +134,7 @@ export function DrinksPalette({cafes,drinkWeights,replaceDrinkWeights}) {
           const bestByBean=topBeanRegion?scored2.filter(e=>regionOf(e.beanRegion)===topBeanRegion[0]).sort((a,b)=>(b.sc??0)-(a.sc??0))[0]:null;
           const avgBiteBean=coffeeTotal?(scored2.reduce((a,e)=>a+(e.sc??0),0)/coffeeTotal).toFixed(2):"—";
           const avgTasteBean=coffeeTotal?(coffeeOnly.reduce((a,e)=>a+e.taste,0)/coffeeTotal).toFixed(1):"—";
-          const avgSpendBean=coffeeTotal?"$"+(coffeeOnly.reduce((a,e)=>a+e.cost,0)/coffeeTotal).toFixed(2):"—";
+          const avgSpendBean=coffeeTotal?"$"+(coffeeOnly.reduce((a,e)=>a+(e.cost/(e.portions||1)),0)/coffeeTotal).toFixed(2):"—";
           const regionsLogged=Object.keys(bc).filter(k=>k!=="Other"&&k!=="Blend").length;
 
           // Simple donut

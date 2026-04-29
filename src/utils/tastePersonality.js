@@ -48,7 +48,7 @@ export function computeRestaurantSignals(entries, weights) {
   }
 
   const tastes = entries.map((e) => NUM(e.taste));
-  const costs = entries.map((e) => NUM(e.cost));
+  const costs = entries.map((e) => NUM(e.cost) / (NUM(e.portions, 1) || 1));
   const waits = entries.map((e) => NUM(e.wait));
 
   const sum = (arr) => arr.reduce((a, x) => a + x, 0);
