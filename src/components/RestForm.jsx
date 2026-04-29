@@ -12,7 +12,7 @@ import { FieldLabel } from "./FieldLabel.jsx";
 import { FormScoreHeader } from "./FormScoreHeader.jsx";
 import { CityInput } from "./CityInput.jsx";
 
-export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,existingEntries,places,onPlaceCreated}) {
+export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,existingEntries,existingCities,places,onPlaceCreated}) {
   const {t} = useLang();
   const [f,setF] = useState(initial);
   const [sub,setSub] = useState(false);
@@ -35,7 +35,7 @@ export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,exi
       <SectionLabel>{t.theBasics}</SectionLabel>
       <div style={{marginBottom:16}}>
         <FieldLabel>{t.city||"City"} *</FieldLabel>
-        <CityInput value={f.city||""} onChange={val=>inp("city",val)} />
+        <CityInput value={f.city||""} onChange={val=>inp("city",val)} existingCities={existingCities} /> 
       </div>
       <div style={S.mb16}>
         <FieldLabel>{t.restaurantName}</FieldLabel>

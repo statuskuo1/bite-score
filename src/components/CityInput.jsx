@@ -231,13 +231,13 @@ export function resolveCity(input) {
  *
  * On blur or selection, the value is normalized to the canonical name.
  */
-export function CityInput({ value, onChange, placeholder }) {
+export function CityInput({ value, onChange, placeholder, existingCities = [] }) {
   const [show, setShow] = useState(false);
   const ref = useRef(null);
-
+  
   const q = (value || "").trim().toLowerCase();
   const filtered = q.length > 0
-    ? CANONICAL_CITIES.filter(c => c.toLowerCase().includes(q))
+  ? [...new Set([...CANONICAL_CITIES, ...existingCities])].filter(c => c.toLowerCase().includes(q))
         // Also match any alias that starts with the query
         .concat(
           Object.entries(CITY_ALIASES)
@@ -277,7 +277,7 @@ export function CityInput({ value, onChange, placeholder }) {
         placeholder={placeholder || "e.g. NYC, Tokyo, London"}
         style={{ width: "100%", boxSizing: "border-box" }}
       />
-      {show && filtered.length > 0 && (
+      {show && (filtered.length > 0 || q.length > 0) && (
         <div style={{
           position: "absolute", top: "100%", left: 0, right: 0,
           background: "#1E1E1C", border: "0.5px solid rgba(255,255,255,0.15)",
@@ -294,6 +294,20 @@ export function CityInput({ value, onChange, placeholder }) {
               📍 {city}
             </div>
           ))}
+          {filtered.length === 0 && q.length > 0 && (
+  <div
+    onMouseDown={() => {
+      const cap = q.charAt(0).toUpperCase() + value.trim().slice(1);
+      onChange(cap);
+      setShow(false);
+    }}
+    style={{ padding: "8px 12px", fontSize: 13, color: "#F0997B", cursor: "pointer" }}
+    onMouseEnter={e => e.currentTarget.style.background = "#2C2C2A"}
+    onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+  >
+    + Add "{q.charAt(0).toUpperCase() + value.trim().slice(1)}"
+  </div>
+)}
         </div>
       )}
     </div>
