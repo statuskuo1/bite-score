@@ -803,7 +803,7 @@ export default function App() {
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:640,background:"#1A1A18",borderTop:"0.5px solid rgba(255,255,255,0.1)",display:"flex",justifyContent:"space-around",alignItems:"center",padding:"8px 0 max(8px,env(safe-area-inset-bottom))",zIndex:100}}>
         {[["log","/log","📋",t.myLog],["palette","/taste","😋",t.myTaste],["add","/add","➕",t.add],["community","/community/global","🌐",t.communityTab],["faq","/faq","❓",t.faq]].map(([v,to,icon,label])=>{
           const badge = v==="community" && unseenFollowers > 0 ? unseenFollowers : 0;
-          const active = v==="log"?pathname.startsWith("/log"):v==="community"?pathname.startsWith("/community"):pathname===to;
+          const active = v==="log"?pathname.startsWith("/log"):v==="community"?pathname.startsWith("/community"):v==="palette"?pathname.startsWith("/taste"):pathname===to;
           return (
             <button key={v} onClick={()=>{navigate(to);setEditR(null);setEditC(null);window.scrollTo({top:0,behavior:"instant"});}} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",padding:"4px 8px",minWidth:56}}>
               {v==="add"?(
@@ -1190,13 +1190,13 @@ export default function App() {
         </div>
       )}
 
-      {pathname==="/taste"&&showSuggest&&!user&&(
+      {pathname.startsWith("/taste")&&showSuggest&&!user&&(
         <GuestPreview message="Sign in to discover new cuisines based on your taste" onSignIn={() => setShowAuthModal(true)}>
           <SuggestView entries={GUEST_PALETTE_ENTRIES} weights={weights} onBack={()=>{}}/>
         </GuestPreview>
       )}
-      {pathname==="/taste"&&showSuggest&&user&&<SuggestView entries={st.entries} weights={weights} onBack={()=>setShowSuggest(false)}/>}
-      {pathname==="/taste"&&!showSuggest&&!user&&(
+      {pathname.startsWith("/taste")&&showSuggest&&user&&<SuggestView entries={st.entries} weights={weights} onBack={()=>setShowSuggest(false)}/>}
+      {pathname.startsWith("/taste")&&!showSuggest&&!user&&(
         <GuestPreview message="Sign in to see your personal taste profile" onSignIn={() => setShowAuthModal(true)}>
           <PaletteView
             entries={GUEST_PALETTE_ENTRIES}
@@ -1213,7 +1213,7 @@ export default function App() {
           />
         </GuestPreview>
       )}
-      {pathname==="/taste"&&!showSuggest&&user&&(
+      {pathname.startsWith("/taste")&&!showSuggest&&user&&(
         <PaletteView
           entries={st.entries}
           cafes={cafes}

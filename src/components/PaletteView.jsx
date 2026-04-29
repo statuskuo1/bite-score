@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useLang } from "../contexts/LangContext.jsx";
 import { FLAGS, REGION_MAP, CUISINE_REGIONS, REGION_COLORS } from "../constants/cuisineConstants.js";
 import { calcBiteOutOf10, meanRestaurantBiteOutOf10 } from "../utils/scoring.js";
@@ -28,7 +29,9 @@ export function PaletteView({
   onOpenSuggest,
 }) {
   const {t} = useLang();
-  const [paletteTab,setPaletteTab] = useState("restaurants");
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const paletteTab = pathname === "/taste/drinks" ? "drinks" : pathname === "/taste/sweets" ? "sweets" : "restaurants";
   const [editingW,setEditingW] = useState(false);
   const [draftW,setDraftW] = useState(()=>({...weights}));
   const [roastMode,setRoastMode] = useState(false);
@@ -83,7 +86,7 @@ export function PaletteView({
     <div>
       <div style={{display:"flex",background:"#252523",borderRadius:10,padding:3,gap:2,marginBottom:20}}>
         {[["restaurants","🍽 "+t.restaurants],["drinks","☕ "+t.drinks],["sweets","🥐 "+t.sweets]].map(([v,l])=>(
-          <button key={v} onClick={()=>setPaletteTab(v)} style={{flex:1,padding:"6px 0",textAlign:"center",borderRadius:8,border:"none",background:paletteTab===v?"#3C1F13":"transparent",color:paletteTab===v?"#F0997B":"#888780",fontSize:11,fontWeight:paletteTab===v?500:400,cursor:"pointer",transition:"all 0.15s"}}>{l}</button>
+          <button key={v} onClick={()=>navigate(v==="restaurants"?"/taste":"/taste/"+v)} style={{flex:1,padding:"6px 0",textAlign:"center",borderRadius:8,border:"none",background:paletteTab===v?"#3C1F13":"transparent",color:paletteTab===v?"#F0997B":"#888780",fontSize:11,fontWeight:paletteTab===v?500:400,cursor:"pointer",transition:"all 0.15s"}}>{l}</button>
         ))}
       </div>
 
