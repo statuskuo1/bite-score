@@ -192,6 +192,21 @@ export default function App() {
           }
         }
 
+        if (user) {
+          try {
+            const rw = localStorage.getItem(`bite_restaurantWeights_${user.id}`);
+            if (rw) setWeights(JSON.parse(rw));
+          } catch (e) { console.error("restaurant weights load:", e); }
+          try {
+            const dw = localStorage.getItem(`bite_drinkWeights_${user.id}`);
+            if (dw) setDrinkWeights(JSON.parse(dw));
+          } catch (e) { console.error("drink weights load:", e); }
+          try {
+            const sw = localStorage.getItem(`bite_sweetWeights_${user.id}`);
+            if (sw) setSweetWeights(JSON.parse(sw));
+          } catch (e) { console.error("sweet weights load:", e); }
+        }
+
         const { data: sData, error: settingsErr } = await supabase.from("settings").select("*");
         if (settingsErr) console.warn("[BITE] settings:", settingsErr.message);
         if (cancelled) return;
@@ -207,18 +222,6 @@ export default function App() {
             } catch (e) {
               console.error("quest letters localStorage:", e);
             }
-            try {
-              const rw = localStorage.getItem(`bite_restaurantWeights_${user.id}`);
-              if (rw) setWeights(JSON.parse(rw));
-            } catch (e) { console.error("restaurant weights load:", e); }
-            try {
-              const dw = localStorage.getItem(`bite_drinkWeights_${user.id}`);
-              if (dw) setDrinkWeights(JSON.parse(dw));
-            } catch (e) { console.error("drink weights load:", e); }
-            try {
-              const sw = localStorage.getItem(`bite_sweetWeights_${user.id}`);
-              if (sw) setSweetWeights(JSON.parse(sw));
-            } catch (e) { console.error("sweet weights load:", e); }
           }
           if (!questHandled) {
             const ql = sData.find((s) => s.key === "questLetters");
