@@ -92,8 +92,8 @@ export function PlaceLeaderboardRow({ place, bite, display }) {
           <div style={{ fontSize: 18, fontWeight: 600, color: rightCol, lineHeight: 1.1 }}>
             {rightVal}
           </div>
-          <div style={{ fontSize: 10, color: "#888780", lineHeight: 1.2 }}>{rightLbl}</div>
-          <div style={{ fontSize: 10, color: "#666663", marginTop: 2 }}>
+          <div style={{ fontSize: 11, color: "#888780", lineHeight: 1.2 }}>{rightLbl}</div>
+          <div style={{ fontSize: 11, color: "#666663", marginTop: 2 }}>
             {place.visitCount} {t.visitsCount}
           </div>
         </div>
@@ -111,12 +111,12 @@ export function PlaceLeaderboardRow({ place, bite, display }) {
           }}>
             {expandedRows.map(([k, v]) => (
               <div key={k}>
-                <div style={{ fontSize: 10, color: "#888780" }}>{k}</div>
+                <div style={{ fontSize: 11, color: "#888780" }}>{k}</div>
                 <div style={S.val}>{v}</div>
               </div>
             ))}
           </div>
-          <div style={{ marginTop: 10, fontSize: 10, color: "#666663" }}>
+          <div style={{ marginTop: 10, fontSize: 11, color: "#666663" }}>
             {t.avg} · {place.validCount}/{place.visitCount} {t.visitsCount}
           </div>
         </div>

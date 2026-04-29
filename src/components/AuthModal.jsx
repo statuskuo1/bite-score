@@ -535,12 +535,12 @@ export function AuthModal({ open, onClose }) {
                 borderColor: (usernameInlineErr || saveError === "username_taken") ? "#A32D2D" : undefined,
               }}
             />
-            <div style={{ fontSize: 10, color: (usernameInlineErr || saveError === "username_taken") ? "#A32D2D" : "#666663", marginBottom: 10, lineHeight: 1.4 }}>
+            <div style={{ fontSize: 11, color: (usernameInlineErr || saveError === "username_taken") ? "#A32D2D" : "#666663", marginBottom: 10, lineHeight: 1.4 }}>
               {usernameInlineErr || t.profileUsernameHelp}
             </div>
             {saveError === "username_taken" && suggestions.length > 0 && (
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
-                <span style={{ fontSize: 10, color: "#888780" }}>{t.profileUsernameSuggest}</span>
+                <span style={{ fontSize: 11, color: "#888780" }}>{t.profileUsernameSuggest}</span>
                 {suggestions.map((s) => (
                   <button
                     key={s}
@@ -633,12 +633,12 @@ export function AuthModal({ open, onClose }) {
                     maxLength={30}
                     style={{ width: "100%", boxSizing: "border-box", marginBottom: 3, fontSize: 13, padding: "6px 10px", borderColor: usernameInlineErr ? "#A32D2D" : undefined }}
                   />
-                  <div style={{ fontSize: 10, color: usernameInlineErr ? "#A32D2D" : "#666663", marginBottom: saveError === "username_taken" && suggestions.length > 0 ? 5 : 10, lineHeight: 1.4 }}>
+                  <div style={{ fontSize: 11, color: usernameInlineErr ? "#A32D2D" : "#666663", marginBottom: saveError === "username_taken" && suggestions.length > 0 ? 5 : 10, lineHeight: 1.4 }}>
                     {usernameInlineErr || t.profileUsernameHelp}
                   </div>
                   {saveError === "username_taken" && suggestions.length > 0 && (
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
-                      <span style={{ fontSize: 10, color: "#888780" }}>{t.profileUsernameSuggest}</span>
+                      <span style={{ fontSize: 11, color: "#888780" }}>{t.profileUsernameSuggest}</span>
                       {suggestions.map((s) => (
                         <button key={s} type="button"
                           onClick={() => { setUsernameDraft(s); setSaveError(null); setSuggestions([]); usernameInputRef.current?.focus(); }}
@@ -657,7 +657,7 @@ export function AuthModal({ open, onClose }) {
                     maxLength={120}
                     style={{ width: "100%", boxSizing: "border-box", marginBottom: 3, fontSize: 13, padding: "6px 10px" }}
                   />
-                  <div style={{ fontSize: 10, color: "#666663", marginBottom: 10, lineHeight: 1.4 }}>{t.profileDisplayNameHelp}</div>
+                  <div style={{ fontSize: 11, color: "#666663", marginBottom: 10, lineHeight: 1.4 }}>{t.profileDisplayNameHelp}</div>
                   <label style={{ fontSize: 11, color: "#C4C2BA", display: "block", marginBottom: 3 }}>{t.profileEmailLabel}</label>
                   <div style={{ fontSize: 13, color: "#F1EFE8", wordBreak: "break-all" }}>{user?.email || "—"}</div>
                 </div>
@@ -718,7 +718,7 @@ export function AuthModal({ open, onClose }) {
               maxLength={30}
               style={inputStyle}
             />
-            <div style={{ fontSize: 10, color: "#666663", marginTop: -6, marginBottom: 10, lineHeight: 1.4 }}>
+            <div style={{ fontSize: 11, color: "#666663", marginTop: -6, marginBottom: 10, lineHeight: 1.4 }}>
               {t.profileUsernameHelp}
             </div>
             <label style={labelStyle}>{t.authEmailLabel}</label>

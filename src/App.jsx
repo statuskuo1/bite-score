@@ -627,7 +627,7 @@ export default function App() {
                     position: "absolute", top: 0, right: 0,
                     minWidth: 16, height: 16, padding: "0 3px",
                     borderRadius: 8, background: "#E85A5A",
-                    color: "#FFF", fontSize: 10, fontWeight: 700,
+                    color: "#FFF", fontSize: 11, fontWeight: 700,
                     display: "flex", alignItems: "center", justifyContent: "center",
                     lineHeight: 1, boxSizing: "border-box",
                     border: "1.5px solid #141413",
@@ -723,7 +723,7 @@ export default function App() {
                 <span style={{fontSize:20,lineHeight:1,position:"relative",display:"inline-block"}}>
                   {icon}
                   {badge>0 && (
-                    <span style={{position:"absolute",top:-4,right:-10,minWidth:16,height:16,padding:"0 4px",borderRadius:8,background:"#E85A5A",color:"#FFF",fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1,boxSizing:"border-box",border:"1.5px solid #1A1A18"}}>
+                    <span style={{position:"absolute",top:-4,right:-10,minWidth:16,height:16,padding:"0 4px",borderRadius:8,background:"#E85A5A",color:"#FFF",fontSize:11,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1,boxSizing:"border-box",border:"1.5px solid #1A1A18"}}>
                       {badge>99 ? "99+" : badge}
                     </span>
                   )}
@@ -832,7 +832,7 @@ export default function App() {
                       {(cafeFilterMilk||cafeFilterBean)&&<button type="button" onClick={()=>{setCafeFilterMilk("");setCafeFilterBean("");}} style={{fontSize:11,color:"#F0997B",background:"none",border:"none",cursor:"pointer",padding:0}}>{t.clear}</button>}
                     </div>
                     <div style={{marginBottom:10}}>
-                      <div style={{fontSize:10,color:"#888780",marginBottom:6}}>{t.milk}</div>
+                      <div style={{fontSize:11,color:"#888780",marginBottom:6}}>{t.milk}</div>
                       <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
                         {["None","Light","Medium","Heavy"].map(m=>(
                           <div key={m} onClick={()=>setCafeFilterMilk(cafeFilterMilk===m?"":m)} style={{padding:"4px 8px",borderRadius:12,cursor:"pointer",fontSize:11,background:cafeFilterMilk===m?"#3C1F13":"#141413",border:"1px solid "+(cafeFilterMilk===m?"#F0997B":"rgba(255,255,255,0.1)"),color:cafeFilterMilk===m?"#F0997B":"#888780"}}>{m}</div>
@@ -840,7 +840,7 @@ export default function App() {
                       </div>
                     </div>
                     <div>
-                      <div style={{fontSize:10,color:"#888780",marginBottom:6}}>{t.beanOrigin}</div>
+                      <div style={{fontSize:11,color:"#888780",marginBottom:6}}>{t.beanOrigin}</div>
                       <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
                         {BEAN_REGIONS.filter(b=>b!=="Other").map(b=>(
                           <div key={b} onClick={()=>setCafeFilterBean(cafeFilterBean===b?"":b)} style={{padding:"4px 8px",borderRadius:12,cursor:"pointer",fontSize:11,background:cafeFilterBean===b?"#3C1F13":"#141413",border:"1px solid "+(cafeFilterBean===b?"#F0997B":"rgba(255,255,255,0.1)"),color:cafeFilterBean===b?"#F0997B":"#888780"}}>{b}</div>

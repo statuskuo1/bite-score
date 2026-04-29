@@ -40,7 +40,7 @@ export function SweetsPalette({cafes, sweetWeights, replaceSweetWeights}) {
         <>
           <WeightSliders weights={draftW} labels={[[t.taste,"taste"],[t.bangBuck,"bpb"],[t.wait,"wait"]]} onUpdate={draftUpd} onReset={()=>setDraftW({...CAFE_WEIGHT_DEFAULTS})} defaults={CAFE_WEIGHT_DEFAULTS}/>
           <div style={{fontSize:11,color:draftOk?"#97C459":"#EF9F27",textAlign:"center",marginTop:8}}>{t.weightsTotal}: {draftSum}/100</div>
-          {!draftOk&&<div style={{fontSize:10,color:"#F1EFE8",textAlign:"center",marginTop:4}}>{t.weightsSumTo100}</div>}
+          {!draftOk&&<div style={{fontSize:11,color:"#F1EFE8",textAlign:"center",marginTop:4}}>{t.weightsSumTo100}</div>}
           <button type="button" disabled={!draftOk} onClick={saveSweetWeights} style={{width:"100%",marginTop:10,padding:"10px",borderRadius:8,border:"none",fontSize:14,fontWeight:500,cursor:draftOk?"pointer":"not-allowed",background:draftOk?"#F0997B":"#5A4A43",color:draftOk?"#141413":"#AFA8A3",opacity:draftOk?1:0.85}}>{t.weightsSave}</button>
         </>
       ):(
@@ -50,7 +50,7 @@ export function SweetsPalette({cafes, sweetWeights, replaceSweetWeights}) {
             {" · "}{t.bangBuck} <span style={{fontWeight:600,color:"#5B9BD5"}}>{sweetWeights.bpb}%</span>
             {" · "}{t.wait} <span style={{fontWeight:600,color:"#97C459"}}>{sweetWeights.wait}%</span>
           </p>
-          {!liveOk&&<div style={{fontSize:10,color:"#F1EFE8",textAlign:"center",marginTop:8}}>{t.weightsSumTo100}</div>}
+          {!liveOk&&<div style={{fontSize:11,color:"#F1EFE8",textAlign:"center",marginTop:8}}>{t.weightsSumTo100}</div>}
         </>
       )}
     </div>
@@ -179,7 +179,7 @@ export function SweetsPalette({cafes, sweetWeights, replaceSweetWeights}) {
                   [t.totalSweets, String(total)],
                 ].map(([label,val])=>(
                   <div key={label} style={{background:"#1E1E1C",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"12px 14px"}}>
-                    <div style={{fontSize:10,color:"#888780",letterSpacing:"0.05em",textTransform:"uppercase",marginBottom:4}}>{label}</div>
+                    <div style={{fontSize:11,color:"#888780",letterSpacing:"0.05em",textTransform:"uppercase",marginBottom:4}}>{label}</div>
                     <div style={{fontSize:13,fontWeight:500,color:"#F1EFE8",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{val}</div>
                   </div>
                 ))}

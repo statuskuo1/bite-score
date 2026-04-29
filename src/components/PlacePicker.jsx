@@ -336,7 +336,7 @@ function rowStyle(isPicked) {
 
 const sectionHeader = {
   padding: "6px 12px",
-  fontSize: 10,
+  fontSize: 11,
   textTransform: "uppercase",
   letterSpacing: "0.08em",
   color: "#888780",

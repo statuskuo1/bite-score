@@ -119,7 +119,7 @@ export function VisitsModal({
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
                   {getRows(v).map(([k, val]) => (
                     <div key={k}>
-                      <div style={{ fontSize: 10, color: "#888780" }}>{k}</div>
+                      <div style={{ fontSize: 11, color: "#888780" }}>{k}</div>
                       <div style={S.val}>{val}</div>
                     </div>
                   ))}

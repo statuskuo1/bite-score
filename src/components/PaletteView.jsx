@@ -105,7 +105,7 @@ export function PaletteView({
                   {t.weightsTotal}: {draftSum}/100
                 </div>
                 {!draftOk&&(
-                  <div style={{fontSize:10,color:"#F1EFE8",textAlign:"center",marginTop:4}}>{t.weightsSumTo100}</div>
+                  <div style={{fontSize:11,color:"#F1EFE8",textAlign:"center",marginTop:4}}>{t.weightsSumTo100}</div>
                 )}
                 <button type="button" disabled={!draftOk} onClick={saveRestaurantWeights} style={{width:"100%",marginTop:10,padding:"10px",borderRadius:8,border:"none",fontSize:14,fontWeight:500,cursor:draftOk?"pointer":"not-allowed",background:draftOk?"#F0997B":"#5A4A43",color:draftOk?"#141413":"#AFA8A3",opacity:draftOk?1:0.85}}>{t.weightsSave}</button>
               </>
@@ -117,7 +117,7 @@ export function PaletteView({
                   {" · "}{t.wait} <span style={{fontWeight:600,color:"#97C459"}}>{weights.wait}%</span>
                 </p>
                 {!weightsOk&&(
-                  <div style={{fontSize:10,color:"#F1EFE8",textAlign:"center",marginTop:8}}>{t.weightsSumTo100}</div>
+                  <div style={{fontSize:11,color:"#F1EFE8",textAlign:"center",marginTop:8}}>{t.weightsSumTo100}</div>
                 )}
               </>
             )}

@@ -78,7 +78,7 @@ export function WeightSliders({weights, labels, onUpdate, onReset, defaults, car
       <style>{RANGE_STYLE}</style>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:stack?6:8}}>
         <span style={{fontSize:careHeadingPx||11,color:"#F1EFE8",fontStyle:"italic",fontWeight:500}}>{t.howMuchCare}</span>
-        {defaults&&<button type="button" onClick={reset} style={{fontSize:10,color:"#888780",background:"none",border:"none",cursor:"pointer",padding:0,textDecoration:"underline",flexShrink:0}}>Reset</button>}
+        {defaults&&<button type="button" onClick={reset} style={{fontSize:11,color:"#888780",background:"none",border:"none",cursor:"pointer",padding:0,textDecoration:"underline",flexShrink:0}}>Reset</button>}
       </div>
       <div style={gridStyle}>
         {labels.map(([label,key])=>{

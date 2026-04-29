@@ -223,7 +223,7 @@ export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addT
               <span style={{fontSize:12,color:activeNotes.size?"#F1EFE8":"#888780"}}>
                 <span style={{color:"#888780"}}>{t.flavorNotes}: </span>{flavorSummary}
               </span>
-              <span style={{fontSize:10,color:"#888780"}}>▾</span>
+              <span style={{fontSize:11,color:"#888780"}}>▾</span>
             </summary>
             <div style={{display:"flex",flexWrap:"wrap",gap:6,padding:"10px 0 4px"}}>
               {FLAVOR_NOTES.map(n=>{

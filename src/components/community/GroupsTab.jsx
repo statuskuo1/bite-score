@@ -291,7 +291,7 @@ function GroupDetail({ user, groupId, onBack, onDeleted }) {
           }}>
             <span style={{ fontSize: 16, width: 22, textAlign: "center" }}>{flag}</span>
             <span style={{ flex: 1, fontSize: 13, color: "#F1EFE8" }}>{r.cuisine}</span>
-            <span style={{ fontSize: 10, color: "#888780" }}>{t.floorScore}</span>
+            <span style={{ fontSize: 11, color: "#888780" }}>{t.floorScore}</span>
             <span style={{ fontSize: 14, color: tasteColor(r.floor), fontWeight: 600, minWidth: 36, textAlign: "right" }}>
               {r.floor.toFixed(1)}
             </span>
@@ -461,7 +461,7 @@ export function GroupsTab({ user }) {
               {g.name || "—"}
             </div>
             {g.owner_id === user?.id && (
-              <div style={{ fontSize: 10, color: "#888780" }}>· {t.ownerLabel}</div>
+              <div style={{ fontSize: 11, color: "#888780" }}>· {t.ownerLabel}</div>
             )}
           </div>
           <span style={{ fontSize: 18, color: "#888780" }}>›</span>

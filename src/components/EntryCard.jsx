@@ -63,7 +63,7 @@ export function EntryCard({
                   key={i}
                   onClick={b.onClick ? (e) => { e.stopPropagation(); b.onClick(); } : undefined}
                   style={{
-                    fontSize: 10, fontWeight: 500, padding: "2px 6px", borderRadius: 10,
+                    fontSize: 11, fontWeight: 500, padding: "2px 6px", borderRadius: 10,
                     background: b.background || "#2A1E05",
                     color: b.color || "#EF9F27",
                     border: "0.5px solid " + (b.color || "#EF9F27"),
@@ -96,7 +96,7 @@ export function EntryCard({
             }}>
               {expandedRows.map(([k, v]) => (
                 <div key={k}>
-                  <div style={{ fontSize: 10, color: "#888780" }}>{k}</div>
+                  <div style={{ fontSize: 11, color: "#888780" }}>{k}</div>
                   <div style={S.val}>{v}</div>
                 </div>
               ))}

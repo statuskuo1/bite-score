@@ -119,7 +119,7 @@ function modeOf(rows, field) {
 function StatusBadge({ label, bg, color, border }) {
   return (
     <span style={{
-      fontSize: 10, fontWeight: 600, padding: "4px 10px", borderRadius: 20,
+      fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 20,
       background: bg, color, border: `1px solid ${border}`,
       whiteSpace: "nowrap", flexShrink: 0,
     }}>
@@ -147,7 +147,7 @@ function SearchRowAction({ profile, relation, busy, onFollow, onUnfollowConfirm,
       type="button"
       onClick={(e) => { e.stopPropagation(); onUnfollowConfirm(profile); }}
       style={{
-        fontSize: 10, fontWeight: 600, padding: "4px 10px", borderRadius: 20,
+        fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 20,
         background: "rgba(155,169,213,0.1)", color: "#9BA9D5",
         border: "1px solid rgba(155,169,213,0.3)",
         whiteSpace: "nowrap", flexShrink: 0, cursor: "pointer",
@@ -283,7 +283,7 @@ function FollowRow({ entry, stats, onOpen, onUnfollowConfirm, t }) {
           type="button"
           onClick={() => onUnfollowConfirm?.(profile, isMutual)}
           style={{
-            fontSize: 10, fontWeight: 600, padding: "4px 10px", borderRadius: 20,
+            fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 20,
             background: "rgba(155,169,213,0.1)", color: "#9BA9D5",
             border: "1px solid rgba(155,169,213,0.3)",
             cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
@@ -319,7 +319,7 @@ function TopPickRow({ pick }) {
         <div style={{ fontSize: 16, fontWeight: 700, color: col, lineHeight: 1.1 }}>
           {pick.avg.toFixed(2)}
         </div>
-        <div style={{ fontSize: 10, color: "#888780", marginTop: 2 }}>
+        <div style={{ fontSize: 11, color: "#888780", marginTop: 2 }}>
           {pick.friendCount} {t.tasteBudsCountSuffix || "taste buds"}
         </div>
       </div>
@@ -439,7 +439,7 @@ function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClose, onCo
                   type="button"
                   onClick={() => setConfirmUnfollow(true)}
                   style={{
-                    fontSize: 10, fontWeight: 600, padding: "4px 10px", borderRadius: 20,
+                    fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 20,
                     background: "rgba(155,169,213,0.1)", color: "#9BA9D5",
                     border: "1px solid rgba(155,169,213,0.3)",
                     cursor: "pointer",

@@ -79,7 +79,7 @@ export function CommunityTab({ user, restaurantWeights, drinkWeights, sweetWeigh
                   <span style={{
                     minWidth: 16, height: 16, padding: "0 4px",
                     borderRadius: 8, background: "#E85A5A",
-                    color: "#FFF", fontSize: 10, fontWeight: 700,
+                    color: "#FFF", fontSize: 11, fontWeight: 700,
                     display: "inline-flex", alignItems: "center", justifyContent: "center",
                     lineHeight: 1, boxSizing: "border-box",
                   }}>
