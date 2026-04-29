@@ -17,6 +17,7 @@ import { Avatar } from "./Avatar.jsx";
 import { UserIdentity } from "./UserIdentity.jsx";
 import { usePaginatedList } from "../usePaginatedList.js";
 import { ShowMoreButton } from "../ShowMoreButton.jsx";
+import { FoodStatsBlock } from "../FoodStatsBlock.jsx";
 
 const ROW_STYLE = {
   display: "flex",
@@ -273,19 +274,6 @@ function FollowerRow({ entry, onFollow, busy, t }) {
   );
 }
 
-/** Single stat tile inside the mini profile sheet. `null` = still loading. */
-function StatCell({ value, label }) {
-  return (
-    <div style={{ flex: 1, textAlign: "center", padding: "0 4px" }}>
-      <div style={{ fontSize: 18, fontWeight: 700, color: "#F1EFE8", lineHeight: 1.1 }}>
-        {value == null ? "—" : value}
-      </div>
-      <div style={{ fontSize: 10, color: "#888780", marginTop: 4, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-        {label}
-      </div>
-    </div>
-  );
-}
 
 /**
  * Bottom-sheet overlay shown when tapping a Taste Bud or Following row.
@@ -401,16 +389,7 @@ function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClose, onCo
           )}
         </div>
 
-        <div style={{
-          display: "flex", alignItems: "stretch",
-          background: "#141413", border: "0.5px solid rgba(255,255,255,0.08)",
-          borderRadius: 12, padding: "12px 4px", marginBottom: 14,
-        }}>
-          <StatCell value={stats?.restaurants} label={t.restaurantsRated || "Restaurants rated"} />
-          <StatCell value={stats?.cuisines} label={t.cuisinesTried || "Cuisines tried"} />
-          <StatCell value={stats?.cities} label={t.citiesExplored || "Cities explored"} />
-          <StatCell value={stats?.regions} label={t.regionsExplored || "Regions explored"} />
-        </div>
+        <FoodStatsBlock stats={stats} style={{ marginBottom: 14 }} />
 
         <div style={{ display: "flex", gap: 8 }}>
           <button
