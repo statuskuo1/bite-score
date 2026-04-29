@@ -84,7 +84,7 @@ function NotifRow({ notif, onFollowBack, onOpenProfile }) {
 
 export function NotificationPanel({
   notifications, loading, onClose, onFollowBack,
-  onOpenProfile, sheetOpen,
+  onOpenProfile, sheetOpen, anchorPos,
 }) {
   const { t } = useLang();
   const panelRef = useRef(null);
@@ -100,17 +100,19 @@ export function NotificationPanel({
     return () => document.removeEventListener("mousedown", handler);
   }, [onClose, sheetOpen]);
 
+  const top = anchorPos?.top ?? 64;
+  const right = anchorPos?.right ?? 16;
+
   return (
     <div
       ref={panelRef}
       style={{
-        position: "absolute",
-        top: "100%",
-        right: 0,
-        marginTop: 8,
+        position: "fixed",
+        top,
+        right,
         width: 320,
         maxWidth: "calc(100vw - 32px)",
-        maxHeight: 440,
+        maxHeight: Math.min(440, window.innerHeight - top - 24),
         overflowY: "auto",
         background: "#1E1E1C",
         border: "0.5px solid rgba(255,255,255,0.15)",

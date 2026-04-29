@@ -114,6 +114,7 @@ export default function App() {
   const [unseenFollowers, setUnseenFollowers] = useState(0);
   const [notifCount, setNotifCount] = useState(0);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
+  const [notifAnchorPos, setNotifAnchorPos] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [notifLoading, setNotifLoading] = useState(false);
   const notifContainerRef = useRef(null);
@@ -149,6 +150,10 @@ export default function App() {
 
   async function openNotifPanel() {
     if (showNotifPanel) { setShowNotifPanel(false); return; }
+    const rect = notifContainerRef.current?.getBoundingClientRect();
+    if (rect) {
+      setNotifAnchorPos({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
+    }
     setShowNotifPanel(true);
     setNotifLoading(true);
     try {
@@ -738,6 +743,7 @@ export default function App() {
                   onFollowBack={handleNotifFollowBack}
                   onOpenProfile={handleOpenNotifProfile}
                   sheetOpen={!!notifSheetProfile}
+                  anchorPos={notifAnchorPos}
                 />
               )}
             </div>
