@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Avatar } from "./community/Avatar.jsx";
 import { Pill } from "./community/Pill.jsx";
 import { useLang } from "../contexts/LangContext.jsx";
@@ -103,7 +104,7 @@ export function NotificationPanel({
   const top = anchorPos?.top ?? 64;
   const right = anchorPos?.right ?? 16;
 
-  return (
+  return createPortal(
     <div
       ref={panelRef}
       style={{
@@ -118,7 +119,7 @@ export function NotificationPanel({
         border: "0.5px solid rgba(255,255,255,0.15)",
         borderRadius: 12,
         boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
-        zIndex: 200,
+        zIndex: 500,
       }}
     >
       <div style={{
@@ -147,6 +148,7 @@ export function NotificationPanel({
           />
         ))
       )}
-    </div>
+    </div>,
+    document.body,
   );
 }

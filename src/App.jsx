@@ -211,18 +211,6 @@ export default function App() {
     }
   }
 
-  // Click-outside to close notification panel.
-  useEffect(() => {
-    if (!showNotifPanel) return;
-    function handler(e) {
-      if (notifSheetProfile) return;
-      if (notifContainerRef.current && !notifContainerRef.current.contains(e.target)) {
-        setShowNotifPanel(false);
-      }
-    }
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [showNotifPanel, notifSheetProfile]);
 
   /** Friends sub-tab calls this when it mounts; we stamp the seen-at and
    *  immediately recount so the badge clears without needing to wait for the
