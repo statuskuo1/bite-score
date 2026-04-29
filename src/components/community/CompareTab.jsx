@@ -85,8 +85,8 @@ function CompatHeroCard({ score, summaryLine, t }) {
   );
 }
 
-function Score({ value }) {
-  const col = tasteColor(value);
+function Score({ value, color }) {
+  const col = color || tasteColor(value);
   return (
     <span style={{
       fontSize: 15, fontWeight: 600, color: col, lineHeight: 1.1,
@@ -110,9 +110,9 @@ function BothRow({ row, isLast }) {
         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
       }}>{row.name}</div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-        <Score value={row.mine} />
-        <span style={{ fontSize: 11, color: "#666663" }}>vs</span>
-        <Score value={row.theirs} />
+      <Score value={row.mine} color={YOU_LEGEND_COLOR} />
+      <span style={{ fontSize: 11, color: "#666663" }}>vs</span>
+      <Score value={row.theirs} color={FRIEND_LEGEND_COLOR} />
       </div>
     </div>
   );
