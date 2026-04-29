@@ -210,7 +210,16 @@ export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addT
   };
   const activeNotes = new Set(Array.isArray(f.flavorNotes) ? f.flavorNotes : []);
 
-  const selectStyle = {...S.wb, appearance:"none", WebkitAppearance:"none", MozAppearance:"none", paddingRight:28, backgroundImage:"linear-gradient(45deg, transparent 50%, #888780 50%), linear-gradient(135deg, #888780 50%, transparent 50%)", backgroundPosition:"calc(100% - 14px) 50%, calc(100% - 9px) 50%", backgroundSize:"5px 5px, 5px 5px", backgroundRepeat:"no-repeat"};
+  const selectStyle = {
+    width:"100%", boxSizing:"border-box",
+    appearance:"none", WebkitAppearance:"none", MozAppearance:"none",
+    backgroundColor:"#1E1E1C", border:"0.5px solid rgba(255,255,255,0.12)",
+    borderRadius:8, padding:"9px 12px", paddingRight:36,
+    fontSize:13, color:"#F1EFE8", outline:"none",
+    backgroundImage:"linear-gradient(45deg, transparent 50%, #888780 50%), linear-gradient(135deg, #888780 50%, transparent 50%)",
+    backgroundPosition:"calc(100% - 14px) 50%, calc(100% - 9px) 50%",
+    backgroundSize:"5px 5px, 5px 5px", backgroundRepeat:"no-repeat",
+  };
 
   return (
     <div style={{...S.card,marginBottom:12}}>

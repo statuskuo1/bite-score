@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { S } from "../styles/sharedStyles.js";
 
 /**
  * Single combobox for the cafe order field. Replaces the old OrderPills +
@@ -58,7 +57,12 @@ export function OrderCombobox({
         onChange={(e) => { onChange(e.target.value); setShow(true); }}
         onFocus={() => setShow(true)}
         placeholder={placeholder}
-        style={S.wb}
+        style={{
+          width:"100%", boxSizing:"border-box",
+          background:"#1E1E1C", border:"0.5px solid rgba(255,255,255,0.12)",
+          borderRadius:8, padding:"9px 12px",
+          fontSize:13, color:"#F1EFE8", outline:"none",
+        }}
       />
       {show && suggestions.length > 0 && (
         <div
