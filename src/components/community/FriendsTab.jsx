@@ -325,31 +325,34 @@ function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClose, onCo
       onClick={onClose}
       style={{
         position: "fixed", inset: 0,
-        background: "rgba(0,0,0,0.65)",
+        background: "rgba(0,0,0,0.78)",
         zIndex: 320,
         display: "flex",
-        alignItems: "flex-end",
+        alignItems: "center",
         justifyContent: "center",
+        padding: "1.5rem",
       }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: "100%", maxWidth: 640,
+          width: "100%", maxWidth: 360,
           background: "#1E1E1C",
-          borderTopLeftRadius: 20, borderTopRightRadius: 20,
-          borderTop: "0.5px solid rgba(255,255,255,0.15)",
-          padding: "12px 18px max(20px, env(safe-area-inset-bottom)) 18px",
-          boxShadow: "0 -8px 32px rgba(0,0,0,0.6)",
+          borderRadius: 16,
+          border: "0.5px solid rgba(255,255,255,0.15)",
+          padding: "1.35rem",
+          boxSizing: "border-box",
+          boxShadow: "0 8px 40px rgba(0,0,0,0.7)",
         }}
       >
-        <div onClick={onClose} style={{
-          width: 36, height: 4, borderRadius: 2,
-          background: "rgba(255,255,255,0.2)",
-          margin: "0 auto 14px",
-          cursor: "pointer",
-          padding: "8px 0",
-        }} />
+
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{ fontSize: 22, color: "#888780", background: "none", border: "none", cursor: "pointer", lineHeight: 1, padding: 0 }}
+          >×</button>
+        </div>
 
         {/* ── Centered avatar + name (mirrors AuthModal profile view) ── */}
         <div style={{ textAlign: "center", marginBottom: 12 }}>
