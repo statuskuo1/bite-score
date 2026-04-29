@@ -73,7 +73,7 @@ function FlavorDropdown({ activeNotes, onToggle, t }) {
           position:"absolute", top:"100%", left:0, right:0, zIndex:60,
           background:"#1E1E1C", border:"0.5px solid rgba(255,255,255,0.12)",
           borderTop:"none", borderRadius:"0 0 8px 8px",
-          maxHeight:220, overflowY:"auto",
+          display:"grid", gridTemplateColumns:"1fr 1fr",
         }}>
           {FLAVOR_NOTES.map(n => {
             const on = activeNotes.has(n.value);
@@ -82,8 +82,8 @@ function FlavorDropdown({ activeNotes, onToggle, t }) {
                 key={n.value}
                 onClick={() => onToggle(n.value)}
                 style={{
-                  display:"flex", alignItems:"center", gap:10,
-                  padding:"10px 14px", cursor:"pointer",
+                  display:"flex", alignItems:"center", gap:8,
+                  padding:"9px 12px", cursor:"pointer",
                   background:on?"rgba(240,153,123,0.06)":"transparent",
                   borderBottom:"0.5px solid rgba(255,255,255,0.06)",
                 }}
@@ -291,10 +291,10 @@ export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addT
       {f.category==="Coffee" && (
         <details style={{marginBottom:16}}>
           <summary style={{cursor:"pointer",fontSize:12,color:"#888780",padding:"4px 0",userSelect:"none"}}>
-            {t.coffeeDetails}
+            {t.coffeeDetails} <span style={{fontWeight:400,opacity:0.6}}>({t.optional||"optional"})</span>
           </summary>
           <div style={{marginTop:10}}>
-            <FieldLabel>{t.roast} <span style={{color:"#888780",fontWeight:400,fontSize:11}}>({t.optional||"optional"})</span></FieldLabel>
+            <FieldLabel>{t.roast}</FieldLabel>
             <div style={S.row8}>
               {ROAST_LEVELS.map(r=>(
                 <div key={r.value} onClick={()=>inp("roast", f.roast===r.value?"":r.value)} style={{flex:1,padding:"6px",borderRadius:8,textAlign:"center",cursor:"pointer",fontSize:11,background:f.roast===r.value?"#3C1F13":"#1E1E1C",border:"1px solid "+(f.roast===r.value?"#F0997B":"rgba(255,255,255,0.1)"),color:f.roast===r.value?"#F0997B":"#888780"}}>{t[r.labelKey]}</div>
@@ -306,12 +306,12 @@ export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addT
           <TastingSlider field="sweetness" label={t.sweetness} leftLabel={t.sweetnessLow} rightLabel={t.sweetnessHigh}/>
 
           <div style={{marginTop:12}}>
-            <FieldLabel>{t.flavorNotes} <span style={{color:"#888780",fontWeight:400,fontSize:11}}>({t.optional||"optional"})</span></FieldLabel>
+            <FieldLabel>{t.flavorNotes}</FieldLabel>
             <FlavorDropdown activeNotes={activeNotes} onToggle={toggleNote} t={t}/>
           </div>
 
           <div style={{marginTop:12}}>
-            <FieldLabel>{t.beanRegion} <span style={{color:"#888780",fontWeight:400,fontSize:11}}>({t.optional||"optional"})</span></FieldLabel>
+            <FieldLabel>{t.beanRegion}</FieldLabel>
             <select value={f.beanRegion||""} onChange={e=>inp("beanRegion", e.target.value)} style={selectStyle}>
               <option value="">—</option>
               {BEAN_ORIGINS.map(b => <option key={b} value={b}>{b}</option>)}
