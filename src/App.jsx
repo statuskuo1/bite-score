@@ -46,6 +46,7 @@ import { AuthModal } from "./components/AuthModal.jsx";
 import { ResetPasswordModal } from "./components/ResetPasswordModal.jsx";
 import { WeightSliders } from "./components/WeightSliders.jsx";
 import { CommunityTab } from "./components/community/CommunityTab.jsx";
+import { SortFilterToolbar } from "./components/SortFilterToolbar.jsx";
 import { countUnseenFollowers, markFollowersSeen } from "./utils/followsApi.js";
 import { usePaginatedList } from "./components/usePaginatedList.js";
 import { ShowMoreButton } from "./components/ShowMoreButton.jsx";
@@ -124,10 +125,8 @@ export default function App() {
   const [sortBy, setSortBy] = useState("bite");
   const [sortAsc, setSortAsc] = useState(false);
   const [tiers, setTiers] = useState(new Set());
-  const [cityFilter, setCityFilter] = useState("");
+  const [cityFilter, setCityFilter] = useState(new Set());
   const lastCity = useRef("NYC");
-  const [showFilter, setShowFilter] = useState(false);
-  const [showSearch, setShowSearch] = useState(false);
   const [search, setSearch] = useState("");
   const [weights, setWeights] = useState({taste:50,bpb:40,wait:10});
   const restaurantWeightsSum = weights.taste + weights.bpb + weights.wait;
@@ -139,30 +138,13 @@ export default function App() {
   const [cafeSortAsc, setCafeSortAsc] = useState(false);
   const [cafeFilterMilk, setCafeFilterMilk] = useState("");
   const [cafeFilterBean, setCafeFilterBean] = useState("");
-  const [showCafeFilter, setShowCafeFilter] = useState(false);
+  const [cafeCityFilter, setCafeCityFilter] = useState(new Set());
   const [cafeSearch, setCafeSearch] = useState("");
-  const [showCafeSearch, setShowCafeSearch] = useState(false);
   const [sweetsSearch, setSweetsSearch] = useState("");
-  const [showSweetsSearch, setShowSweetsSearch] = useState(false);
   const [sweetsSortBy, setSweetsSortBy] = useState("bite");
   const [sweetsSortAsc, setSweetsSortAsc] = useState(false);
-  const fRef = useRef(null);
-  const sRef = useRef(null);
-  const cfRef = useRef(null);
-  const csRef = useRef(null);
-  const ssRef = useRef(null);
-
-  useEffect(()=>{
-    function h(e){
-      if(fRef.current&&!fRef.current.contains(e.target))setShowFilter(false);
-      if(sRef.current&&!sRef.current.contains(e.target))setShowSearch(false);
-      if(cfRef.current&&!cfRef.current.contains(e.target))setShowCafeFilter(false);
-      if(csRef.current&&!csRef.current.contains(e.target))setShowCafeSearch(false);
-      if(ssRef.current&&!ssRef.current.contains(e.target))setShowSweetsSearch(false);
-    }
-    document.addEventListener("mousedown",h);document.addEventListener("touchstart",h);
-    return()=>{document.removeEventListener("mousedown",h);document.removeEventListener("touchstart",h);};
-  },[]);
+  const [sweetsTiers, setSweetsTiers] = useState(new Set());
+  const [sweetsCityFilter, setSweetsCityFilter] = useState(new Set());
 
   useEffect(() => {
     if (!authReady) return;
@@ -311,15 +293,32 @@ export default function App() {
     return sortAsc?d:-d;
   });
 
-  const allCities = [...new Set(sortedR.map(e=>e.city||"NYC"))].sort();
+  const restaurantCityCounts = useMemo(() => {
+    const m = new Map();
+    st.entries.forEach((e) => {
+      const c = e.city || "NYC";
+      m.set(c, (m.get(c) || 0) + 1);
+    });
+    return [...m.entries()].sort((a, b) => b[1] - a[1]);
+  }, [st.entries]);
   const filtered = sortedR.filter(e=>{
     if(tiers.size>0&&!tiers.has(scoreLabel(calcBiteOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights),t)))return false;
-    if(cityFilter&&(e.city||"NYC")!==cityFilter)return false;
+    if(cityFilter.size>0&&!cityFilter.has(e.city||"NYC"))return false;
     if(search.trim()){const q=search.trim().toLowerCase();return e.name.toLowerCase().includes(q)||e.cuisine.toLowerCase().includes(q)||(e.city||'NYC').toLowerCase().includes(q)||(e.notes&&e.notes.toLowerCase().includes(q));}
     return true;
   });
 
   const DRINK_CATS = ["Coffee","Tea","Other"];
+  const drinkCityCounts = useMemo(() => {
+    const m = new Map();
+    cafes.forEach((e) => {
+      if (!DRINK_CATS.includes(e.category)) return;
+      const c = e.city || "NYC";
+      m.set(c, (m.get(c) || 0) + 1);
+    });
+    return [...m.entries()].sort((a, b) => b[1] - a[1]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cafes]);
   const sortedDrinks = [...cafes].filter(e=>DRINK_CATS.includes(e.category)).sort((a,b)=>{
     let d=0;
     if(cafeSortBy==="bite") d=(calcCafeOutOf10(b.taste,b.cost,b.portions,b.wait,b.useR,b.repeatability,drinkWeights)??0)-(calcCafeOutOf10(a.taste,a.cost,a.portions,a.wait,a.useR,a.repeatability,drinkWeights)??0);
@@ -331,10 +330,30 @@ export default function App() {
   }).filter(e=>{
     if(cafeFilterMilk&&e.milkLevel!==cafeFilterMilk)return false;
     if(cafeFilterBean&&regionOf(e.beanRegion)!==cafeFilterBean)return false;
-    if(cafeSearch.trim()){const q=cafeSearch.trim().toLowerCase();return e.name.toLowerCase().includes(q)||e.order.toLowerCase().includes(q);}
+    if(cafeCityFilter.size>0&&!cafeCityFilter.has(e.city||"NYC"))return false;
+    if(cafeSearch.trim()){const q=cafeSearch.trim().toLowerCase();return e.name.toLowerCase().includes(q)||e.order.toLowerCase().includes(q)||(e.city||"NYC").toLowerCase().includes(q);}
     return true;
   });
 
+  const sweetCityCounts = useMemo(() => {
+    const m = new Map();
+    cafes.forEach((e) => {
+      if (e.category !== "Sweets") return;
+      const c = e.city || "NYC";
+      m.set(c, (m.get(c) || 0) + 1);
+    });
+    return [...m.entries()].sort((a, b) => b[1] - a[1]);
+  }, [cafes]);
+
+  /** Union of cities the user has ever entered across restaurant + cafe
+   *  visits, so CityInput's autocomplete remembers user-typed cities that
+   *  aren't in the canonical alias map. */
+  const existingCities = useMemo(() => {
+    const set = new Set();
+    for (const e of st.entries) { const c = (e?.city || "").trim(); if (c) set.add(c); }
+    for (const e of cafes)      { const c = (e?.city || "").trim(); if (c) set.add(c); }
+    return [...set].sort();
+  }, [st.entries, cafes]);
   const sortedSweets = [...cafes].filter(e=>e.category==="Sweets").sort((a,b)=>{
     let d=0;
     if(sweetsSortBy==="bite") d=(calcCafeOutOf10(b.taste,b.cost,b.portions,b.wait,b.useR,b.repeatability,sweetWeights)??0)-(calcCafeOutOf10(a.taste,a.cost,a.portions,a.wait,a.useR,a.repeatability,sweetWeights)??0);
@@ -344,7 +363,9 @@ export default function App() {
     else if(sweetsSortBy==="repeat") d=b.repeatability-a.repeatability;
     return sweetsSortAsc?-d:d;
   }).filter(e=>{
-    if(sweetsSearch.trim()){const q=sweetsSearch.trim().toLowerCase();return e.name.toLowerCase().includes(q)||e.order.toLowerCase().includes(q);}
+    if(sweetsTiers.size>0&&!sweetsTiers.has(scoreLabel(calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,sweetWeights),t)))return false;
+    if(sweetsCityFilter.size>0&&!sweetsCityFilter.has(e.city||"NYC"))return false;
+    if(sweetsSearch.trim()){const q=sweetsSearch.trim().toLowerCase();return e.name.toLowerCase().includes(q)||e.order.toLowerCase().includes(q)||(e.city||"NYC").toLowerCase().includes(q);}
     return true;
   });
 
@@ -404,15 +425,15 @@ export default function App() {
    *  user lands at the top of the new results. */
   const restaurantGroupsPage = usePaginatedList(
     restaurantGroups,
-    `${sortBy}|${sortAsc}|${cityFilter}|${search}|${[...tiers].join(",")}|${logTab}`,
+    `${sortBy}|${sortAsc}|${[...cityFilter].sort().join(",")}|${search}|${[...tiers].join(",")}|${logTab}`,
   );
   const drinkGroupsPage = usePaginatedList(
     drinkGroups,
-    `${cafeSortBy}|${cafeSortAsc}|${cafeFilterMilk}|${cafeFilterBean}|${cafeSearch}|${logTab}`,
+    `${cafeSortBy}|${cafeSortAsc}|${cafeFilterMilk}|${cafeFilterBean}|${[...cafeCityFilter].sort().join(",")}|${cafeSearch}|${logTab}`,
   );
   const sweetGroupsPage = usePaginatedList(
     sweetGroups,
-    `${sweetsSortBy}|${sweetsSortAsc}|${sweetsSearch}|${logTab}`,
+    `${sweetsSortBy}|${sweetsSortAsc}|${[...sweetsTiers].join(",")}|${[...sweetsCityFilter].sort().join(",")}|${sweetsSearch}|${logTab}`,
   );
 
   const tierFilterRows = rating010FilterRows(t);
@@ -608,60 +629,38 @@ export default function App() {
 
           {logTab==="restaurants"&&(
             <div>
-
-              {allCities.length>1&&(
-                <div style={{display:"flex",gap:6,flexWrap:"nowrap",overflowX:"auto",scrollbarWidth:"none",marginBottom:8,paddingBottom:2}}>
-                  <div onClick={()=>setCityFilter("")} style={{padding:"4px 12px",borderRadius:16,fontSize:11,cursor:"pointer",flexShrink:0,background:!cityFilter?"#3C1F13":"transparent",color:!cityFilter?"#F0997B":"#888780",border:"1px solid "+(!cityFilter?"#F0997B":"rgba(255,255,255,0.1)")}}>All</div>
-                  {allCities.map(city=>(
-                    <div key={city} onClick={()=>setCityFilter(city===cityFilter?"":city)} style={{padding:"4px 12px",borderRadius:16,fontSize:11,cursor:"pointer",flexShrink:0,background:cityFilter===city?"rgba(91,155,213,0.15)":"transparent",color:cityFilter===city?"#5B9BD5":"#888780",border:"1px solid "+(cityFilter===city?"rgba(91,155,213,0.5)":"rgba(255,255,255,0.1)")}}>📍 {city}</div>
-                  ))}
-                </div>
-              )}
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                <div style={{display:"flex",gap:6,flexWrap:"nowrap",overflowX:"auto",WebkitOverflowScrolling:"touch",scrollbarWidth:"none",paddingBottom:2}}>
-                  {[["bite","BITE"],["taste",t.taste],["bpb",t.bangBuck],["wait",t.wait],["repeat",t.repeatability]].map(([v,l])=>(
-                    <button key={v} onClick={()=>setSortBy(v)} style={{padding:"5px 12px",borderRadius:16,border:"1px solid "+(sortBy===v?"#F0997B":"rgba(255,255,255,0.1)"),background:sortBy===v?"#3C1F13":"transparent",color:sortBy===v?"#F0997B":"#888780",fontSize:12,cursor:"pointer"}}>{l}</button>
-                  ))}
-                </div>
-                <div style={{display:"flex",gap:6,flexShrink:0}}>
-                  <div ref={sRef} style={{position:"relative"}}>
-                    <button onClick={()=>setShowSearch(s=>!s)} style={{width:34,height:34,borderRadius:8,border:"1.5px solid "+(showSearch||search?"#F0997B":"rgba(255,255,255,0.1)"),background:showSearch||search?"#3C1F13":"transparent",color:showSearch||search?"#F0997B":"#888780",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4" stroke="currentColor" strokeWidth="1.5"/><path d="M9.5 9.5L13 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
-                    </button>
-                    {showSearch&&(
-                      <div style={{position:"absolute",right:0,top:40,background:"#1E1E1C",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 10px",boxShadow:"0 4px 24px rgba(0,0,0,0.5)",zIndex:50,width:200}}>
-                        <input autoFocus value={search} onChange={e=>setSearch(e.target.value)} placeholder={t.searchPlaceholder} style={{width:"100%",boxSizing:"border-box",fontSize:12}}/>
-                        {search&&<button onClick={()=>setSearch("")} style={{fontSize:11,color:"#888780",background:"none",border:"none",cursor:"pointer",padding:"4px 0 0",display:"block"}}>{t.clear}</button>}
-                      </div>
-                    )}
-                  </div>
-                  <div ref={fRef} style={{position:"relative"}}>
-                    <button onClick={()=>setShowFilter(f=>!f)} style={{width:34,height:34,borderRadius:8,border:"1.5px solid "+(showFilter||tiers.size>0?"#F0997B":"rgba(255,255,255,0.1)"),background:showFilter||tiers.size>0?"#3C1F13":"transparent",color:showFilter||tiers.size>0?"#F0997B":"#888780",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 2h12l-4.5 5.5V12L5.5 10.5V7.5L1 2z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg>
-                    </button>
-                    {showFilter&&(
-                      <div style={{position:"absolute",right:0,top:40,background:"#1E1E1C",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:10,overflow:"hidden",minWidth:180,boxShadow:"0 4px 24px rgba(0,0,0,0.5)",zIndex:50}}>
-                        <div style={{padding:"6px 10px",borderBottom:"0.5px solid rgba(255,255,255,0.1)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                          <span style={S.sm}>{t.filterByTier}</span>
-                          {tiers.size>0&&<button onClick={()=>setTiers(new Set())} style={{fontSize:11,color:"#F0997B",background:"none",border:"none",cursor:"pointer",padding:0}}>{t.clear}</button>}
+              <SortFilterToolbar
+                viewBy={sortBy}
+                onViewBy={setSortBy}
+                viewOptions={[["bite","BITE"],["taste",t.taste],["bpb",t.bangBuck],["wait",t.wait],["repeat",t.repeatability]]}
+                cityCounts={restaurantCityCounts}
+                selectedCities={cityFilter}
+                onCitiesChange={setCityFilter}
+                search={search}
+                onSearch={setSearch}
+                filterContent={
+                  <>
+                    <div style={{padding:"6px 10px",borderBottom:"0.5px solid rgba(255,255,255,0.1)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <span style={S.sm}>{t.filterByTier}</span>
+                      {tiers.size>0&&<button type="button" onClick={()=>setTiers(new Set())} style={{fontSize:11,color:"#F0997B",background:"none",border:"none",cursor:"pointer",padding:0}}>{t.clear}</button>}
+                    </div>
+                    {tierFilterRows.map(([tier,col])=>{
+                      const on=tiers.has(tier);
+                      const cnt=sortedR.filter(e=>scoreLabel(calcBiteOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights),t)===tier).length;
+                      return(
+                        <div key={tier} onClick={()=>setTiers(p=>{const n=new Set(p);on?n.delete(tier):n.add(tier);return n;})} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderBottom:"0.5px solid rgba(255,255,255,0.1)",cursor:"pointer",background:on?"rgba(255,255,255,0.03)":"transparent"}}>
+                          <div style={{width:13,height:13,borderRadius:3,border:"1.5px solid "+(on?col:"rgba(255,255,255,0.1)"),background:on?col:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{on&&<span style={{color:"#141413",fontSize:9,fontWeight:700,lineHeight:1}}>✓</span>}</div>
+                          <span style={{flex:1,fontSize:12,color:on?col:"#F1EFE8",fontWeight:on?500:400}}>{tier}</span>
+                          <span style={S.sm}>{cnt}</span>
                         </div>
-                        {tierFilterRows.map(([tier,col])=>{
-                          const on=tiers.has(tier);
-                          const cnt=sortedR.filter(e=>scoreLabel(calcBiteOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights),t)===tier).length;
-                          return(
-                            <div key={tier} onClick={()=>setTiers(p=>{const n=new Set(p);on?n.delete(tier):n.add(tier);return n;})} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderBottom:"0.5px solid rgba(255,255,255,0.1)",cursor:"pointer",background:on?"rgba(255,255,255,0.03)":"transparent"}}>
-                              <div style={{width:13,height:13,borderRadius:3,border:"1.5px solid "+(on?col:"rgba(255,255,255,0.1)"),background:on?col:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{on&&<span style={{color:"#141413",fontSize:9,fontWeight:700,lineHeight:1}}>✓</span>}</div>
-                              <span style={{flex:1,fontSize:12,color:on?col:"#F1EFE8",fontWeight:on?500:400}}>{tier}</span>
-                              <span style={S.sm}>{cnt}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                  <button onClick={()=>setSortAsc(a=>!a)} style={{width:34,height:34,borderRadius:8,border:"1.5px solid "+"#F0997B",background:"#3C1F13",color:"#F0997B",fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>{sortAsc?"↑":"↓"}</button>
-                </div>
-              </div>
+                      );
+                    })}
+                  </>
+                }
+                filterActive={tiers.size>0}
+                sortAsc={sortAsc}
+                onToggleSortAsc={()=>setSortAsc(a=>!a)}
+              />
               {filtered.length===0&&<p style={{color:"#888780",fontSize:14}}>{t.noEntries}</p>}
               {restaurantGroupsPage.visible.map(({grp,e})=>{
                 const visits=grp.length;
@@ -688,56 +687,43 @@ export default function App() {
 
           {logTab==="drinks"&&(
             <div>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                <div style={{display:"flex",gap:6,flexWrap:"nowrap",overflowX:"auto",WebkitOverflowScrolling:"touch",scrollbarWidth:"none",paddingBottom:2}}>
-                  {[["bite","BITE"],["taste",t.taste],["bpb",t.bangBuck],["wait",t.wait],["repeat","Repeat"]].map(([v,l])=>(
-                    <button key={v} onClick={()=>setCafeSortBy(v)} style={{padding:"5px 12px",borderRadius:16,border:"1px solid "+(cafeSortBy===v?"#F0997B":"rgba(255,255,255,0.1)"),background:cafeSortBy===v?"#3C1F13":"transparent",color:cafeSortBy===v?"#F0997B":"#888780",fontSize:12,cursor:"pointer"}}>{l}</button>
-                  ))}
-                </div>
-                <div style={{display:"flex",gap:6,flexShrink:0}}>
-                  <div ref={csRef} style={{position:"relative"}}>
-                    <button onClick={()=>setShowCafeSearch(s=>!s)} style={{width:34,height:34,borderRadius:8,border:"1.5px solid "+(showCafeSearch||cafeSearch?"#F0997B":"rgba(255,255,255,0.1)"),background:showCafeSearch||cafeSearch?"#3C1F13":"transparent",color:showCafeSearch||cafeSearch?"#F0997B":"#888780",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4" stroke="currentColor" strokeWidth="1.5"/><path d="M9.5 9.5L13 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
-                    </button>
-                    {showCafeSearch&&(
-                      <div style={{position:"absolute",right:0,top:40,background:"#1E1E1C",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 10px",boxShadow:"0 4px 24px rgba(0,0,0,0.5)",zIndex:50,width:200}}>
-                        <input autoFocus value={cafeSearch} onChange={e=>setCafeSearch(e.target.value)} placeholder={t.searchPlaceholder} style={{width:"100%",boxSizing:"border-box",fontSize:12}}/>
-                        {cafeSearch&&<button onClick={()=>setCafeSearch("")} style={{fontSize:11,color:"#888780",background:"none",border:"none",cursor:"pointer",padding:"4px 0 0",display:"block"}}>{t.clear}</button>}
+              <SortFilterToolbar
+                viewBy={cafeSortBy}
+                onViewBy={setCafeSortBy}
+                viewOptions={[["bite","BITE"],["taste",t.taste],["bpb",t.bangBuck],["wait",t.wait],["repeat",t.repeatability]]}
+                cityCounts={drinkCityCounts}
+                selectedCities={cafeCityFilter}
+                onCitiesChange={setCafeCityFilter}
+                search={cafeSearch}
+                onSearch={setCafeSearch}
+                filterContent={
+                  <div style={{padding:"10px 12px"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                      <span style={S.sm}>Filter</span>
+                      {(cafeFilterMilk||cafeFilterBean)&&<button type="button" onClick={()=>{setCafeFilterMilk("");setCafeFilterBean("");}} style={{fontSize:11,color:"#F0997B",background:"none",border:"none",cursor:"pointer",padding:0}}>{t.clear}</button>}
+                    </div>
+                    <div style={{marginBottom:10}}>
+                      <div style={{fontSize:10,color:"#888780",marginBottom:6}}>{t.milk}</div>
+                      <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                        {["None","Light","Medium","Heavy"].map(m=>(
+                          <div key={m} onClick={()=>setCafeFilterMilk(cafeFilterMilk===m?"":m)} style={{padding:"4px 8px",borderRadius:12,cursor:"pointer",fontSize:11,background:cafeFilterMilk===m?"#3C1F13":"#141413",border:"1px solid "+(cafeFilterMilk===m?"#F0997B":"rgba(255,255,255,0.1)"),color:cafeFilterMilk===m?"#F0997B":"#888780"}}>{m}</div>
+                        ))}
                       </div>
-                    )}
-                  </div>
-                  <div ref={cfRef} style={{position:"relative"}}>
-                    <button onClick={()=>setShowCafeFilter(f=>!f)} style={{width:34,height:34,borderRadius:8,border:"1.5px solid "+(showCafeFilter||cafeFilterMilk||cafeFilterBean?"#F0997B":"rgba(255,255,255,0.1)"),background:showCafeFilter||cafeFilterMilk||cafeFilterBean?"#3C1F13":"transparent",color:showCafeFilter||cafeFilterMilk||cafeFilterBean?"#F0997B":"#888780",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 2h12l-4.5 5.5V12L5.5 10.5V7.5L1 2z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg>
-                    </button>
-                    {showCafeFilter&&(
-                      <div style={{position:"absolute",right:0,top:40,background:"#1E1E1C",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:10,overflow:"hidden",minWidth:200,boxShadow:"0 4px 24px rgba(0,0,0,0.5)",zIndex:50,padding:"10px 12px"}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                          <span style={S.sm}>Filter</span>
-                          {(cafeFilterMilk||cafeFilterBean)&&<button onClick={()=>{setCafeFilterMilk("");setCafeFilterBean("");}} style={{fontSize:11,color:"#F0997B",background:"none",border:"none",cursor:"pointer",padding:0}}>{t.clear}</button>}
-                        </div>
-                        <div style={{marginBottom:10}}>
-                          <div style={{fontSize:10,color:"#888780",marginBottom:6}}>{t.milk}</div>
-                          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-                            {["None","Light","Medium","Heavy"].map(m=>(
-                              <div key={m} onClick={()=>setCafeFilterMilk(cafeFilterMilk===m?"":m)} style={{padding:"4px 8px",borderRadius:12,cursor:"pointer",fontSize:11,background:cafeFilterMilk===m?"#3C1F13":"#141413",border:"1px solid "+(cafeFilterMilk===m?"#F0997B":"rgba(255,255,255,0.1)"),color:cafeFilterMilk===m?"#F0997B":"#888780"}}>{m}</div>
-                            ))}
-                          </div>
-                        </div>
-                        <div>
-                          <div style={{fontSize:10,color:"#888780",marginBottom:6}}>{t.beanOrigin}</div>
-                          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-                            {BEAN_REGIONS.filter(b=>b!=="Other").map(b=>(
-                              <div key={b} onClick={()=>setCafeFilterBean(cafeFilterBean===b?"":b)} style={{padding:"4px 8px",borderRadius:12,cursor:"pointer",fontSize:11,background:cafeFilterBean===b?"#3C1F13":"#141413",border:"1px solid "+(cafeFilterBean===b?"#F0997B":"rgba(255,255,255,0.1)"),color:cafeFilterBean===b?"#F0997B":"#888780"}}>{b}</div>
-                            ))}
-                          </div>
-                        </div>
+                    </div>
+                    <div>
+                      <div style={{fontSize:10,color:"#888780",marginBottom:6}}>{t.beanOrigin}</div>
+                      <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                        {BEAN_REGIONS.filter(b=>b!=="Other").map(b=>(
+                          <div key={b} onClick={()=>setCafeFilterBean(cafeFilterBean===b?"":b)} style={{padding:"4px 8px",borderRadius:12,cursor:"pointer",fontSize:11,background:cafeFilterBean===b?"#3C1F13":"#141413",border:"1px solid "+(cafeFilterBean===b?"#F0997B":"rgba(255,255,255,0.1)"),color:cafeFilterBean===b?"#F0997B":"#888780"}}>{b}</div>
+                        ))}
                       </div>
-                    )}
+                    </div>
                   </div>
-                  <button onClick={()=>setCafeSortAsc(a=>!a)} style={{width:34,height:34,borderRadius:8,border:"1.5px solid #F0997B",background:"#3C1F13",color:"#F0997B",fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>{cafeSortAsc?"↑":"↓"}</button>
-                </div>
-              </div>
+                }
+                filterActive={!!(cafeFilterMilk||cafeFilterBean)}
+                sortAsc={cafeSortAsc}
+                onToggleSortAsc={()=>setCafeSortAsc(a=>!a)}
+              />
               {!sortedDrinks.length&&<p style={{color:"#888780",fontSize:14}}>{t.noDrinks}</p>}
               {drinkGroupsPage.visible.map(([name,grp])=>(
                 <CafeGroupRow key={name} group={grp} cafeSortBy={cafeSortBy} weights={drinkWeights} user={user} onEdit={e=>{setEditC(e);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={async id=>{
@@ -757,27 +743,38 @@ export default function App() {
 
           {logTab==="sweets"&&(
             <div>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                <div style={{display:"flex",gap:6,flexWrap:"nowrap",overflowX:"auto",WebkitOverflowScrolling:"touch",scrollbarWidth:"none",paddingBottom:2}}>
-                  {[["bite","BITE"],["taste",t.taste],["bpb",t.bangBuck],["wait",t.wait],["repeat","Repeat"]].map(([v,l])=>(
-                    <button key={v} onClick={()=>setSweetsSortBy(v)} style={{padding:"5px 12px",borderRadius:16,border:"1px solid "+(sweetsSortBy===v?"#F0997B":"rgba(255,255,255,0.1)"),background:sweetsSortBy===v?"#3C1F13":"transparent",color:sweetsSortBy===v?"#F0997B":"#888780",fontSize:12,cursor:"pointer"}}>{l}</button>
-                  ))}
-                </div>
-                <div style={{display:"flex",gap:6,flexShrink:0}}>
-                  <div ref={ssRef} style={{position:"relative"}}>
-                    <button onClick={()=>setShowSweetsSearch(s=>!s)} style={{width:34,height:34,borderRadius:8,border:"1.5px solid "+(showSweetsSearch||sweetsSearch?"#F0997B":"rgba(255,255,255,0.1)"),background:showSweetsSearch||sweetsSearch?"#3C1F13":"transparent",color:showSweetsSearch||sweetsSearch?"#F0997B":"#888780",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4" stroke="currentColor" strokeWidth="1.5"/><path d="M9.5 9.5L13 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
-                    </button>
-                    {showSweetsSearch&&(
-                      <div style={{position:"absolute",right:0,top:40,background:"#1E1E1C",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 10px",boxShadow:"0 4px 24px rgba(0,0,0,0.5)",zIndex:50,width:200}}>
-                        <input autoFocus value={sweetsSearch} onChange={e=>setSweetsSearch(e.target.value)} placeholder={t.searchPlaceholder} style={{width:"100%",boxSizing:"border-box",fontSize:12}}/>
-                        {sweetsSearch&&<button onClick={()=>setSweetsSearch("")} style={{fontSize:11,color:"#888780",background:"none",border:"none",cursor:"pointer",padding:"4px 0 0",display:"block"}}>{t.clear}</button>}
-                      </div>
-                    )}
-                  </div>
-                  <button onClick={()=>setSweetsSortAsc(a=>!a)} style={{width:34,height:34,borderRadius:8,border:"1.5px solid #F0997B",background:"#3C1F13",color:"#F0997B",fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>{sweetsSortAsc?"↑":"↓"}</button>
-                </div>
-              </div>
+              <SortFilterToolbar
+                viewBy={sweetsSortBy}
+                onViewBy={setSweetsSortBy}
+                viewOptions={[["bite","BITE"],["taste",t.taste],["bpb",t.bangBuck],["wait",t.wait],["repeat",t.repeatability]]}
+                cityCounts={sweetCityCounts}
+                selectedCities={sweetsCityFilter}
+                onCitiesChange={setSweetsCityFilter}
+                search={sweetsSearch}
+                onSearch={setSweetsSearch}
+                filterContent={
+                  <>
+                    <div style={{padding:"6px 10px",borderBottom:"0.5px solid rgba(255,255,255,0.1)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <span style={S.sm}>{t.filterByTier}</span>
+                      {sweetsTiers.size>0&&<button type="button" onClick={()=>setSweetsTiers(new Set())} style={{fontSize:11,color:"#F0997B",background:"none",border:"none",cursor:"pointer",padding:0}}>{t.clear}</button>}
+                    </div>
+                    {tierFilterRows.map(([tier,col])=>{
+                      const on=sweetsTiers.has(tier);
+                      const cnt=cafes.filter(e=>e.category==="Sweets"&&scoreLabel(calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,sweetWeights),t)===tier).length;
+                      return(
+                        <div key={tier} onClick={()=>setSweetsTiers(p=>{const n=new Set(p);on?n.delete(tier):n.add(tier);return n;})} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderBottom:"0.5px solid rgba(255,255,255,0.1)",cursor:"pointer",background:on?"rgba(255,255,255,0.03)":"transparent"}}>
+                          <div style={{width:13,height:13,borderRadius:3,border:"1.5px solid "+(on?col:"rgba(255,255,255,0.1)"),background:on?col:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{on&&<span style={{color:"#141413",fontSize:9,fontWeight:700,lineHeight:1}}>✓</span>}</div>
+                          <span style={{flex:1,fontSize:12,color:on?col:"#F1EFE8",fontWeight:on?500:400}}>{tier}</span>
+                          <span style={S.sm}>{cnt}</span>
+                        </div>
+                      );
+                    })}
+                  </>
+                }
+                filterActive={sweetsTiers.size>0}
+                sortAsc={sweetsSortAsc}
+                onToggleSortAsc={()=>setSweetsSortAsc(a=>!a)}
+              />
               {!sortedSweets.length&&<p style={{color:"#888780",fontSize:14}}>{t.noSweets}</p>}
               {sweetGroupsPage.visible.map(([name,grp])=>(
                 <CafeGroupRow key={name} group={grp} cafeSortBy={sweetsSortBy} weights={sweetWeights} user={user} onEdit={e=>{setEditC(e);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={async id=>{
@@ -809,7 +806,7 @@ export default function App() {
         />
       )}
 
-      {st.view==="log"&&editR&&<RestForm initial={editR} weights={weights} existingEntries={st.entries} places={restaurantPlaces}
+      {st.view==="log"&&editR&&<RestForm initial={editR} weights={weights} existingEntries={st.entries} existingCities={existingCities} places={restaurantPlaces}
         onPlaceCreated={(p)=>upsertPlace(setRestaurantPlaces, p.id, p)}
         onSave={async e=>{
         let resolvedPlaceId = e.placeId;
@@ -868,13 +865,13 @@ export default function App() {
           }
         }
         setCafes(p=>p.map(x=>x.id===e.id?{...e,id:x.id,placeId:resolvedPlaceId??x.placeId,ownerId:e.ownerId??user?.id??x.ownerId}:x)); setEditC(null);
-      }} onCancel={()=>{setEditC(null);window.scrollTo({top:0,behavior:"smooth"});}} existingCafes={cafes} places={cafePlaces}/>}
+      }} onCancel={()=>{setEditC(null);window.scrollTo({top:0,behavior:"smooth"});}} existingCafes={cafes} existingCities={existingCities} places={cafePlaces}/>}
 
       {/* ── Add Rating ── */}
       {st.view==="add"&&(
         <div>
           {addType==="restaurant"
-            ?<RestForm initial={{...INIT_REST,city:lastCity.current}} weights={weights} existingEntries={st.entries} places={restaurantPlaces}
+            ?<RestForm initial={{...INIT_REST,city:lastCity.current}} weights={weights} existingEntries={st.entries} existingCities={existingCities} places={restaurantPlaces}
                 onPlaceCreated={(p)=>upsertPlace(setRestaurantPlaces, p.id, p)}
                 onSave={async e=>{
                   if (e.city) lastCity.current = e.city;
@@ -929,6 +926,7 @@ export default function App() {
                 onCancel={()=>dispatch({type:"VIEW",view:"log"})}
                 addType={addType} setAddType={setAddType}
                 existingCafes={cafes}
+                existingCities={existingCities}
                 places={cafePlaces}
               />
           }

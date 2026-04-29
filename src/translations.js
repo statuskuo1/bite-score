@@ -44,6 +44,7 @@ export const T = {
     prVersion:"✨ PR version",roastMe:"🔥 Roast me",
     editWeights:"Edit weights",doneWeights:"Done",weightsSave:"Save",edit:"Edit",deleteLabel:"Delete",
     filterByTier:"Filter by tier",clear:"Clear",
+    viewLabel:"View",cityLabel:"City",cityAll:"All",
     searchPlaceholder:"Search name, cuisine...",noEntries:"No entries match.",
     showMoreTemplate:"Show {count} more ({remaining} remaining)",
     noEntriesYet:"No entries yet.",noDrinks:"No drink entries yet.",noSweets:"No sweets entries yet.",

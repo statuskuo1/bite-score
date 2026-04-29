@@ -20,7 +20,7 @@ import { S } from "../../styles/sharedStyles.js";
  * answers "what does this place look like, on average, to the community?"
  * before the viewer's weights are applied.
  */
-export function PlaceLeaderboardRow({ place, bite }) {
+export function PlaceLeaderboardRow({ place, bite, display }) {
   const { t } = useLang();
   const [exp, setExp] = useState(false);
   const isCafe = "category" in place;
@@ -28,8 +28,12 @@ export function PlaceLeaderboardRow({ place, bite }) {
     ? (place.category === "Sweets" ? "🥐" : place.category === "Tea" ? "🍵" : place.category === "Other" ? "☕" : "☕")
     : (FLAGS[place.cuisine] || (place.cuisine?.[0] || "?").toUpperCase());
 
-  const col = scoreColor(bite);
-  const lbl = scoreLabel(bite, t);
+  /** Right-side metric defaults to BITE (back-compat for any caller that
+   *  doesn't pass `display`); GlobalTab passes a custom display so the metric
+   *  tracks its View pill (Taste / Bang-Buck / Wait / Repeatability). */
+  const rightVal = display ? display.val : (bite != null ? bite.toFixed(2) : "—");
+  const rightCol = display ? display.color : scoreColor(bite);
+  const rightLbl = display ? display.label : scoreLabel(bite, t);
 
   const subtitle = isCafe
     ? `${place.category}${place.city ? " · " + place.city : ""}`
@@ -85,10 +89,10 @@ export function PlaceLeaderboardRow({ place, bite }) {
         </div>
 
         <div style={{ textAlign: "right", flexShrink: 0 }}>
-          <div style={{ fontSize: 18, fontWeight: 600, color: col, lineHeight: 1.1 }}>
-            {bite != null ? bite.toFixed(2) : "—"}
+          <div style={{ fontSize: 18, fontWeight: 600, color: rightCol, lineHeight: 1.1 }}>
+            {rightVal}
           </div>
-          <div style={{ fontSize: 10, color: "#888780", lineHeight: 1.2 }}>{lbl}</div>
+          <div style={{ fontSize: 10, color: "#888780", lineHeight: 1.2 }}>{rightLbl}</div>
           <div style={{ fontSize: 10, color: "#666663", marginTop: 2 }}>
             {place.visitCount} {t.visitsCount}
           </div>

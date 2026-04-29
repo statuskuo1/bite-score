@@ -5,10 +5,20 @@ import {
   fetchAggregatedRestaurantPlaces,
   fetchAggregatedCafePlaces,
 } from "../../utils/visitPlacesApi.js";
-import { calcBiteOutOf10, calcCafeOutOf10 } from "../../utils/scoring.js";
+import {
+  calcBiteOutOf10,
+  calcCafeOutOf10,
+  scoreColor,
+  scoreLabel,
+  tasteColor,
+  tasteLabel,
+} from "../../utils/scoring.js";
+import { rating010FilterRows } from "../../constants/ratingTiers0to10.js";
+import { S } from "../../styles/sharedStyles.js";
 import { PlaceLeaderboardRow } from "./PlaceLeaderboardRow.jsx";
 import { usePaginatedList } from "../usePaginatedList.js";
 import { ShowMoreButton } from "../ShowMoreButton.jsx";
+import { SortFilterToolbar } from "../SortFilterToolbar.jsx";
 
 const CATS = [
   { key: "restaurants", labelKey: "restaurants", icon: "🍽" },
@@ -26,17 +36,24 @@ const CATS = [
  * Café tabs (drinks / sweets) use their own café weights, so the same place
  * can land at different BITE under restaurants vs. drinks.
  *
- * Min-visits filter (default 1) keeps single-visit places off the top until
- * they get a second confirmation.
+ * Toolbar mirrors My Log: View pill (BITE / Taste / Bang-Buck / Wait /
+ * Repeatability), multi-select City pill, search, tier filter, sort direction.
+ * The selected View also drives the right-side metric on each leaderboard
+ * row (via `display` prop on `PlaceLeaderboardRow`).
  */
 export function GlobalTab({ user, restaurantWeights, drinkWeights, sweetWeights }) {
   const { t } = useLang();
   const [cat, setCat] = useState("restaurants");
-  const [minVisits, setMinVisits] = useState(1);
   const [restaurants, setRestaurants] = useState([]);
   const [drinks, setDrinks] = useState([]);
   const [sweets, setSweets] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  const [viewBy, setViewBy] = useState("bite");
+  const [sortAsc, setSortAsc] = useState(false);
+  const [cityFilter, setCityFilter] = useState(new Set());
+  const [search, setSearch] = useState("");
+  const [tiers, setTiers] = useState(new Set());
 
   useEffect(() => {
     if (!user?.id) return;
@@ -82,23 +99,81 @@ export function GlobalTab({ user, restaurantWeights, drinkWeights, sweetWeights 
     return calcCafeOutOf10(...args, sweetWeights);
   }
 
-  /** Sort + filter is memo'd so weight changes re-rank without a refetch. */
-  const rows = useMemo(() => {
+  function sortValue(p) {
+    if (viewBy === "taste") return p.avgTaste ?? 0;
+    if (viewBy === "bpb") return -((p.avgCost ?? 0) / (p.avgPortions || 1));
+    if (viewBy === "wait") return -(p.avgWait ?? 0);
+    if (viewBy === "repeat") return p.avgRepeat ?? 0;
+    return p.bite ?? 0;
+  }
+
+  /** Right-side metric on the leaderboard row mirrors the My Log getDisplay shape. */
+  function getDisplay(p) {
+    if (viewBy === "taste") {
+      const v = p.avgTaste;
+      return { val: v != null ? v.toFixed(1) : "—", label: tasteLabel(v, t), color: tasteColor(v) };
+    }
+    if (viewBy === "bpb") {
+      const v = (p.avgCost ?? 0) / (p.avgPortions || 1);
+      return { val: "$" + v.toFixed(2), label: t.perPortion, color: "#5B9BD5" };
+    }
+    if (viewBy === "wait") {
+      const v = p.avgWait ?? 0;
+      return { val: v.toFixed(0) + " min", label: t.waitLabel, color: "#888780" };
+    }
+    if (viewBy === "repeat") {
+      const r = roundedRepeat(p.avgRepeat);
+      const stars = "⭐".repeat(r) || "✕";
+      const lbl = r === 3 ? t.mustReturnLabel : r === 2 ? t.wouldSeekOutLabel : r === 1 ? t.ifOccasionCallsLabel : t.wouldntReturnLabel;
+      return { val: stars, label: lbl, color: "#EF9F27" };
+    }
+    return { val: p.bite != null ? p.bite.toFixed(2) : "—", label: scoreLabel(p.bite, t), color: scoreColor(p.bite) };
+  }
+
+  const baseRows = useMemo(() => {
     const base = cat === "restaurants" ? restaurants : cat === "drinks" ? drinks : sweets;
-    return base
-      .map((p) => ({ ...p, bite: biteForPlace(p) }))
-      .filter((p) => p.bite != null && p.visitCount >= minVisits)
+    return base.map((p) => ({ ...p, bite: biteForPlace(p) })).filter((p) => p.bite != null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cat, restaurants, drinks, sweets, restaurantWeights, drinkWeights, sweetWeights]);
+
+  const cityCounts = useMemo(() => {
+    const m = new Map();
+    baseRows.forEach((p) => {
+      const c = p.city || "NYC";
+      m.set(c, (m.get(c) || 0) + 1);
+    });
+    return [...m.entries()].sort((a, b) => b[1] - a[1]);
+  }, [baseRows]);
+
+  const tierFilterRows = rating010FilterRows(t);
+
+  const rows = useMemo(() => {
+    return baseRows
+      .filter((p) => cityFilter.size === 0 || cityFilter.has(p.city || "NYC"))
+      .filter((p) => tiers.size === 0 || tiers.has(scoreLabel(p.bite, t)))
+      .filter((p) => {
+        if (!search.trim()) return true;
+        const q = search.trim().toLowerCase();
+        const cuisineOrCat = p.cuisine || p.category || "";
+        return p.name.toLowerCase().includes(q)
+          || cuisineOrCat.toLowerCase().includes(q)
+          || (p.city || "").toLowerCase().includes(q);
+      })
       .sort((a, b) => {
-        if (b.bite !== a.bite) return b.bite - a.bite;
+        const va = sortValue(a);
+        const vb = sortValue(b);
+        if (va !== vb) return sortAsc ? va - vb : vb - va;
         return b.visitCount - a.visitCount;
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cat, minVisits, restaurants, drinks, sweets, restaurantWeights, drinkWeights, sweetWeights]);
+  }, [baseRows, cityFilter, tiers, search, viewBy, sortAsc, t]);
 
-  /** Pagination tail. Resets when the user switches category or min-visits;
-   *  weight changes re-rank in place but the slice from the top still shows
-   *  the (newly) best, so weights aren't part of the reset key. */
-  const rowsPage = usePaginatedList(rows, `${cat}|${minVisits}`);
+  /** Pagination tail. Reset on cat / view / sort / filter / search changes so
+   *  the user lands at the top of the new results. */
+  const rowsPage = usePaginatedList(
+    rows,
+    `${cat}|${viewBy}|${sortAsc}|${[...cityFilter].sort().join(",")}|${[...tiers].join(",")}|${search}`,
+  );
 
   return (
     <div>
@@ -128,27 +203,48 @@ export function GlobalTab({ user, restaurantWeights, drinkWeights, sweetWeights 
         })}
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        <span style={{ fontSize: 11, color: "#888780" }}>{t.minVisitsFilter}:</span>
-        {[1, 2, 3, 5].map((n) => {
-          const on = minVisits === n;
-          return (
-            <button
-              key={n}
-              type="button"
-              onClick={() => setMinVisits(n)}
-              style={{
-                padding: "3px 10px", borderRadius: 14, fontSize: 11, cursor: "pointer",
-                background: on ? "#3C1F13" : "transparent",
-                color: on ? "#F0997B" : "#888780",
-                border: "1px solid " + (on ? "#F0997B" : "rgba(255,255,255,0.1)"),
-              }}
-            >
-              {n}+
-            </button>
-          );
-        })}
-      </div>
+      <SortFilterToolbar
+        viewBy={viewBy}
+        onViewBy={setViewBy}
+        viewOptions={[["bite", "BITE"], ["taste", t.taste], ["bpb", t.bangBuck], ["wait", t.wait], ["repeat", t.repeatability]]}
+        cityCounts={cityCounts}
+        selectedCities={cityFilter}
+        onCitiesChange={setCityFilter}
+        search={search}
+        onSearch={setSearch}
+        filterContent={
+          <>
+            <div style={{ padding: "6px 10px", borderBottom: "0.5px solid rgba(255,255,255,0.1)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={S.sm}>{t.filterByTier}</span>
+              {tiers.size > 0 && (
+                <button type="button" onClick={() => setTiers(new Set())} style={{ fontSize: 11, color: "#F0997B", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                  {t.clear}
+                </button>
+              )}
+            </div>
+            {tierFilterRows.map(([tier, col]) => {
+              const on = tiers.has(tier);
+              const cnt = baseRows.filter((p) => scoreLabel(p.bite, t) === tier).length;
+              return (
+                <div
+                  key={tier}
+                  onClick={() => setTiers((p) => { const n = new Set(p); on ? n.delete(tier) : n.add(tier); return n; })}
+                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", borderBottom: "0.5px solid rgba(255,255,255,0.1)", cursor: "pointer", background: on ? "rgba(255,255,255,0.03)" : "transparent" }}
+                >
+                  <div style={{ width: 13, height: 13, borderRadius: 3, border: "1.5px solid " + (on ? col : "rgba(255,255,255,0.1)"), background: on ? col : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    {on && <span style={{ color: "#141413", fontSize: 9, fontWeight: 700, lineHeight: 1 }}>✓</span>}
+                  </div>
+                  <span style={{ flex: 1, fontSize: 12, color: on ? col : "#F1EFE8", fontWeight: on ? 500 : 400 }}>{tier}</span>
+                  <span style={S.sm}>{cnt}</span>
+                </div>
+              );
+            })}
+          </>
+        }
+        filterActive={tiers.size > 0}
+        sortAsc={sortAsc}
+        onToggleSortAsc={() => setSortAsc((a) => !a)}
+      />
 
       {loading && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -167,6 +263,7 @@ export function GlobalTab({ user, restaurantWeights, drinkWeights, sweetWeights 
           key={`${p.placeId}-${p.category || "rest"}`}
           place={p}
           bite={p.bite}
+          display={getDisplay(p)}
         />
       ))}
       {!loading && (
