@@ -239,10 +239,7 @@ export default function App() {
     } catch (e) { /* ignore */ }
   }, [authReady, user?.id]);
 
-  // Send guests to Global (the only fully-accessible tab) on initial load or sign-out.
-  useEffect(() => {
-    if (authReady && !user) dispatch({ type: "VIEW", view: "community" });
-  }, [authReady, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
 
   function dismissWelcome() {
     setShowWelcome(false);
