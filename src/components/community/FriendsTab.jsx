@@ -397,15 +397,7 @@ function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClose, onCo
   if (!profile) return null;
 
   const name = profile.display_name || profile.username || "—";
-  const canUnfollow = relation === "taste_buds" || relation === "i_follow";
   const canCompare = relation === "taste_buds" || relation === "i_follow";
-
-  const badgesByRelation = {
-    taste_buds: { bg: "#1A2E0A", color: "#97C459", border: "rgba(151,196,89,0.4)", label: t.tasteBuds || "Taste Buds" },
-    i_follow:   { bg: "#1F1A2E", color: "#9BA9D5", border: "rgba(155,169,213,0.4)", label: t.following || "Following" },
-    they_follow: { bg: "#252523", color: "#888780", border: "rgba(255,255,255,0.15)", label: "Follows you" },
-  };
-  const badge = badgesByRelation[relation] ?? null;
 
   return (
     <>
@@ -449,24 +441,31 @@ function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClose, onCo
             <div style={{ fontSize: 13, color: "#C4C2BA", marginTop: 3 }}>
               @{profile.username || "–"}
             </div>
-            {badge && (
-              <div style={{ marginTop: 8 }}>
-                {canUnfollow ? (
-                  <button
-                    type="button"
-                    onClick={() => setConfirmUnfollow(true)}
-                    style={{
-                      fontSize: 10, fontWeight: 600, padding: "4px 10px", borderRadius: 20,
-                      background: badge.bg, color: badge.color,
-                      border: `1px solid ${badge.border}`,
-                      cursor: "pointer",
-                    }}
-                  >
-                    {badge.label}
-                  </button>
-                ) : (
-                  <StatusBadge label={badge.label} bg={badge.bg} color={badge.color} border={badge.border} />
+            {(relation === "taste_buds" || relation === "i_follow") && (
+              <div style={{ marginTop: 8, display: "flex", gap: 6, alignItems: "center", justifyContent: "center" }}>
+                {relation === "taste_buds" && (
+                  <StatusBadge
+                    label={t.tasteBuds || "Taste Buds"}
+                    bg="#1A2E0A" color="#97C459" border="rgba(151,196,89,0.4)"
+                  />
                 )}
+                <button
+                  type="button"
+                  onClick={() => setConfirmUnfollow(true)}
+                  style={{
+                    fontSize: 10, fontWeight: 600, padding: "4px 10px", borderRadius: 20,
+                    background: "rgba(155,169,213,0.1)", color: "#9BA9D5",
+                    border: "1px solid rgba(155,169,213,0.3)",
+                    cursor: "pointer",
+                  }}
+                >
+                  {t.following || "Following"}
+                </button>
+              </div>
+            )}
+            {relation === "they_follow" && (
+              <div style={{ marginTop: 8 }}>
+                <StatusBadge label="Follows you" bg="#252523" color="#888780" border="rgba(255,255,255,0.15)" />
               </div>
             )}
           </div>
@@ -529,6 +528,7 @@ export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowC
   const [followError, setFollowError] = useState(null);
   const [openProfile, setOpenProfile] = useState(null);
   const [openRelation, setOpenRelation] = useState(null);
+  const [searchUnfollowTarget, setSearchUnfollowTarget] = useState(null);
   /** New Followers section is collapsible. Default state derives from the
    *  current count (expanded if there are unseen followers, collapsed if 0).
    *  Tracked here so the user can manually collapse a non-empty list. */
@@ -775,6 +775,7 @@ export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowC
                     relation={rel}
                     busy={busy}
                     onFollow={handleFollow}
+                    onUnfollowConfirm={(profile) => setSearchUnfollowTarget(profile)}
                     t={t}
                   />
                 </button>
@@ -915,6 +916,19 @@ export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowC
           onUnfollow={handleSheetUnfollow}
           onViewLog={onViewLog}
           t={t}
+        />
+      )}
+
+      {searchUnfollowTarget && (
+        <UnfollowConfirmDialog
+          profile={searchUnfollowTarget}
+          isTasteBuds={relationByUserId.get(searchUnfollowTarget.id) === "taste_buds"}
+          busy={!!busyById[searchUnfollowTarget.id]}
+          onConfirm={async () => {
+            await handleUnfollow(searchUnfollowTarget.id);
+            setSearchUnfollowTarget(null);
+          }}
+          onCancel={() => setSearchUnfollowTarget(null)}
         />
       )}
     </div>
