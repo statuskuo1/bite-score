@@ -353,7 +353,7 @@ function FollowerRow({ entry, onFollow, busy, t }) {
  * View Log closes the sheet and hands the profile back to the caller, which
  * swaps in the read-only `UserLogView` for that user.
  */
-function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClose, onCompareWith, onUnfollow, onViewLog, t }) {
+function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClose, onCompareWith, onUnfollow, onFollow, onViewLog, t }) {
   const [stats, setStats] = useState(null);
   const [confirmUnfollow, setConfirmUnfollow] = useState(false);
 
@@ -452,32 +452,53 @@ function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClose, onCo
 
           <FoodStatsBlock stats={stats} style={{ marginBottom: 14 }} />
 
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              type="button"
-              onClick={() => { onViewLog?.(profile); onClose?.(); }}
-              style={{
-                flex: 1, padding: "12px 14px", borderRadius: 10,
-                background: "#3C1F13", border: "1px solid rgba(240,153,123,0.4)",
-                color: "#F0997B", fontSize: 14, fontWeight: 600, cursor: "pointer",
-              }}
-            >
-              {t.viewLog || "View log"}
-            </button>
-            {canCompare && (
+          {(relation === "i_follow" || relation === "taste_buds") ? (
+            <div style={{ display: "flex", gap: 8 }}>
               <button
                 type="button"
-                onClick={() => { onCompareWith?.(profile); onClose?.(); }}
+                onClick={() => { onViewLog?.(profile); onClose?.(); }}
                 style={{
                   flex: 1, padding: "12px 14px", borderRadius: 10,
-                  background: "transparent", border: "0.5px solid rgba(255,255,255,0.2)",
-                  color: "#C4C2BA", fontSize: 14, fontWeight: 500, cursor: "pointer",
+                  background: "#3C1F13", border: "1px solid rgba(240,153,123,0.4)",
+                  color: "#F0997B", fontSize: 14, fontWeight: 600, cursor: "pointer",
                 }}
               >
-                {t.compareSub || "Compare"}
+                {t.viewLog || "View log"}
               </button>
-            )}
-          </div>
+              {canCompare && (
+                <button
+                  type="button"
+                  onClick={() => { onCompareWith?.(profile); onClose?.(); }}
+                  style={{
+                    flex: 1, padding: "12px 14px", borderRadius: 10,
+                    background: "transparent", border: "0.5px solid rgba(255,255,255,0.2)",
+                    color: "#C4C2BA", fontSize: 14, fontWeight: 500, cursor: "pointer",
+                  }}
+                >
+                  {t.compareSub || "Compare"}
+                </button>
+              )}
+            </div>
+          ) : (
+            <div style={{ textAlign: "center" }}>
+              <p style={{ fontSize: 12, color: "#888780", margin: "0 0 10px" }}>
+                {t.followToSeeLog || "Follow to see their log"}
+              </p>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onFollow?.(profile.id)}
+                style={{
+                  width: "100%", padding: "12px 14px", borderRadius: 10,
+                  background: "#F0997B", border: "none",
+                  color: "#141413", fontSize: 14, fontWeight: 600,
+                  cursor: busy ? "wait" : "pointer", opacity: busy ? 0.6 : 1,
+                }}
+              >
+                {busy ? "…" : (t.follow || "Follow")}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -863,6 +884,7 @@ export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowC
           onClose={closeProfileSheet}
           onCompareWith={onCompareWith}
           onUnfollow={handleSheetUnfollow}
+          onFollow={async (id) => { await handleFollow(id); closeProfileSheet(); }}
           onViewLog={onViewLog}
           t={t}
         />
