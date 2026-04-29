@@ -6,10 +6,9 @@ import {
   followUser,
   unfollowUser,
   listFollows,
-  fetchUserProfileStats,
   NEW_FOLLOWERS_WINDOW_MS,
 } from "../../utils/followsApi.js";
-import { fetchRestaurantVisitsForUser } from "../../utils/visitPlacesApi.js";
+import { fetchRestaurantVisitsForUser, computeFoodStats } from "../../utils/visitPlacesApi.js";
 import { pairCompatibility, aggregateFriendsTopPicks } from "../../utils/compatibility.js";
 import { tasteColor } from "../../utils/scoring.js";
 import { FLAGS } from "../../constants/cuisineConstants.js";
@@ -296,19 +295,23 @@ function StatCell({ value, label }) {
  * View Log closes the sheet and hands the profile back to the caller, which
  * swaps in the read-only `UserLogView` for that user.
  */
-function MiniProfileSheet({ profile, relation, busy, onClose, onCompareWith, onUnfollow, onViewLog, t }) {
+function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClose, onCompareWith, onUnfollow, onViewLog, t }) {
   const [stats, setStats] = useState(null);
 
+  /** Prefer cached visits when the parent already has them (Taste Buds —
+   *  loaded eagerly for compatibility scoring). For Following-only profiles
+   *  we fetch on demand. */
   useEffect(() => {
     if (!profile?.id) { setStats(null); return; }
+    if (cachedVisits) { setStats(computeFoodStats(cachedVisits)); return; }
     let cancelled = false;
     setStats(null);
     (async () => {
-      const s = await fetchUserProfileStats(supabase, profile.id);
-      if (!cancelled) setStats(s);
+      const v = await fetchRestaurantVisitsForUser(supabase, profile.id);
+      if (!cancelled) setStats(computeFoodStats(v));
     })();
     return () => { cancelled = true; };
-  }, [profile?.id]);
+  }, [profile?.id, cachedVisits]);
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -364,11 +367,28 @@ function MiniProfileSheet({ profile, relation, busy, onClose, onCompareWith, onU
               {name}
             </div>
             <div style={{
-              fontSize: 12, color: "#888780", marginTop: 2,
-              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-            }}>
-              @{profile.username || "—"}
-            </div>
+  display: "flex", alignItems: "center", justifyContent: "space-between",
+  marginTop: 2,
+}}>
+  <div style={{
+    fontSize: 12, color: "#888780",
+    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+  }}>
+    @{profile.username || "–"}
+  </div>
+  <button
+    type="button"
+    disabled={busy}
+    onClick={() => onUnfollow?.(profile.id)}
+    style={{
+      fontSize: 11, color: "#A32D2D", background: "none",
+      border: "none", cursor: busy ? "not-allowed" : "pointer",
+      opacity: busy ? 0.6 : 1, padding: 0, flexShrink: 0,
+    }}
+  >
+    {busy ? "…" : (t.unfollow || "Unfollow")}
+  </button>
+</div>
             <div style={{ marginTop: 6 }}>
               <span style={{
                 fontSize: 10, fontWeight: 600, padding: "4px 10px", borderRadius: 20,
@@ -386,10 +406,10 @@ function MiniProfileSheet({ profile, relation, busy, onClose, onCompareWith, onU
           background: "#141413", border: "0.5px solid rgba(255,255,255,0.08)",
           borderRadius: 12, padding: "12px 4px", marginBottom: 16,
         }}>
-          <StatCell value={stats?.ratings} label={t.ratingsLabel || "ratings"} />
-          <StatCell value={stats?.followers} label={t.followers || "followers"} />
-          <StatCell value={stats?.following} label={t.following || "following"} />
-          <StatCell value={stats?.tasteBuds} label={t.tasteBuds || "taste buds"} />
+          <StatCell value={stats?.restaurants} label={t.restaurantsRated || "Restaurants rated"} />
+          <StatCell value={stats?.cuisines} label={t.cuisinesTried || "Cuisines tried"} />
+          <StatCell value={stats?.cities} label={t.citiesExplored || "Cities explored"} />
+          <StatCell value={stats?.regions} label={t.regionsExplored || "Regions explored"} />
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -421,21 +441,7 @@ function MiniProfileSheet({ profile, relation, busy, onClose, onCompareWith, onU
             {t.compareSub || "Compare"}
           </button>
 
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => onUnfollow?.(profile.id)}
-            style={{
-              padding: "12px 14px", borderRadius: 10,
-              background: "transparent",
-              border: "1px solid rgba(163,45,45,0.5)",
-              color: "#A32D2D", fontSize: 14, fontWeight: 500,
-              cursor: busy ? "not-allowed" : "pointer",
-              opacity: busy ? 0.6 : 1,
-            }}
-          >
-            {busy ? "…" : (t.unfollow || "Unfollow")}
-          </button>
+        
         </div>
       </div>
     </div>
@@ -835,6 +841,7 @@ export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowC
           profile={openProfile}
           relation={openRelation}
           busy={!!busyById[openProfile.id]}
+          cachedVisits={budVisits[openProfile.id]}
           onClose={closeProfileSheet}
           onCompareWith={onCompareWith}
           onUnfollow={handleSheetUnfollow}

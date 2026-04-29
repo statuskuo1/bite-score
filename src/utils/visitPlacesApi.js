@@ -3,6 +3,8 @@
  * UI keeps a flattened row per visit (join place + author profile).
  */
 
+import { REGION_MAP } from "../constants/cuisineConstants.js";
+
 const PROFILE_FIELDS = "id, username, display_name, avatar_url";
 
 /** Gated debug log — silent in production builds (Vite drops the call site). */
@@ -368,6 +370,34 @@ export async function fetchRestaurantVisitsForUser(client, userId) {
     return [];
   }
   return (data || []).map(mapRestaurantVisitRow);
+}
+
+/**
+ * Roll a list of restaurant visit rows (as produced by `mapRestaurantVisitRow`)
+ * into the four "food stats" surfaced in the Friends-tab mini profile sheet.
+ *
+ * Counts mirror how cuisines/regions are tallied elsewhere (palette donut,
+ * quests): primary `cuisine` only, blanks ignored. `regions` excludes the
+ * implicit "Other" bucket — only cuisines mapped via `REGION_MAP` count, so
+ * the value is always 0..Object.keys(CUISINE_REGIONS).length.
+ */
+export function computeFoodStats(visits) {
+  const rows = Array.isArray(visits) ? visits : [];
+  const cuisines = new Set();
+  const cities = new Set();
+  const regions = new Set();
+  for (const v of rows) {
+    if (v.cuisine) cuisines.add(v.cuisine);
+    if (v.city) cities.add(v.city);
+    const r = REGION_MAP[v.cuisine];
+    if (r) regions.add(r);
+  }
+  return {
+    restaurants: rows.length,
+    cuisines: cuisines.size,
+    cities: cities.size,
+    regions: regions.size,
+  };
 }
 
 export async function fetchCafeVisitsForUser(client, userId) {

@@ -51,6 +51,7 @@ export const T = {
     topCuisine:"Top cuisine",topRated:"Top rated",avgTaste:"Avg taste",avgSpend:"Avg spend",
     avgBitePaletteNote:"BITE averages how close each visit is to your best possible weighted score at these sliders — not raw taste alone. Price and wait usually pull it below average taste.",
     regionsExplored:"Regions explored",bestDrink:"Best drink",avgCost:"Avg cost",
+    restaurantsRated:"Restaurants rated",cuisinesTried:"Cuisines tried",citiesExplored:"Cities explored",
     totalDrinks:"Total drinks",totalSweets:"Total sweets",hiddenGem:"Hidden gem 💎",
     pastryLeaderboard:"Pastry leaderboard",sweetsPersonality:"Sweets personality",
     coffeePersonality:"Coffee personality",beanOrigin:"Bean origin",
