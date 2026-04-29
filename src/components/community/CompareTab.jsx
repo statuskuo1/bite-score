@@ -9,6 +9,8 @@ import { FLAGS } from "../../constants/cuisineConstants.js";
 import { Pill } from "./Pill.jsx";
 import { Avatar } from "./Avatar.jsx";
 import { UserIdentity } from "./UserIdentity.jsx";
+import { usePaginatedList } from "../usePaginatedList.js";
+import { ShowMoreButton } from "../ShowMoreButton.jsx";
 
 const SECTION_LABEL_STYLE = {
   fontSize: 11,
@@ -33,8 +35,6 @@ const FLAG_BOX_STYLE = {
 
 const YOU_LEGEND_COLOR = "#F0997B";
 const FRIEND_LEGEND_COLOR = "#5B9BD5";
-
-const TOP_DISCOVER_LIMIT = 3;
 
 function topSharedCuisines(agreements, { limit = 2, threshold = 7 } = {}) {
   return [...(agreements || [])]
@@ -208,6 +208,15 @@ export function CompareTab({ user, initialTarget, onClearTarget, onFollowChange 
     return restaurantOverlap(myVisits, theirVisits);
   }, [myVisits, theirVisits, target?.id]);
 
+  /** Pagination tails. Hooks live above the early-return picker view so
+   *  the order stays stable between the picker and the compare view. The
+   *  buds picker resets when the bud set size changes; the per-target
+   *  lists reset when the target changes. */
+  const budsPage = usePaginatedList(buds, String(buds.length));
+  const bothPage = usePaginatedList(overlap?.both || [], target?.id || "");
+  const onlyTheirsPage = usePaginatedList(overlap?.onlyTheirs || [], target?.id || "");
+  const onlyMinePage = usePaginatedList(overlap?.onlyMine || [], target?.id || "");
+
   function clearTarget() {
     setTarget(null);
     onClearTarget?.();
@@ -233,7 +242,7 @@ export function CompareTab({ user, initialTarget, onClearTarget, onFollowChange 
             {t.noTasteBudsYet || "No taste buds yet."}
           </p>
         )}
-        {buds.map((f) => (
+        {budsPage.visible.map((f) => (
           <button
             key={f.id}
             type="button"
@@ -249,6 +258,11 @@ export function CompareTab({ user, initialTarget, onClearTarget, onFollowChange 
             <span style={{ fontSize: 18, color: "#888780" }}>›</span>
           </button>
         ))}
+        <ShowMoreButton
+          remaining={budsPage.remaining}
+          pageSize={budsPage.pageSize}
+          onClick={budsPage.showMore}
+        />
       </div>
     );
   }
@@ -265,8 +279,8 @@ export function CompareTab({ user, initialTarget, onClearTarget, onFollowChange 
   const friendName = target.display_name || target.username || "—";
   const isTasteBud = buds.some((f) => f.otherUserId === target?.id);
 
-  const onlyTheirs = overlap?.onlyTheirs?.slice(0, TOP_DISCOVER_LIMIT) || [];
-  const onlyMine = overlap?.onlyMine?.slice(0, TOP_DISCOVER_LIMIT) || [];
+  const onlyTheirs = overlap?.onlyTheirs || [];
+  const onlyMine = overlap?.onlyMine || [];
 
   return (
     <div>
@@ -326,10 +340,15 @@ export function CompareTab({ user, initialTarget, onClearTarget, onFollowChange 
                   background: "#1E1E1C", border: "0.5px solid rgba(255,255,255,0.1)",
                   borderRadius: 12, overflow: "hidden",
                 }}>
-                  {overlap.both.map((r, i) => (
-                    <BothRow key={r.placeId} row={r} isLast={i === overlap.both.length - 1} />
+                  {bothPage.visible.map((r, i) => (
+                    <BothRow key={r.placeId} row={r} isLast={i === bothPage.visible.length - 1} />
                   ))}
                 </div>
+                <ShowMoreButton
+                  remaining={bothPage.remaining}
+                  pageSize={bothPage.pageSize}
+                  onClick={bothPage.showMore}
+                />
                 <div style={{
                   display: "flex", justifyContent: "center", gap: 6,
                   fontSize: 11, color: "#888780", marginTop: 8,
@@ -353,20 +372,27 @@ export function CompareTab({ user, initialTarget, onClearTarget, onFollowChange 
             {onlyTheirs.length === 0 ? (
               <p style={{ fontSize: 12, color: "#888780", margin: 0 }}>{t.nothingNewFromThem}</p>
             ) : (
-              onlyTheirs.map((r) => (
-                <DiscoverRow
-                  key={r.placeId}
-                  row={r}
-                  subLine={[
-                    r.cuisine,
-                    fmtTemplate(t.friendRatedText || "{name} rated {score}", {
-                      name: friendName, score: r.theirs.toFixed(2),
-                    }),
-                  ].filter(Boolean).join(" · ")}
-                  badgeText={t.discoverBadge}
-                  badgeTone={DISCOVER_TONE}
+              <>
+                {onlyTheirsPage.visible.map((r) => (
+                  <DiscoverRow
+                    key={r.placeId}
+                    row={r}
+                    subLine={[
+                      r.cuisine,
+                      fmtTemplate(t.friendRatedText || "{name} rated {score}", {
+                        name: friendName, score: r.theirs.toFixed(2),
+                      }),
+                    ].filter(Boolean).join(" · ")}
+                    badgeText={t.discoverBadge}
+                    badgeTone={DISCOVER_TONE}
+                  />
+                ))}
+                <ShowMoreButton
+                  remaining={onlyTheirsPage.remaining}
+                  pageSize={onlyTheirsPage.pageSize}
+                  onClick={onlyTheirsPage.showMore}
                 />
-              ))
+              </>
             )}
           </section>
 
@@ -377,20 +403,27 @@ export function CompareTab({ user, initialTarget, onClearTarget, onFollowChange 
             {onlyMine.length === 0 ? (
               <p style={{ fontSize: 12, color: "#888780", margin: 0 }}>{t.nothingNewFromYou}</p>
             ) : (
-              onlyMine.map((r) => (
-                <DiscoverRow
-                  key={r.placeId}
-                  row={r}
-                  subLine={[
-                    r.cuisine,
-                    fmtTemplate(t.youRatedText || "You rated {score}", {
-                      score: r.mine.toFixed(2),
-                    }),
-                  ].filter(Boolean).join(" · ")}
-                  badgeText={t.recommendBadge}
-                  badgeTone={RECOMMEND_TONE}
+              <>
+                {onlyMinePage.visible.map((r) => (
+                  <DiscoverRow
+                    key={r.placeId}
+                    row={r}
+                    subLine={[
+                      r.cuisine,
+                      fmtTemplate(t.youRatedText || "You rated {score}", {
+                        score: r.mine.toFixed(2),
+                      }),
+                    ].filter(Boolean).join(" · ")}
+                    badgeText={t.recommendBadge}
+                    badgeTone={RECOMMEND_TONE}
+                  />
+                ))}
+                <ShowMoreButton
+                  remaining={onlyMinePage.remaining}
+                  pageSize={onlyMinePage.pageSize}
+                  onClick={onlyMinePage.showMore}
                 />
-              ))
+              </>
             )}
           </section>
         </>

@@ -1,4 +1,4 @@
-import { useState, useReducer, useRef, useEffect, useCallback } from "react";
+import { useState, useReducer, useRef, useEffect, useCallback, useMemo } from "react";
 import { LangContext } from "./contexts/LangContext.jsx";
 import { useAuth } from "./contexts/AuthContext.jsx";
 import { T } from "./translations.js";
@@ -48,6 +48,8 @@ import { ResetPasswordModal } from "./components/ResetPasswordModal.jsx";
 import { WeightSliders } from "./components/WeightSliders.jsx";
 import { CommunityTab } from "./components/community/CommunityTab.jsx";
 import { countUnseenFollowers, markFollowersSeen } from "./utils/followsApi.js";
+import { usePaginatedList } from "./components/usePaginatedList.js";
+import { ShowMoreButton } from "./components/ShowMoreButton.jsx";
 
 /** Drops optional paragraphs from welcome body (DB or defaults): play-mode aside; sign-in/cloud disclaimer (EN+ZH) so languages stay aligned when overrides differ. */
 function omitPlayWelcomeAside(body) {
@@ -347,6 +349,73 @@ export default function App() {
     return true;
   });
 
+  /** Group-by-name + sort for each My Log tab. Pagination happens at the
+   *  group level (one card = one place) so users see "20 places at a time",
+   *  not "20 visits at a time". */
+  const restaurantGroups = useMemo(() => {
+    const groups = {};
+    filtered.forEach((e) => { const k = e.name; if (!groups[k]) groups[k] = []; groups[k].push(e); });
+    return Object.values(groups).map((grp) => {
+      const e = grp[grp.length - 1];
+      const biteVals = grp.map((x) => calcBiteOutOf10(x.taste, x.cost, x.portions, x.wait, x.useR, x.repeatability, weights)).filter((v) => v != null);
+      const avgBite = biteVals.length ? biteVals.reduce((a, b) => a + b, 0) / biteVals.length : 0;
+      const avgTaste = grp.reduce((a, x) => a + x.taste, 0) / grp.length;
+      const avgBpb = grp.reduce((a, x) => a + (x.cost / x.portions), 0) / grp.length;
+      const avgWait = grp.reduce((a, x) => a + x.wait, 0) / grp.length;
+      const avgRepeat = grp.reduce((a, x) => a + x.repeatability, 0) / grp.length;
+      const visits = grp.length;
+      const sortVal = sortBy === "taste" ? avgTaste
+        : sortBy === "bpb" ? -avgBpb
+        : sortBy === "wait" ? -avgWait
+        : sortBy === "repeat" ? avgRepeat + (visits * 0.001)
+        : avgBite;
+      return { grp, e, sortVal };
+    }).sort((a, b) => sortAsc ? a.sortVal - b.sortVal : b.sortVal - a.sortVal);
+  }, [filtered, sortBy, sortAsc, weights]);
+
+  const drinkGroups = useMemo(() => {
+    const groups = {};
+    sortedDrinks.forEach((e) => { const k = e.name; if (!groups[k]) groups[k] = []; groups[k].push(e); });
+    const getSortVal = (grp) => {
+      const avg = (fn) => grp.reduce((a, e) => a + fn(e), 0) / grp.length;
+      if (cafeSortBy === "taste") return avg((e) => e.taste);
+      if (cafeSortBy === "bpb") return -avg((e) => e.cost / e.portions);
+      if (cafeSortBy === "wait") return -avg((e) => e.wait);
+      if (cafeSortBy === "repeat") return avg((e) => e.repeatability) + (grp.length * 0.001);
+      return avg((e) => calcCafeOutOf10(e.taste, e.cost, e.portions, e.wait, e.useR, e.repeatability, drinkWeights) ?? 0);
+    };
+    return Object.entries(groups).sort((a, b) => cafeSortAsc ? getSortVal(a[1]) - getSortVal(b[1]) : getSortVal(b[1]) - getSortVal(a[1]));
+  }, [sortedDrinks, cafeSortBy, cafeSortAsc, drinkWeights]);
+
+  const sweetGroups = useMemo(() => {
+    const groups = {};
+    sortedSweets.forEach((e) => { const k = e.name; if (!groups[k]) groups[k] = []; groups[k].push(e); });
+    const getSortVal = (grp) => {
+      const avg = (fn) => grp.reduce((a, e) => a + fn(e), 0) / grp.length;
+      if (sweetsSortBy === "taste") return avg((e) => e.taste);
+      if (sweetsSortBy === "bpb") return -avg((e) => e.cost / e.portions);
+      if (sweetsSortBy === "wait") return -avg((e) => e.wait);
+      if (sweetsSortBy === "repeat") return avg((e) => e.repeatability) + (grp.length * 0.001);
+      return avg((e) => calcCafeOutOf10(e.taste, e.cost, e.portions, e.wait, e.useR, e.repeatability, sweetWeights) ?? 0);
+    };
+    return Object.entries(groups).sort((a, b) => sweetsSortAsc ? getSortVal(a[1]) - getSortVal(b[1]) : getSortVal(b[1]) - getSortVal(a[1]));
+  }, [sortedSweets, sweetsSortBy, sweetsSortAsc, sweetWeights]);
+
+  /** Pagination tails. Reset on every sort/filter/search/tab change so the
+   *  user lands at the top of the new results. */
+  const restaurantGroupsPage = usePaginatedList(
+    restaurantGroups,
+    `${sortBy}|${sortAsc}|${cityFilter}|${search}|${[...tiers].join(",")}|${logTab}`,
+  );
+  const drinkGroupsPage = usePaginatedList(
+    drinkGroups,
+    `${cafeSortBy}|${cafeSortAsc}|${cafeFilterMilk}|${cafeFilterBean}|${cafeSearch}|${logTab}`,
+  );
+  const sweetGroupsPage = usePaginatedList(
+    sweetGroups,
+    `${sweetsSortBy}|${sweetsSortAsc}|${sweetsSearch}|${logTab}`,
+  );
+
   const tierFilterRows = rating010FilterRows(t);
   const tabSt = (on) => ({padding:"7px 18px",borderRadius:20,border:"1.5px solid "+(on?"#F0997B":"rgba(255,255,255,0.1)"),background:on?"#3C1F13":"transparent",color:on?"#F0997B":"#888780",fontSize:13,fontWeight:on?500:400,cursor:"pointer"});
 
@@ -595,38 +664,26 @@ export default function App() {
                 </div>
               </div>
               {filtered.length===0&&<p style={{color:"#888780",fontSize:14}}>{t.noEntries}</p>}
-              {(()=>{
-                const groups={};
-                filtered.forEach(e=>{const k=e.name;if(!groups[k])groups[k]=[];groups[k].push(e);});
-                const groupArr=Object.values(groups).map(grp=>{
-                  const e=grp[grp.length-1];
-                  const biteVals=grp.map(e=>calcBiteOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights)).filter(v=>v!=null);
-                  const avgBite=biteVals.length?biteVals.reduce((a,b)=>a+b,0)/biteVals.length:0;
-                  const avgTaste=grp.reduce((a,e)=>a+e.taste,0)/grp.length;
-                  const avgBpb=grp.reduce((a,e)=>a+(e.cost/e.portions),0)/grp.length;
-                  const avgWait=grp.reduce((a,e)=>a+e.wait,0)/grp.length;
-                  const avgRepeat=grp.reduce((a,e)=>a+e.repeatability,0)/grp.length;
-                  // sortVal: higher = better (for descending = best first)
-                  const visits=grp.length;
-                  const sortVal=sortBy==="taste"?avgTaste:sortBy==="bpb"?-avgBpb:sortBy==="wait"?-avgWait:sortBy==="repeat"?avgRepeat+(visits*0.001):avgBite;
-                  return {grp, e, sortVal};
-                }).sort((a,b)=>sortAsc?a.sortVal-b.sortVal:b.sortVal-a.sortVal);
-                return groupArr.map(({grp,e})=>{
-                  const visits=grp.length;
-                  const display=getDisplay(e);
-                  return (
-                    <RestRow key={e.id} e={e} display={display} user={user} visits={visits} group={grp} weights={weights}
-                      onEdit={v=>{setEditR(v||e);window.scrollTo({top:0,behavior:"smooth"});}}
-                      onDelete={async id=>{
-                        const did=id||e.id;
-                        const row=st.entries.find(x=>x.id===did);
-                        if(!canMutateVisit(row,user))return;
-                        try{await supabase.from("restaurant_visits").delete().eq("id",did);}catch(err){console.error("restaurant delete threw:",err);}
-                        dispatch({type:"DEL",id:did});
-                      }}/>
-                  );
-                });
-              })()}
+              {restaurantGroupsPage.visible.map(({grp,e})=>{
+                const visits=grp.length;
+                const display=getDisplay(e);
+                return (
+                  <RestRow key={e.id} e={e} display={display} user={user} visits={visits} group={grp} weights={weights}
+                    onEdit={v=>{setEditR(v||e);window.scrollTo({top:0,behavior:"smooth"});}}
+                    onDelete={async id=>{
+                      const did=id||e.id;
+                      const row=st.entries.find(x=>x.id===did);
+                      if(!canMutateVisit(row,user))return;
+                      try{await supabase.from("restaurant_visits").delete().eq("id",did);}catch(err){console.error("restaurant delete threw:",err);}
+                      dispatch({type:"DEL",id:did});
+                    }}/>
+                );
+              })}
+              <ShowMoreButton
+                remaining={restaurantGroupsPage.remaining}
+                pageSize={restaurantGroupsPage.pageSize}
+                onClick={restaurantGroupsPage.showMore}
+              />
               {sortedR.length>0&&(
                 <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginTop:16}}>
                   {[[t.entries,String(sortedR.length)],[t.avgBite,(()=>{const m=meanRestaurantBiteOutOf10(sortedR,weights);return m!=null?`${m.toFixed(2)}/10`:"—";})()]].map(([l,v])=>(
@@ -693,26 +750,19 @@ export default function App() {
                 </div>
               </div>
               {!sortedDrinks.length&&<p style={{color:"#888780",fontSize:14}}>{t.noDrinks}</p>}
-              {(()=>{
-                const groups={};
-                sortedDrinks.forEach(e=>{const k=e.name;if(!groups[k])groups[k]=[];groups[k].push(e);});
-                const getSortVal=(grp)=>{
-                  const avg=(fn)=>grp.reduce((a,e)=>a+fn(e),0)/grp.length;
-                  if(cafeSortBy==="taste") return avg(e=>e.taste);
-                  if(cafeSortBy==="bpb") return -avg(e=>e.cost/e.portions);
-                  if(cafeSortBy==="wait") return -avg(e=>e.wait);
-                  if(cafeSortBy==="repeat") return avg(e=>e.repeatability)+(grp.length*0.001);
-                  return avg(e=>calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,drinkWeights)??0);
-                };
-                return Object.entries(groups).sort((a,b)=>cafeSortAsc?getSortVal(a[1])-getSortVal(b[1]):getSortVal(b[1])-getSortVal(a[1])).map(([name,grp])=>(
-                  <CafeGroupRow key={name} group={grp} cafeSortBy={cafeSortBy} weights={drinkWeights} user={user} onEdit={e=>{setEditC(e);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={async id=>{
-                        const row=cafes.find(x=>x.id===id);
-                        if(!canMutateVisit(row,user))return;
-                        try{await supabase.from("cafe_visits").delete().eq("id",id);}catch(err){console.error("cafe delete threw:",err);}
-                        setCafes(p=>p.filter(x=>x.id!==id));
-                      }}/>
-                ));
-              })()}
+              {drinkGroupsPage.visible.map(([name,grp])=>(
+                <CafeGroupRow key={name} group={grp} cafeSortBy={cafeSortBy} weights={drinkWeights} user={user} onEdit={e=>{setEditC(e);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={async id=>{
+                      const row=cafes.find(x=>x.id===id);
+                      if(!canMutateVisit(row,user))return;
+                      try{await supabase.from("cafe_visits").delete().eq("id",id);}catch(err){console.error("cafe delete threw:",err);}
+                      setCafes(p=>p.filter(x=>x.id!==id));
+                    }}/>
+              ))}
+              <ShowMoreButton
+                remaining={drinkGroupsPage.remaining}
+                pageSize={drinkGroupsPage.pageSize}
+                onClick={drinkGroupsPage.showMore}
+              />
               {sortedDrinks.length>0&&(
                 <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginTop:16}}>
                   {[[t.entries,String(sortedDrinks.length)],[t.avgBite,(sortedDrinks.reduce((a,e)=>a+(calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,drinkWeights)??0),0)/sortedDrinks.length).toFixed(2)]].map(([l,v])=>(
@@ -750,26 +800,19 @@ export default function App() {
                 </div>
               </div>
               {!sortedSweets.length&&<p style={{color:"#888780",fontSize:14}}>{t.noSweets}</p>}
-              {(()=>{
-                const groups={};
-                sortedSweets.forEach(e=>{const k=e.name;if(!groups[k])groups[k]=[];groups[k].push(e);});
-                const getSortValS=(grp)=>{
-                  const avg=(fn)=>grp.reduce((a,e)=>a+fn(e),0)/grp.length;
-                  if(sweetsSortBy==="taste") return avg(e=>e.taste);
-                  if(sweetsSortBy==="bpb") return -avg(e=>e.cost/e.portions);
-                  if(sweetsSortBy==="wait") return -avg(e=>e.wait);
-                  if(sweetsSortBy==="repeat") return avg(e=>e.repeatability)+(grp.length*0.001);
-                  return avg(e=>calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,sweetWeights)??0);
-                };
-                return Object.entries(groups).sort((a,b)=>sweetsSortAsc?getSortValS(a[1])-getSortValS(b[1]):getSortValS(b[1])-getSortValS(a[1])).map(([name,grp])=>(
-                  <CafeGroupRow key={name} group={grp} cafeSortBy={sweetsSortBy} weights={sweetWeights} user={user} onEdit={e=>{setEditC(e);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={async id=>{
-                        const row=cafes.find(x=>x.id===id);
-                        if(!canMutateVisit(row,user))return;
-                        try{await supabase.from("cafe_visits").delete().eq("id",id);}catch(err){console.error("cafe delete threw:",err);}
-                        setCafes(p=>p.filter(x=>x.id!==id));
-                      }}/>
-                ));
-              })()}
+              {sweetGroupsPage.visible.map(([name,grp])=>(
+                <CafeGroupRow key={name} group={grp} cafeSortBy={sweetsSortBy} weights={sweetWeights} user={user} onEdit={e=>{setEditC(e);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={async id=>{
+                      const row=cafes.find(x=>x.id===id);
+                      if(!canMutateVisit(row,user))return;
+                      try{await supabase.from("cafe_visits").delete().eq("id",id);}catch(err){console.error("cafe delete threw:",err);}
+                      setCafes(p=>p.filter(x=>x.id!==id));
+                    }}/>
+              ))}
+              <ShowMoreButton
+                remaining={sweetGroupsPage.remaining}
+                pageSize={sweetGroupsPage.pageSize}
+                onClick={sweetGroupsPage.showMore}
+              />
               {sortedSweets.length>0&&(
                 <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginTop:16}}>
                   {[[t.entries,String(sortedSweets.length)],[t.avgBite,(sortedSweets.reduce((a,e)=>a+(calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,sweetWeights)??0),0)/sortedSweets.length).toFixed(2)]].map(([l,v])=>(

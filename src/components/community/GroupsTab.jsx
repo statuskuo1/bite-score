@@ -21,6 +21,8 @@ import { tasteColor } from "../../utils/scoring.js";
 import { FLAGS } from "../../constants/cuisineConstants.js";
 import { Pill } from "./Pill.jsx";
 import { UserIdentity } from "./UserIdentity.jsx";
+import { usePaginatedList } from "../usePaginatedList.js";
+import { ShowMoreButton } from "../ShowMoreButton.jsx";
 
 /** Detail view for one group: members, invite picker, ranked cuisines + suggested places. */
 function GroupDetail({ user, groupId, onBack, onDeleted }) {
@@ -80,6 +82,10 @@ function GroupDetail({ user, groupId, onBack, onDeleted }) {
     () => tasteBuds.filter((f) => !memberIds.has(f.otherUserId)),
     [tasteBuds, memberIds]
   );
+
+  /** Pagination tails. Both reset on group switch. */
+  const membersPage = usePaginatedList(data?.members || [], groupId);
+  const invitablePage = usePaginatedList(budsInvitable, groupId);
 
   const ranked = useMemo(() => {
     if (!data?.members?.length) return [];
@@ -207,7 +213,7 @@ function GroupDetail({ user, groupId, onBack, onDeleted }) {
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {data.members.map((m) => {
+          {membersPage.visible.map((m) => {
             const isMe = m.user_id === user.id;
             const isOwnerMember = m.user_id === data.group.owner_id;
             const suffix = isMe
@@ -230,6 +236,11 @@ function GroupDetail({ user, groupId, onBack, onDeleted }) {
               </div>
             );
           })}
+          <ShowMoreButton
+            remaining={membersPage.remaining}
+            pageSize={membersPage.pageSize}
+            onClick={membersPage.showMore}
+          />
         </div>
 
         {showInvite && isOwner && (
@@ -244,7 +255,7 @@ function GroupDetail({ user, groupId, onBack, onDeleted }) {
                 {t.allTasteBudsInGroup || "All your Taste Buds are already in this group."}
               </p>
             )}
-            {budsInvitable.map((f) => (
+            {invitablePage.visible.map((f) => (
               <div key={f.id} style={{
                 display: "flex", alignItems: "center", gap: 8, padding: "4px 0",
               }}>
@@ -256,6 +267,11 @@ function GroupDetail({ user, groupId, onBack, onDeleted }) {
                 >{t.invite || "Invite"}</Pill>
               </div>
             ))}
+            <ShowMoreButton
+              remaining={invitablePage.remaining}
+              pageSize={invitablePage.pageSize}
+              onClick={invitablePage.showMore}
+            />
           </div>
         )}
       </div>
@@ -343,6 +359,10 @@ export function GroupsTab({ user }) {
 
   useEffect(() => { reload(); }, [reload]);
 
+  /** Pagination tail. Hook lives above the `openId` early return so the
+   *  call order stays stable between the list and detail views. */
+  const groupsPage = usePaginatedList(groups, String(groups.length));
+
   async function submitCreate() {
     const name = newName.trim();
     if (!name) return;
@@ -424,7 +444,7 @@ export function GroupsTab({ user }) {
         <p style={{ fontSize: 12, color: "#888780", margin: 0 }}>{t.noGroupsYet}</p>
       )}
 
-      {groups.map((g) => (
+      {groupsPage.visible.map((g) => (
         <button
           key={g.id}
           type="button"
@@ -447,6 +467,11 @@ export function GroupsTab({ user }) {
           <span style={{ fontSize: 18, color: "#888780" }}>›</span>
         </button>
       ))}
+      <ShowMoreButton
+        remaining={groupsPage.remaining}
+        pageSize={groupsPage.pageSize}
+        onClick={groupsPage.showMore}
+      />
     </div>
   );
 }

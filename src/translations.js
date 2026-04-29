@@ -45,6 +45,7 @@ export const T = {
     editWeights:"Edit weights",doneWeights:"Done",weightsSave:"Save",edit:"Edit",deleteLabel:"Delete",
     filterByTier:"Filter by tier",clear:"Clear",
     searchPlaceholder:"Search name, cuisine...",noEntries:"No entries match.",
+    showMoreTemplate:"Show {count} more ({remaining} remaining)",
     noEntriesYet:"No entries yet.",noDrinks:"No drink entries yet.",noSweets:"No sweets entries yet.",
     topCuisine:"Top cuisine",topRated:"Top rated",avgTaste:"Avg taste",avgSpend:"Avg spend",
     avgBitePaletteNote:"BITE averages how close each visit is to your best possible weighted score at these sliders — not raw taste alone. Price and wait usually pull it below average taste.",

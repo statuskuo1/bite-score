@@ -16,6 +16,8 @@ import { FLAGS } from "../../constants/cuisineConstants.js";
 import { Pill } from "./Pill.jsx";
 import { Avatar } from "./Avatar.jsx";
 import { UserIdentity } from "./UserIdentity.jsx";
+import { usePaginatedList } from "../usePaginatedList.js";
+import { ShowMoreButton } from "../ShowMoreButton.jsx";
 
 const ROW_STYLE = {
   display: "flex",
@@ -48,6 +50,14 @@ const FLAG_BOX_STYLE = {
   fontSize: 18,
   flexShrink: 0,
 };
+
+/** Alphabetical sort by display_name (fallback to username). Used by every
+ *  people-list in this tab so ordering is predictable as the corpus grows. */
+function byDisplayName(a, b) {
+  const an = a.otherProfile?.display_name || a.otherProfile?.username || "";
+  const bn = b.otherProfile?.display_name || b.otherProfile?.username || "";
+  return an.localeCompare(bn);
+}
 
 /** Map followUser result codes onto user-visible reasons. */
 function describeFollowError(code, t) {
@@ -302,6 +312,11 @@ function MiniProfileSheet({ profile, relation, busy, onClose, onCompareWith, onU
     return () => { cancelled = true; };
   }, [profile?.id]);
 
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = ""; };
+  }, []);
+
   if (!profile) return null;
 
   const name = profile.display_name || profile.username || "—";
@@ -333,10 +348,12 @@ function MiniProfileSheet({ profile, relation, busy, onClose, onCompareWith, onU
           boxShadow: "0 -8px 32px rgba(0,0,0,0.6)",
         }}
       >
-        <div style={{
+       <div onClick={onClose} style={{
           width: 36, height: 4, borderRadius: 2,
           background: "rgba(255,255,255,0.2)",
           margin: "0 auto 14px",
+          cursor: "pointer",
+          padding: "8px 0",
         }} />
 
         <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
@@ -561,12 +578,20 @@ export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowC
    *  follower, just not "new" anymore). Mirrors `countUnseenFollowers`. */
   const pendingFollowers = useMemo(() => {
     const cutoff = Date.now() - NEW_FOLLOWERS_WINDOW_MS;
-    return followers.filter((f) => {
-      if (f.isMutual) return false;
-      const ts = f.createdAt ? new Date(f.createdAt).getTime() : 0;
-      return Number.isFinite(ts) && ts >= cutoff;
-    });
+    return followers
+      .filter((f) => {
+        if (f.isMutual) return false;
+        const ts = f.createdAt ? new Date(f.createdAt).getTime() : 0;
+        return Number.isFinite(ts) && ts >= cutoff;
+      })
+      .sort(byDisplayName);
   }, [followers]);
+
+  /** Alphabetical Taste Buds. Plain `.sort` mutates, so spread first. */
+  const tasteBudsSorted = useMemo(
+    () => [...tasteBuds].sort(byDisplayName),
+    [tasteBuds],
+  );
 
   /** Auto-collapse when the count flips to 0 / auto-expand when it returns.
    *  Manual toggles still win for the rest of the session. */
@@ -581,9 +606,15 @@ export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowC
 
   /** Non-mutual following — people I follow who haven't followed me back. */
   const nonMutualFollowing = useMemo(
-    () => following.filter((f) => !f.isMutual),
+    () => following.filter((f) => !f.isMutual).sort(byDisplayName),
     [following],
   );
+
+  /** Paginated tails for the three people-lists. No sort/filter UI on this
+   *  tab so the only natural reset is when the source array's size changes. */
+  const tasteBudsPage = usePaginatedList(tasteBudsSorted, String(tasteBudsSorted.length));
+  const followingPage = usePaginatedList(nonMutualFollowing, String(nonMutualFollowing.length));
+  const pendingFollowersPage = usePaginatedList(pendingFollowers, String(pendingFollowers.length));
 
   function setBusy(id, on) {
     setBusyById((m) => ({ ...m, [id]: on }));
@@ -730,7 +761,7 @@ export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowC
           </button>
           {newFollowersExpanded && (
             <div style={{ marginTop: 8 }}>
-              {pendingFollowers.map((r) => (
+              {pendingFollowersPage.visible.map((r) => (
                 <FollowerRow
                   key={r.id}
                   entry={r}
@@ -739,6 +770,11 @@ export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowC
                   t={t}
                 />
               ))}
+              <ShowMoreButton
+                remaining={pendingFollowersPage.remaining}
+                pageSize={pendingFollowersPage.pageSize}
+                onClick={pendingFollowersPage.showMore}
+              />
             </div>
           )}
         </div>
@@ -756,7 +792,7 @@ export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowC
           {t.noTasteBudsYet || "No taste buds yet. Follow someone — if they follow you back, you become Taste Buds!"}
         </p>
       )}
-      {tasteBuds.map((f) => (
+      {tasteBudsPage.visible.map((f) => (
         <TasteBudRow
           key={f.id}
           entry={f}
@@ -764,6 +800,11 @@ export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowC
           onOpen={openProfileSheet}
         />
       ))}
+      <ShowMoreButton
+        remaining={tasteBudsPage.remaining}
+        pageSize={tasteBudsPage.pageSize}
+        onClick={tasteBudsPage.showMore}
+      />
 
       {/* Following (I follow them, they haven't followed back) */}
       {nonMutualFollowing.length > 0 && (
@@ -771,13 +812,18 @@ export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowC
           <div style={SECTION_LABEL_STYLE}>
             {t.following || "Following"}
           </div>
-          {nonMutualFollowing.map((r) => (
+          {followingPage.visible.map((r) => (
             <FollowingRow
               key={r.id}
               entry={r}
               onOpen={openProfileSheet}
             />
           ))}
+          <ShowMoreButton
+            remaining={followingPage.remaining}
+            pageSize={followingPage.pageSize}
+            onClick={followingPage.showMore}
+          />
         </div>
       )}
 

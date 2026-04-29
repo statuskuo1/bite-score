@@ -7,6 +7,8 @@ import {
 } from "../../utils/visitPlacesApi.js";
 import { calcBiteOutOf10, calcCafeOutOf10 } from "../../utils/scoring.js";
 import { PlaceLeaderboardRow } from "./PlaceLeaderboardRow.jsx";
+import { usePaginatedList } from "../usePaginatedList.js";
+import { ShowMoreButton } from "../ShowMoreButton.jsx";
 
 const CATS = [
   { key: "restaurants", labelKey: "restaurants", icon: "🍽" },
@@ -93,6 +95,11 @@ export function GlobalTab({ user, restaurantWeights, drinkWeights, sweetWeights 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cat, minVisits, restaurants, drinks, sweets, restaurantWeights, drinkWeights, sweetWeights]);
 
+  /** Pagination tail. Resets when the user switches category or min-visits;
+   *  weight changes re-rank in place but the slice from the top still shows
+   *  the (newly) best, so weights aren't part of the reset key. */
+  const rowsPage = usePaginatedList(rows, `${cat}|${minVisits}`);
+
   return (
     <div>
       <div style={{
@@ -155,13 +162,20 @@ export function GlobalTab({ user, restaurantWeights, drinkWeights, sweetWeights 
         <p style={{ color: "#888780", fontSize: 14 }}>{t.noEntriesYet}</p>
       )}
 
-      {!loading && rows.map((p) => (
+      {!loading && rowsPage.visible.map((p) => (
         <PlaceLeaderboardRow
           key={`${p.placeId}-${p.category || "rest"}`}
           place={p}
           bite={p.bite}
         />
       ))}
+      {!loading && (
+        <ShowMoreButton
+          remaining={rowsPage.remaining}
+          pageSize={rowsPage.pageSize}
+          onClick={rowsPage.showMore}
+        />
+      )}
     </div>
   );
 }
