@@ -214,8 +214,8 @@ export function CompareTab({ user, initialTarget, onClearTarget, onFollowChange 
    *  lists reset when the target changes. */
   const budsPage = usePaginatedList(buds, String(buds.length));
   const bothPage = usePaginatedList(overlap?.both || [], target?.id || "");
-  const onlyTheirsPage = usePaginatedList(overlap?.onlyTheirs || [], target?.id || "");
-  const onlyMinePage = usePaginatedList(overlap?.onlyMine || [], target?.id || "");
+  const onlyTheirsPage = usePaginatedList(overlap?.onlyTheirs || [], target?.id || "", 3);
+  const onlyMinePage = usePaginatedList(overlap?.onlyMine || [], target?.id || "", 3);
 
   function clearTarget() {
     setTarget(null);
