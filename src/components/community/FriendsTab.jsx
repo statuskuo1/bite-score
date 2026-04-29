@@ -77,7 +77,7 @@ function MatchPill({ score, suffix }) {
         padding: "5px 12px", borderRadius: 999, fontSize: 11,
         background: "transparent", color: "#888780",
         border: "1px solid rgba(255,255,255,0.1)", whiteSpace: "nowrap",
-      }}>—</span>
+      }}>—%</span>
     );
   }
   const col = tasteColor(score / 10);
