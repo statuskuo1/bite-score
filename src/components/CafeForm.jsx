@@ -8,7 +8,6 @@ import { supabase } from "../config/supabaseClient.js";
 import { fetchPopularOrdersForPlace } from "../utils/visitPlacesApi.js";
 import { PlacePicker } from "./PlacePicker.jsx";
 import { OrderCombobox } from "./OrderCombobox.jsx";
-import { Toggle } from "./Toggle.jsx";
 import { RepeatPicker } from "./RepeatPicker.jsx";
 import { SectionLabel } from "./SectionLabel.jsx";
 import { FieldLabel } from "./FieldLabel.jsx";
@@ -261,8 +260,7 @@ export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addT
       </div>
 
       <div style={S.sec}><SectionLabel>{t.repeatability}</SectionLabel></div>
-      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}><Toggle on={f.useR} onClick={()=>inp("useR",!f.useR)}/><span style={{fontSize:13,color:"#888780"}}>{t.includeInScore}</span></div>
-      {f.useR&&<div style={S.mb16}><FieldLabel>Repeatability — <span style={{color:"#F0997B"}}>{"⭐".repeat(f.repeatability)||"✕"}</span></FieldLabel><RepeatPicker value={f.repeatability} onChange={v=>inp("repeatability",v)}/></div>}
+      <div style={S.mb16}><FieldLabel>Repeatability — <span style={{color:"#F0997B"}}>{"⭐".repeat(f.repeatability)||"✕"}</span></FieldLabel><RepeatPicker value={f.repeatability} onChange={v=>inp("repeatability",v)}/></div>
 
       <div style={S.sec}><SectionLabel>{t.notes}</SectionLabel></div>
       <div style={{marginBottom:20}}><textarea value={f.notes} onChange={e=>inp("notes",e.target.value)} placeholder={t.anythingMemorable} rows={3} style={{width:"100%",boxSizing:"border-box",resize:"vertical"}}/></div>

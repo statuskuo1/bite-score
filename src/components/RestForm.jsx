@@ -110,8 +110,7 @@ export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,exi
         <div style={S.f1}><FieldLabel>{t.waitMins}</FieldLabel><input type="number" min="0" step="1" value={f.wait} onChange={e=>inp("wait",e.target.value)} style={S.wb}/></div>
       </div>
       <div style={S.sec}><SectionLabel>{t.repeatability}</SectionLabel></div>
-      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}><Toggle on={f.useR} onClick={()=>inp("useR",!f.useR)}/><span style={{fontSize:13,color:"#888780"}}>{t.includeInScore}</span></div>
-      {f.useR&&<div style={S.mb16}><FieldLabel>Repeatability — <span style={{color:"#F0997B"}}>{"⭐".repeat(f.repeatability)||"✕"}</span></FieldLabel><RepeatPicker value={f.repeatability} onChange={v=>inp("repeatability",v)}/></div>}
+      <div style={S.mb16}><FieldLabel>Repeatability — <span style={{color:"#F0997B"}}>{"⭐".repeat(f.repeatability)||"✕"}</span></FieldLabel><RepeatPicker value={f.repeatability} onChange={v=>inp("repeatability",v)}/></div>
       <div style={S.sec}><SectionLabel>{t.notes}</SectionLabel></div>
       <div style={{marginBottom:20}}><textarea value={f.notes} onChange={e=>inp("notes",e.target.value)} placeholder={t.whatMemorable} rows={3} style={{width:"100%",boxSizing:"border-box",resize:"vertical"}}/></div>
       <div style={S.row8}>
