@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLang } from "../../contexts/LangContext.jsx";
 import { GlobalTab } from "./GlobalTab.jsx";
 import { FriendsTab } from "./FriendsTab.jsx";
@@ -23,7 +23,7 @@ const SUBS = [
  * GlobalTab so its mean-then-BITE leaderboard reflects the viewer's own My
  * Taste sliders. The other sub-tabs don't read weights today.
  */
-export function CommunityTab({ user, restaurantWeights, drinkWeights, sweetWeights, unseenFollowers = 0, onMarkFollowersSeen, onFollowChange }) {
+export function CommunityTab({ user, restaurantWeights, drinkWeights, sweetWeights, unseenFollowers = 0, onMarkFollowersSeen, onFollowChange, externalUserLogTarget, onExternalUserLogConsumed, externalCompareTarget, onExternalCompareConsumed }) {
   const { t } = useLang();
   const [active, setActive] = useState("global");
   const [compareTarget, setCompareTarget] = useState(null);
@@ -31,6 +31,21 @@ export function CommunityTab({ user, restaurantWeights, drinkWeights, sweetWeigh
    *  until the user taps Back. The sub-tab strip and `active` selection are
    *  preserved underneath so we land back on Friends on dismissal. */
   const [userLogTarget, setUserLogTarget] = useState(null);
+
+  useEffect(() => {
+    if (externalUserLogTarget) {
+      setUserLogTarget(externalUserLogTarget);
+      onExternalUserLogConsumed?.();
+    }
+  }, [externalUserLogTarget]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (externalCompareTarget) {
+      setCompareTarget(externalCompareTarget);
+      setActive("compare");
+      onExternalCompareConsumed?.();
+    }
+  }, [externalCompareTarget]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function jumpToCompare(friendProfile) {
     setCompareTarget(friendProfile);

@@ -37,7 +37,7 @@ export function UserIdentity({ profile, size = 28, variant = "row", nameSuffix =
           {profile?.display_name || profile?.username || "—"}
           {nameSuffix}
         </div>
-        <div style={{ fontSize: handleSize, color: "#888780" }}>
+        <div style={{ fontSize: handleSize, color: "#888780", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           @{profile?.username || "—"}
         </div>
       </div>

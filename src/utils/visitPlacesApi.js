@@ -237,7 +237,7 @@ export async function fetchAllRestaurantPlaces(client) {
   const { data, error } = await client
     .from("restaurant_places")
     .select(
-      "id, name, cuisine, cuisine2, is_fusion, city, google_place_id, verified_name, verified_cuisine, verified_city, lat, lng, verified_at",
+      "id, name, cuisine, cuisine2, is_fusion, city, verified_name, verified_cuisine, verified_city, lat, lng, verified_at",
     );
   if (error) {
     console.warn("[BITE] fetchAllRestaurantPlaces:", error.message);
@@ -250,7 +250,7 @@ export async function fetchAllRestaurantPlaces(client) {
     cuisine: p.cuisine || "",
     cuisine2: p.cuisine2 || "",
     isFusion: !!p.is_fusion,
-    googlePlaceId: p.google_place_id || "",
+    googlePlaceId: "",
     verifiedName: p.verified_name || "",
     verifiedCuisine: p.verified_cuisine || "",
     verifiedCity: p.verified_city || "",
@@ -264,7 +264,7 @@ export async function fetchAllCafePlaces(client) {
   const { data, error } = await client
     .from("cafe_places")
     .select(
-      "id, name, city, google_place_id, verified_name, verified_city, lat, lng, verified_at",
+      "id, name, city, verified_name, verified_city, lat, lng, verified_at",
     );
   if (error) {
     console.warn("[BITE] fetchAllCafePlaces:", error.message);
@@ -274,7 +274,7 @@ export async function fetchAllCafePlaces(client) {
     id: p.id,
     name: p.name || "",
     city: p.city || "",
-    googlePlaceId: p.google_place_id || "",
+    googlePlaceId: "",
     verifiedName: p.verified_name || "",
     verifiedCity: p.verified_city || "",
     lat: p.lat ?? null,

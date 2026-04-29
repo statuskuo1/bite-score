@@ -47,7 +47,8 @@ import { ResetPasswordModal } from "./components/ResetPasswordModal.jsx";
 import { WeightSliders } from "./components/WeightSliders.jsx";
 import { CommunityTab } from "./components/community/CommunityTab.jsx";
 import { SortFilterToolbar } from "./components/SortFilterToolbar.jsx";
-import { countUnseenFollowers, markFollowersSeen, followUser } from "./utils/followsApi.js";
+import { countUnseenFollowers, markFollowersSeen, followUser, unfollowUser, getRelation } from "./utils/followsApi.js";
+import { MiniProfileSheet } from "./components/community/MiniProfileSheet.jsx";
 import { countUnreadNotifications, fetchUnreadNotifications, markNotificationsRead } from "./utils/notificationsApi.js";
 import { usePaginatedList } from "./components/usePaginatedList.js";
 import { ShowMoreButton } from "./components/ShowMoreButton.jsx";
@@ -82,8 +83,12 @@ export default function App() {
   const [showNotifPanel, setShowNotifPanel] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [notifLoading, setNotifLoading] = useState(false);
-  const [panelTop, setPanelTop] = useState(76);
   const notifContainerRef = useRef(null);
+  const [notifSheetProfile, setNotifSheetProfile] = useState(null);
+  const [notifSheetRelation, setNotifSheetRelation] = useState("none");
+  const [notifSheetBusy, setNotifSheetBusy] = useState(false);
+  const [extUserLogTarget, setExtUserLogTarget] = useState(null);
+  const [extCompareTarget, setExtCompareTarget] = useState(null);
   /** Mandarin localization is temporarily stashed while EN gets polish.
    *  `T.zh` and components' `lang === "zh"` branches are intentionally preserved
    *  so reviving = restore lang state + UI toggles. See
@@ -116,8 +121,6 @@ export default function App() {
 
   async function openNotifPanel() {
     if (showNotifPanel) { setShowNotifPanel(false); return; }
-    const rect = notifContainerRef.current?.getBoundingClientRect();
-    if (rect) setPanelTop(Math.round(rect.bottom + 8));
     setShowNotifPanel(true);
     setNotifLoading(true);
     try {
@@ -137,17 +140,56 @@ export default function App() {
     return res;
   }
 
+  async function handleOpenNotifProfile(profile) {
+    if (!profile?.id) return;
+    setNotifSheetBusy(true);
+    setNotifSheetProfile(profile);
+    setNotifSheetRelation("none");
+    try {
+      const rel = await getRelation(supabase, user?.id, profile.id);
+      setNotifSheetRelation(rel);
+    } finally {
+      setNotifSheetBusy(false);
+    }
+  }
+
+  async function handleNotifSheetFollow(targetId) {
+    if (!user?.id) return;
+    setNotifSheetBusy(true);
+    try {
+      await followUser(supabase, user.id, targetId);
+      const rel = await getRelation(supabase, user.id, targetId);
+      setNotifSheetRelation(rel);
+      refreshSocialCounts();
+    } finally {
+      setNotifSheetBusy(false);
+    }
+  }
+
+  async function handleNotifSheetUnfollow(targetId) {
+    if (!user?.id) return;
+    setNotifSheetBusy(true);
+    try {
+      await unfollowUser(supabase, user.id, targetId);
+      setNotifSheetProfile(null);
+      refreshSocialCounts();
+    } finally {
+      setNotifSheetBusy(false);
+    }
+  }
+
   // Click-outside to close notification panel.
   useEffect(() => {
     if (!showNotifPanel) return;
     function handler(e) {
+      if (notifSheetProfile) return;
       if (notifContainerRef.current && !notifContainerRef.current.contains(e.target)) {
         setShowNotifPanel(false);
       }
     }
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [showNotifPanel]);
+  }, [showNotifPanel, notifSheetProfile]);
 
   /** Friends sub-tab calls this when it mounts; we stamp the seen-at and
    *  immediately recount so the badge clears without needing to wait for the
@@ -169,8 +211,19 @@ export default function App() {
   const welcomeTitleDisplay = (welcomeUseDbCopy && welcomeOverride[lang+"_title"]) || t.welcome1;
   const welcomeBodyDisplay = omitPlayWelcomeAside((welcomeUseDbCopy && welcomeOverride[lang+"_body"]) || t.welcome2);
 
+  useEffect(() => {
+    if (!user?.id) return;
+    try {
+      if (localStorage.getItem(`bite_welcomeDismissed_${user.id}`)) setShowWelcome(false);
+    } catch (e) { /* ignore */ }
+  }, [user?.id]);
+
   function dismissWelcome() {
     setShowWelcome(false);
+    if (user?.id) {
+      try { localStorage.setItem(`bite_welcomeDismissed_${user.id}`, "1"); }
+      catch (e) { console.error("welcome dismissed save:", e); }
+    }
   }
   const [editR, setEditR] = useState(null);
   const [editC, setEditC] = useState(null);
@@ -593,7 +646,7 @@ export default function App() {
     <div style={{fontFamily:"var(--font-sans)",maxWidth:640,margin:"0 auto",padding:user?"1.25rem 1rem max(8rem, env(safe-area-inset-bottom)) 1rem":"1.25rem 1rem 2rem 1rem",background:"#141413",minHeight:"100vh",color:"#F1EFE8",overflowX:"hidden"}}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&display=swap');
-        input,select,textarea{background:#252523!important;color:#F1EFE8!important;border:1px solid rgba(255,255,255,0.2)!important;border-radius:8px;padding:9px 12px;}
+        input,select,textarea{background:#252523!important;color:#F1EFE8!important;border:1px solid rgba(255,255,255,0.2)!important;border-radius:8px;padding:9px 12px;font-size:16px!important;}
         input:focus,textarea:focus{border-color:#F0997B!important;outline:none;}
         input::placeholder,textarea::placeholder{color:#666663!important;}
         input[type=range]{accent-color:#F0997B;padding:0;border:none!important;background:transparent!important;}
@@ -642,7 +695,8 @@ export default function App() {
                   loading={notifLoading}
                   onClose={() => setShowNotifPanel(false)}
                   onFollowBack={handleNotifFollowBack}
-                  top={panelTop}
+                  onOpenProfile={handleOpenNotifProfile}
+                  sheetOpen={!!notifSheetProfile}
                 />
               )}
             </div>
@@ -932,6 +986,10 @@ export default function App() {
           unseenFollowers={unseenFollowers}
           onMarkFollowersSeen={handleMarkFollowersSeen}
           onFollowChange={refreshSocialCounts}
+          externalUserLogTarget={extUserLogTarget}
+          onExternalUserLogConsumed={() => setExtUserLogTarget(null)}
+          externalCompareTarget={extCompareTarget}
+          onExternalCompareConsumed={() => setExtCompareTarget(null)}
         />
       )}
 
@@ -1088,6 +1146,29 @@ export default function App() {
       <AuthModal open={showAuthModal} onClose={()=>setShowAuthModal(false)} />
       <ResetPasswordModal />
     </div>
+    {notifSheetProfile && (
+      <MiniProfileSheet
+        profile={notifSheetProfile}
+        relation={notifSheetRelation}
+        busy={notifSheetBusy}
+        onClose={() => setNotifSheetProfile(null)}
+        onFollow={handleNotifSheetFollow}
+        onUnfollow={handleNotifSheetUnfollow}
+        onViewLog={(profile) => {
+          setNotifSheetProfile(null);
+          setShowNotifPanel(false);
+          setExtUserLogTarget(profile);
+          dispatch({ type: "VIEW", view: "community" });
+        }}
+        onCompareWith={(profile) => {
+          setNotifSheetProfile(null);
+          setShowNotifPanel(false);
+          setExtCompareTarget(profile);
+          dispatch({ type: "VIEW", view: "community" });
+        }}
+        t={t}
+      />
+    )}
     </LangContext.Provider>
   );
 }

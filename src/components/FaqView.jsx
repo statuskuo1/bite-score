@@ -1,8 +1,8 @@
 import { useState } from "react";
 
 const Q_STYLE = { fontWeight: 500, fontSize: 14, color: "#F0997B", marginBottom: 6 };
-const A_STYLE = { fontSize: 13, color: "#888780", lineHeight: 1.7 };
-const ITEM_STYLE = { borderBottom: "0.5px solid rgba(255,255,255,0.1)", padding: "14px 0" };
+const A_STYLE = { fontSize: 14, color: "#AEABA4", lineHeight: 1.7 };
+const ITEM_STYLE = { borderBottom: "0.5px solid rgba(255,255,255,0.1)", padding: "20px 0" };
 
 function FaqItem({ q, children }) {
   return (

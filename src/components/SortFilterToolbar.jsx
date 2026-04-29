@@ -205,6 +205,7 @@ export function SortFilterToolbar({
                 autoFocus
                 value={search}
                 onChange={(e) => onSearch(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.target.blur(); setOpenSearch(false); } }}
                 placeholder={searchPlaceholder || t.searchPlaceholder}
                 style={{ width: "100%", boxSizing: "border-box", fontSize: 12 }}
               />
