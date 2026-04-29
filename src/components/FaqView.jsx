@@ -21,8 +21,8 @@ function IndentedLine({ children }) {
   );
 }
 
-function CollapsibleSection({ title, children }) {
-  const [open, setOpen] = useState(false);
+function CollapsibleSection({ title, children, defaultOpen = false }) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
     <div style={{ marginTop: 4 }}>
       <button
@@ -54,35 +54,37 @@ function CollapsibleSection({ title, children }) {
 export function FaqView() {
   return (
     <div>
-      {/* ── TIER 1: Basics — always visible ── */}
-      <FaqItem q="What is BITE Score?">
-        BITE — the Benefit Index of Taste and Efficiency — is a personal restaurant rating system
-        that weighs everything you actually care about into one number: taste, cost, portion size,
-        wait time, and whether you'd go back. You set the weights, so the score reflects your
-        priorities. Change them anytime and your scores adjust in real time.
-      </FaqItem>
+      {/* ── TIER 1: Overview — collapsible, default open ── */}
+      <CollapsibleSection title="Overview" defaultOpen>
+        <FaqItem q="What is BITE Score?">
+          BITE — the Benefit Index of Taste and Efficiency — is a personal restaurant rating system
+          that weighs everything you actually care about into one number: taste, cost, portion size,
+          wait time, and whether you'd go back. You set the weights, so the score reflects your
+          priorities. Change them anytime and your scores adjust in real time.
+        </FaqItem>
 
-      <FaqItem q="How do I rate?">
-        Tap the + button and pick Restaurant or Cafe. For cafes, your entry automatically sorts
-        into Drinks or Sweets based on the category you pick (Coffee, Tea → Drinks; Croissant,
-        Soft Serve → Sweets). Each has its own leaderboard and scoring formula. You can log
-        multiple items per cafe visit.
-      </FaqItem>
+        <FaqItem q="How do I rate?">
+          Tap the + button and pick Restaurant or Cafe. For cafes, your entry automatically sorts
+          into Drinks or Sweets based on the category you pick (Coffee, Tea → Drinks; Croissant,
+          Soft Serve → Sweets). Each has its own leaderboard and scoring formula. You can log
+          multiple items per cafe visit.
+        </FaqItem>
 
-      <FaqItem q="What's a Taste Bud?">
-        When you follow someone and they follow you back, you become Taste Buds. You can view
-        each other's full log, compare your ratings, and discover restaurants through each other.
-      </FaqItem>
+        <FaqItem q="What's a Taste Bud?">
+          When you follow someone and they follow you back, you become Taste Buds. You can view
+          each other's full log, compare your ratings, and discover restaurants through each other.
+        </FaqItem>
 
-      <FaqItem q="Can others see my ratings?">
-        Your ratings appear on the Global leaderboard by restaurant. Anyone who follows you can
-        view your full log and compare with you.
-      </FaqItem>
+        <FaqItem q="Can others see my ratings?">
+          Your ratings appear on the Global leaderboard by restaurant. Anyone who follows you can
+          view your full log and compare with you.
+        </FaqItem>
 
-      <FaqItem q="What do the scores mean?">
-        Scores range from 0 to 10: 9+ is Elite, 7.5+ is Great, 6+ is Good, 4+ is Decent, below
-        4 is Don't bother.
-      </FaqItem>
+        <FaqItem q="What do the scores mean?">
+          Scores range from 0 to 10: 9+ is Elite, 7.5+ is Great, 6+ is Good, 4+ is Decent, below
+          4 is Don't bother.
+        </FaqItem>
+      </CollapsibleSection>
 
       {/* ── TIER 2: Community features ── */}
       <CollapsibleSection title="Community features">
