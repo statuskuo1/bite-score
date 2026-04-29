@@ -50,6 +50,7 @@ export function AuthModal({ open, onClose }) {
   const [suggestions, setSuggestions] = useState([]);
   const usernameInputRef = useRef(null);
 
+  const [editMode, setEditMode] = useState(false);
   const [socialCounts, setSocialCounts] = useState({ followers: 0, following: 0, tasteBuds: 0 });
   const [foodStats, setFoodStats] = useState({ restaurants: 0, cuisines: 0, cities: 0, regions: 0 });
 
@@ -79,6 +80,7 @@ export function AuthModal({ open, onClose }) {
     setSaveError(null);
     setSaveOk(false);
     setSuggestions([]);
+    setEditMode(false);
   }, [open, user?.id, profile?.username, profile?.display_name, username]);
 
   /** Auto-clear the "Saved" indicator after a short window. */
@@ -326,6 +328,7 @@ export function AuthModal({ open, onClose }) {
       await refreshProfile();
       setSaveOk(true);
       setSuggestions([]);
+      setEditMode(false);
     } catch (e) {
       console.error(e);
       setErr(t.profileSavingErr);
@@ -386,10 +389,12 @@ export function AuthModal({ open, onClose }) {
       }}
     >
       <div onClick={(e) => e.stopPropagation()} style={panel}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-          <div style={{ fontSize: 17, fontWeight: 600, color: "#F1EFE8" }}>
-            {session ? t.profileTitle : (pendingVerificationEmail ? t.authVerifySentTitle : t.authTitle)}
-          </div>
+        <div style={{ display: "flex", justifyContent: session ? "flex-end" : "space-between", alignItems: "center", marginBottom: session ? 8 : 14 }}>
+          {!session && (
+            <div style={{ fontSize: 17, fontWeight: 600, color: "#F1EFE8" }}>
+              {pendingVerificationEmail ? t.authVerifySentTitle : t.authTitle}
+            </div>
+          )}
           <button
             type="button"
             onClick={onClose}
@@ -401,153 +406,170 @@ export function AuthModal({ open, onClose }) {
 
         {session && user ? (
           <div>
-            {/* ── Avatar + username header ── */}
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+            {/* ── Centered avatar + name (both states) ── */}
+            <div style={{ textAlign: "center", marginBottom: 12 }}>
               {profile?.avatar_url ? (
                 <img
                   src={profile.avatar_url}
                   alt=""
                   referrerPolicy="no-referrer"
                   style={{
-                    width: 48, height: 48, borderRadius: "50%",
-                    objectFit: "cover", flexShrink: 0,
+                    width: 56, height: 56, borderRadius: "50%",
+                    objectFit: "cover",
                     border: "0.5px solid rgba(255,255,255,0.12)",
+                    marginBottom: 8,
                   }}
                 />
               ) : (
                 <div style={{
-                  width: 48, height: 48, borderRadius: "50%", flexShrink: 0,
+                  width: 56, height: 56, borderRadius: "50%",
                   background: "#3C1F13", color: "#F0997B",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 20, fontWeight: 600, lineHeight: 1,
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 22, fontWeight: 600, lineHeight: 1,
+                  marginBottom: 8,
                 }}>
-                  {(usernameTrim || username || user.email || "?").charAt(0).toUpperCase()}
+                  {((profile?.display_name || usernameTrim || username || user.email || "?")).charAt(0).toUpperCase()}
                 </div>
               )}
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: "#F1EFE8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {username || user.email?.split("@")[0] || user.id}
-                </div>
-                {user.email && (
-                  <div style={{ fontSize: 11, color: "#888780", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {user.email}
-                  </div>
-                )}
+              <div style={{ fontSize: 15, fontWeight: 600, color: "#F1EFE8", lineHeight: 1.2 }}>
+                {profile?.display_name || username || user.email?.split("@")[0] || "—"}
+              </div>
+              <div style={{ fontSize: 12, color: "#888780", marginTop: 2 }}>
+                @{username || "—"}
               </div>
             </div>
 
-            {/* ── Social stats ── */}
-            <div style={{ fontSize: 12, color: "#888780", marginBottom: 12 }}>
-              <span>{socialCounts.followers} followers</span>
-              <span style={{ margin: "0 5px", opacity: 0.4 }}>·</span>
-              <span>{socialCounts.following} following</span>
-              <span style={{ margin: "0 5px", opacity: 0.4 }}>·</span>
-              <span>{socialCounts.tasteBuds} taste buds</span>
-            </div>
-
-            {/* ── Food stats ── */}
-            <div style={{
-              background: "#141413", borderRadius: 10,
-              padding: "10px 12px", marginBottom: 14,
-              display: "flex", flexDirection: "column", gap: 6,
-            }}>
-              {[
-                { emoji: "🍽", label: "Restaurants rated", val: String(foodStats.restaurants), color: "#F0997B" },
-                { emoji: "🌍", label: "Cuisines tried", val: `${foodStats.cuisines} / 135`, color: "#97C459" },
-                { emoji: "📍", label: "Cities explored", val: String(foodStats.cities), color: "#5B9BD5" },
-                { emoji: "🗺", label: "Regions explored", val: `${foodStats.regions} / 17`, color: "#EF9F27" },
-              ].map(({ emoji, label, val, color }) => (
-                <div key={label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 13, width: 20, textAlign: "center", flexShrink: 0 }}>{emoji}</span>
-                  <span style={{ flex: 1, fontSize: 12, color: "#888780" }}>{label}</span>
-                  <span style={{ fontSize: 13, fontWeight: 600, color }}>{val}</span>
+            {!editMode ? (
+              <>
+                {/* ── Social stats ── */}
+                <div style={{ textAlign: "center", fontSize: 12, color: "#888780", marginBottom: 14 }}>
+                  <span>{socialCounts.followers} followers</span>
+                  <span style={{ margin: "0 5px", opacity: 0.4 }}>·</span>
+                  <span>{socialCounts.following} following</span>
+                  <span style={{ margin: "0 5px", opacity: 0.4 }}>·</span>
+                  <span>{socialCounts.tasteBuds} taste buds</span>
                 </div>
-              ))}
-            </div>
 
-            {/* ── Editable fields ── */}
-            <label style={{ fontSize: 10, color: "#888780", display: "block", marginBottom: 4 }}>{t.profileUsernameLabel}</label>
-            <input
-              ref={usernameInputRef}
-              type="text"
-              autoComplete="off"
-              value={usernameDraft}
-              onChange={(e) => { setUsernameDraft(e.target.value.toLowerCase()); setSaveError(null); setSaveOk(false); setSuggestions([]); }}
-              maxLength={30}
-              style={{
-                width: "100%", boxSizing: "border-box", marginBottom: 3, fontSize: 13,
-                padding: "6px 10px",
-                borderColor: usernameInlineErr ? "#A32D2D" : undefined,
-              }}
-            />
-            <div style={{ fontSize: 10, color: usernameInlineErr ? "#A32D2D" : "#666663", marginBottom: saveError === "username_taken" && suggestions.length > 0 ? 5 : 10, lineHeight: 1.4 }}>
-              {usernameInlineErr || t.profileUsernameHelp}
-            </div>
-            {saveError === "username_taken" && suggestions.length > 0 && (
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
-                <span style={{ fontSize: 10, color: "#888780" }}>{t.profileUsernameSuggest}</span>
-                {suggestions.map((s) => (
+                {/* ── Food stats ── */}
+                <div style={{
+                  background: "#141413", borderRadius: 10,
+                  padding: "10px 12px", marginBottom: 14,
+                  display: "flex", flexDirection: "column", gap: 7,
+                }}>
+                  {[
+                    { emoji: "🍽", label: "Restaurants rated", val: String(foodStats.restaurants), color: "#F0997B" },
+                    { emoji: "🌍", label: "Cuisines tried", val: `${foodStats.cuisines} / 135`, color: "#97C459" },
+                    { emoji: "📍", label: "Cities explored", val: String(foodStats.cities), color: "#5B9BD5" },
+                    { emoji: "🗺", label: "Regions explored", val: `${foodStats.regions} / 17`, color: "#EF9F27" },
+                  ].map(({ emoji, label, val, color }) => (
+                    <div key={label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 13, width: 20, textAlign: "center", flexShrink: 0 }}>{emoji}</span>
+                      <span style={{ flex: 1, fontSize: 12, color: "#888780" }}>{label}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color }}>{val}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* ── Default action buttons ── */}
+                {saveOk && (
+                  <p style={{ fontSize: 12, color: "#97C459", margin: "0 0 8px", textAlign: "center" }}>{t.profileSaved}</p>
+                )}
+                <div style={{ display: "flex", gap: 8 }}>
                   <button
-                    key={s}
                     type="button"
-                    onClick={() => {
-                      setUsernameDraft(s);
-                      setSaveError(null);
-                      setSuggestions([]);
-                      usernameInputRef.current?.focus();
-                    }}
+                    onClick={() => setEditMode(true)}
+                    style={{ ...btn, flex: 1, marginBottom: 0, background: "#3C1F13", color: "#F0997B", border: "none" }}
+                  >
+                    Edit profile
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={signOut}
+                    style={{ ...btn, flex: 1, marginBottom: 0, background: "transparent", color: "#888780", border: "0.5px solid rgba(255,255,255,0.15)" }}
+                  >
+                    {t.signOut}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* ── Edit form ── */}
+                <div style={{ background: "#141413", borderRadius: 10, padding: "12px", marginBottom: 12 }}>
+                  <label style={{ fontSize: 10, color: "#888780", display: "block", marginBottom: 4 }}>{t.profileUsernameLabel}</label>
+                  <input
+                    ref={usernameInputRef}
+                    type="text"
+                    autoComplete="off"
+                    value={usernameDraft}
+                    onChange={(e) => { setUsernameDraft(e.target.value.toLowerCase()); setSaveError(null); setSaveOk(false); setSuggestions([]); }}
+                    maxLength={30}
                     style={{
-                      padding: "3px 8px",
-                      borderRadius: 14,
-                      fontSize: 11,
-                      background: "#3C1F13",
-                      color: "#F0997B",
-                      border: "1px solid rgba(240,153,123,0.4)",
-                      cursor: "pointer",
+                      width: "100%", boxSizing: "border-box", marginBottom: 3,
+                      fontSize: 13, padding: "6px 10px",
+                      borderColor: usernameInlineErr ? "#A32D2D" : undefined,
+                    }}
+                  />
+                  <div style={{ fontSize: 10, color: usernameInlineErr ? "#A32D2D" : "#666663", marginBottom: saveError === "username_taken" && suggestions.length > 0 ? 5 : 10, lineHeight: 1.4 }}>
+                    {usernameInlineErr || t.profileUsernameHelp}
+                  </div>
+                  {saveError === "username_taken" && suggestions.length > 0 && (
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
+                      <span style={{ fontSize: 10, color: "#888780" }}>{t.profileUsernameSuggest}</span>
+                      {suggestions.map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => { setUsernameDraft(s); setSaveError(null); setSuggestions([]); usernameInputRef.current?.focus(); }}
+                          style={{ padding: "3px 8px", borderRadius: 14, fontSize: 11, background: "#3C1F13", color: "#F0997B", border: "1px solid rgba(240,153,123,0.4)", cursor: "pointer" }}
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  <label style={{ fontSize: 10, color: "#888780", display: "block", marginBottom: 4 }}>{t.profileDisplayNameLabel}</label>
+                  <input
+                    type="text"
+                    autoComplete="off"
+                    value={displayNameDraft}
+                    onChange={(e) => { setDisplayNameDraft(e.target.value); setSaveOk(false); }}
+                    maxLength={120}
+                    style={{ width: "100%", boxSizing: "border-box", marginBottom: 3, fontSize: 13, padding: "6px 10px" }}
+                  />
+                  <div style={{ fontSize: 10, color: "#666663", marginBottom: 10, lineHeight: 1.4 }}>{t.profileDisplayNameHelp}</div>
+
+                  <label style={{ fontSize: 10, color: "#888780", display: "block", marginBottom: 3 }}>{t.profileEmailLabel}</label>
+                  <div style={{ fontSize: 12, color: "#C4C2BA", wordBreak: "break-all" }}>{user.email || "—"}</div>
+                </div>
+
+                {/* ── Edit action buttons ── */}
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => { setEditMode(false); setSaveError(null); setSuggestions([]); setUsernameDraft(profile?.username ?? username ?? ""); setDisplayNameDraft(profile?.display_name ?? ""); }}
+                    style={{ ...btn, flex: 1, marginBottom: 0, background: "transparent", color: "#888780", border: "0.5px solid rgba(255,255,255,0.15)" }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy || saveBusy || !canSave}
+                    onClick={saveProfile}
+                    style={{
+                      ...btn, flex: 1, marginBottom: 0,
+                      background: canSave ? "#F0997B" : "#5A4A43",
+                      color: canSave ? "#141413" : "#AFA8A3",
+                      cursor: (busy || saveBusy) ? "wait" : (canSave ? "pointer" : "not-allowed"),
+                      opacity: canSave ? 1 : 0.85,
                     }}
                   >
-                    {s}
+                    {saveBusy ? "…" : t.profileSave}
                   </button>
-                ))}
-              </div>
+                </div>
+              </>
             )}
-
-            <label style={{ fontSize: 10, color: "#888780", display: "block", marginBottom: 4 }}>{t.profileDisplayNameLabel}</label>
-            <input
-              type="text"
-              autoComplete="off"
-              value={displayNameDraft}
-              onChange={(e) => { setDisplayNameDraft(e.target.value); setSaveOk(false); }}
-              maxLength={120}
-              style={{ width: "100%", boxSizing: "border-box", marginBottom: 3, fontSize: 13, padding: "6px 10px" }}
-            />
-            <div style={{ fontSize: 10, color: "#666663", marginBottom: 10, lineHeight: 1.4 }}>{t.profileDisplayNameHelp}</div>
-
-            <label style={{ fontSize: 10, color: "#888780", display: "block", marginBottom: 3 }}>{t.profileEmailLabel}</label>
-            <div style={{ fontSize: 12, color: "#C4C2BA", marginBottom: 14, wordBreak: "break-all" }}>
-              {user.email || "—"}
-            </div>
-
-            <button
-              type="button"
-              disabled={busy || saveBusy || !canSave}
-              onClick={saveProfile}
-              style={{
-                ...btn,
-                background: canSave ? "#F0997B" : "#5A4A43",
-                color: canSave ? "#141413" : "#AFA8A3",
-                cursor: (busy || saveBusy) ? "wait" : (canSave ? "pointer" : "not-allowed"),
-                opacity: canSave ? 1 : 0.85,
-              }}
-            >
-              {saveBusy ? "…" : t.profileSave}
-            </button>
-            {saveOk && (
-              <p style={{ fontSize: 12, color: "#97C459", margin: "0 0 10px", textAlign: "center" }}>{t.profileSaved}</p>
-            )}
-            <button type="button" disabled={busy || saveBusy} onClick={signOut} style={{ ...btn, background: "transparent", color: "#A32D2D", border: "0.5px solid #A32D2D" }}>
-              {t.signOut}
-            </button>
           </div>
         ) : pendingVerificationEmail ? (
           <div>
