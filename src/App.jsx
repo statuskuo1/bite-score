@@ -82,6 +82,7 @@ export default function App() {
   const [showNotifPanel, setShowNotifPanel] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [notifLoading, setNotifLoading] = useState(false);
+  const [panelTop, setPanelTop] = useState(76);
   const notifContainerRef = useRef(null);
   /** Mandarin localization is temporarily stashed while EN gets polish.
    *  `T.zh` and components' `lang === "zh"` branches are intentionally preserved
@@ -115,6 +116,8 @@ export default function App() {
 
   async function openNotifPanel() {
     if (showNotifPanel) { setShowNotifPanel(false); return; }
+    const rect = notifContainerRef.current?.getBoundingClientRect();
+    if (rect) setPanelTop(Math.round(rect.bottom + 8));
     setShowNotifPanel(true);
     setNotifLoading(true);
     try {
@@ -639,6 +642,7 @@ export default function App() {
                   loading={notifLoading}
                   onClose={() => setShowNotifPanel(false)}
                   onFollowBack={handleNotifFollowBack}
+                  top={panelTop}
                 />
               )}
             </div>

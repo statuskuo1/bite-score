@@ -127,7 +127,7 @@ function NotifRow({ notif, onFollowBack, onOpenProfile }) {
   );
 }
 
-export function NotificationPanel({ notifications, loading, onClose, onFollowBack }) {
+export function NotificationPanel({ notifications, loading, onClose, onFollowBack, top = 76 }) {
   const panelRef = useRef(null);
   const [openProfile, setOpenProfile] = useState(null);
 
@@ -147,10 +147,11 @@ export function NotificationPanel({ notifications, loading, onClose, onFollowBac
       <div
         ref={panelRef}
         style={{
-          position: "absolute",
-          top: "calc(100% + 8px)",
-          right: 0,
+          position: "fixed",
+          top: top,
+          right: 16,
           width: 320,
+          maxWidth: "calc(100vw - 32px)",
           maxHeight: 440,
           overflowY: "auto",
           background: "#1E1E1C",
