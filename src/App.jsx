@@ -1354,7 +1354,31 @@ export default function App() {
           fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
         }
         setEditC(null); setEditDineWith([]);
-      }} onCancel={()=>{setEditC(null);setEditDineWith([]);window.scrollTo({top:0,behavior:"smooth"});}} existingCafes={cafes} existingCities={existingCities} places={cafePlaces}/>}
+      }}
+      onSaveAndContinue={async e=>{
+        if (e.city) persistLastCity(e.city);
+        let resolvedPlaceId = e.placeId;
+        if(canMutateVisit(e,user)) {
+          try {
+            resolvedPlaceId = await ensureCafePlace(supabase, { placeId: e.placeId||null, name: e.name, city: e.city||"" });
+            upsertPlace(setCafePlaces, resolvedPlaceId, { name: e.name, city: e.city||"" });
+            const { error } = await supabase.from("cafe_visits").update(cafeVisitUpdatePayload(resolvedPlaceId, e)).eq("id", e.id);
+            if (error) console.error("cafe update error:", error, "id:", e.id);
+          } catch (err) { console.error("cafe update threw:", err); }
+        }
+        setCafes(p=>p.map(x=>x.id===e.id?{...e,id:x.id,placeId:resolvedPlaceId??x.placeId,ownerId:e.ownerId??user?.id??x.ownerId}:x));
+        const prevIds = new Set((editDineWith||[]).map(p=>p.id));
+        const newlyTagged = (e.dineWith||[]).filter(p=>!prevIds.has(p.id));
+        if (newlyTagged.length && e.id) {
+          await Promise.all(newlyTagged.map(p=>insertDineTag(supabase,{taggerId:user.id,taggedId:p.id,entryId:e.id,entryType:"cafe",restaurantName:e.name,city:e.city||"",cuisine:e.category||""})));
+          fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
+        }
+        setEditC(null); setEditDineWith([]);
+        setAddPrefill({ name: e.name, city: e.city||"", placeId: resolvedPlaceId||null, category: e.category });
+        setAddType("cafe");
+        navigate("/add");
+      }}
+      onCancel={()=>{setEditC(null);setEditDineWith([]);window.scrollTo({top:0,behavior:"smooth"});}} existingCafes={cafes} existingCities={existingCities} places={cafePlaces}/>}
 
       {/* ── Add Rating ── */}
       {pathname==="/add"&&!user&&(
@@ -1545,6 +1569,8 @@ export default function App() {
                   navigate(e.category==="Sweets"?"/log/sweets":"/log/drinks");
                 }}
                 onSaveAndContinue={async e=>{
+                  setAddPrefill(null);
+                  setAddInitialDineWith([]);
                   if (e.city) persistLastCity(e.city);
                   const inserted = await insertCafeEntry(e);
                   const toTag = (e.dineWith || []).filter(p => p.id !== addTagTaggerId);

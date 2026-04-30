@@ -278,7 +278,7 @@ export function CafeForm({initial,initialDineWith=[],onSave,onSaveAndContinue,on
 
   function buildEntry() {
     return {
-      ...(isEdit ? {id: initial.id} : {}),
+      ...(isEdit ? {id: initial.id, ownerId: initial.ownerId ?? null} : {}),
       placeId: f.placeId || null,
       name: f.name, city: f.city || "",
       category: f.category, order: f.order,
@@ -476,7 +476,7 @@ export function CafeForm({initial,initialDineWith=[],onSave,onSaveAndContinue,on
 
       <div style={S.row8}>
         <button onClick={onCancel} style={{flex:1,padding:"10px",background:"transparent",color:"#888780",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:8,fontSize:14,cursor:"pointer"}}>{t.cancel}</button>
-        {!isEdit && onSaveAndContinue && (
+        {onSaveAndContinue && (
           <button onClick={saveAndAddAnother} style={{flex:2,padding:"10px",background:"transparent",color:"#F0997B",border:"1px dashed rgba(240,153,123,0.5)",borderRadius:8,fontSize:14,fontWeight:500,cursor:"pointer"}}>{t.saveAndAddAnother}</button>
         )}
         <button onClick={save} style={{flex:2,padding:"10px",background:"#F0997B",color:"#141413",border:"none",borderRadius:8,fontSize:15,fontWeight:500,cursor:"pointer"}}>{t.save}</button>
