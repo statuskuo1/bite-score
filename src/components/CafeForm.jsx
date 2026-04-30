@@ -131,11 +131,11 @@ function FlavorDropdown({ activeNotes, onToggle, t }) {
   );
 }
 
-export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addType,setAddType,existingCafes,existingCities,places,onPlaceCreated,user,tasteBudIds}) {
+export function CafeForm({initial,initialDineWith=[],onSave,onSaveAndContinue,onCancel,weights,addType,setAddType,existingCafes,existingCities,places,onPlaceCreated,user,tasteBudIds}) {
   const {t} = useLang();
   const [f, setF] = useState({...INIT_CAFE, ...initial});
   const [sub, setSub] = useState(false);
-  const [dineWith, setDineWith] = useState([]);
+  const [dineWith, setDineWith] = useState(initialDineWith);
   const [currencyCode, setCurrencyCode] = useState(() => initial.currency_code || getCurrencyForCity(initial.city || ""));
   const currSymbol = CURRENCY_SYMBOLS[currencyCode] || currencyCode;
   const inp = (k, v) => setF(p => ({...p, [k]: v}));
@@ -269,6 +269,18 @@ export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addT
         {sub&&!f.name&&<div style={S.err}>Required</div>}
       </div>
 
+      {user && (
+        <div style={S.mb16}>
+          <FieldLabel>Dined with @</FieldLabel>
+          <DineWithPicker
+            userId={user.id}
+            tasteBudIds={tasteBudIds}
+            selected={dineWith}
+            onChange={setDineWith}
+          />
+        </div>
+      )}
+
       <div style={S.sec}><SectionLabel>{t.cafeItems}</SectionLabel></div>
       <div style={{marginBottom:16}}>
         <FieldLabel>{t.category}</FieldLabel>
@@ -334,18 +346,6 @@ export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addT
             />
           </div>
         </details>
-      )}
-
-      {user && (
-        <div style={S.mb16}>
-          <FieldLabel>Dined with @</FieldLabel>
-          <DineWithPicker
-            userId={user.id}
-            tasteBudIds={tasteBudIds}
-            selected={dineWith}
-            onChange={setDineWith}
-          />
-        </div>
       )}
 
       <div style={S.sec}><SectionLabel>{t.scoreInputs}</SectionLabel></div>

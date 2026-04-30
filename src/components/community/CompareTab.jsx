@@ -226,17 +226,23 @@ export function CompareTab({ user, initialTarget, onClearTarget, onFollowChange 
     (async () => {
       const { data: tags } = await supabase
         .from("dine_with_tags")
-        .select("entry_id")
+        .select("entry_id, entry_type")
         .or(`and(tagger_id.eq.${user.id},tagged_id.eq.${target.id}),and(tagger_id.eq.${target.id},tagged_id.eq.${user.id})`)
         .not("entry_id", "is", null);
       if (cancelled) return;
       if (!tags?.length) { setDinedTogetherPlaceIds(new Set()); return; }
-      const { data: visits } = await supabase
-        .from("restaurant_visits")
-        .select("place_id")
-        .in("id", tags.map((r) => r.entry_id));
+      const restIds = tags.filter((r) => r.entry_type !== "cafe").map((r) => r.entry_id);
+      const cafeIds = tags.filter((r) => r.entry_type === "cafe").map((r) => r.entry_id);
+      const [restRes, cafeRes] = await Promise.all([
+        restIds.length ? supabase.from("restaurant_visits").select("place_id").in("id", restIds) : { data: [] },
+        cafeIds.length ? supabase.from("cafe_visits").select("place_id").in("id", cafeIds) : { data: [] },
+      ]);
       if (!cancelled) {
-        setDinedTogetherPlaceIds(new Set((visits || []).map((v) => v.place_id).filter(Boolean)));
+        const placeIds = [
+          ...(restRes.data || []).map((v) => v.place_id),
+          ...(cafeRes.data || []).map((v) => v.place_id),
+        ].filter(Boolean);
+        setDinedTogetherPlaceIds(new Set(placeIds));
       }
     })();
     return () => { cancelled = true; };

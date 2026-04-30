@@ -233,29 +233,42 @@ export default function App() {
     }
   }
 
-  async function applyDineTagPrefill({ restaurantName, city, cuisine, taggerId, entryId, taggerProfile }) {
-    const [placeRes, coDiners] = await Promise.all([
-      supabase.from("restaurant_places").select("is_fusion, cuisine, cuisine2")
-        .ilike("name", restaurantName || "").limit(1).maybeSingle(),
-      fetchCoDiners(supabase, { taggerId, entryId, excludeUserId: user?.id }),
-    ]);
-    const place = placeRes.data;
+  async function applyDineTagPrefill({ restaurantName, city, cuisine, taggerId, entryId, taggerProfile, entryType = "restaurant" }) {
     const resolvedCity = resolveCity(city || "");
-    const resolvedCuisine = cuisine || place?.cuisine || "";
-    setAddPrefill({
-      name: restaurantName || "",
-      ...(resolvedCity ? { city: resolvedCity } : {}),
-      cuisine: resolvedCuisine,
-      cuisine2: place?.cuisine2 || "",
-      isFusion: !!place?.is_fusion,
-      letter: (resolvedCuisine[0] || "").toUpperCase(),
-    });
+    let prefill;
+    let coDiners;
+    if (entryType === "cafe") {
+      coDiners = await fetchCoDiners(supabase, { taggerId, entryId, excludeUserId: user?.id });
+      prefill = {
+        name: restaurantName || "",
+        ...(resolvedCity ? { city: resolvedCity } : {}),
+        category: cuisine || "Coffee",
+      };
+    } else {
+      const [placeRes, coD] = await Promise.all([
+        supabase.from("restaurant_places").select("is_fusion, cuisine, cuisine2")
+          .ilike("name", restaurantName || "").limit(1).maybeSingle(),
+        fetchCoDiners(supabase, { taggerId, entryId, excludeUserId: user?.id }),
+      ]);
+      coDiners = coD;
+      const place = placeRes.data;
+      const resolvedCuisine = cuisine || place?.cuisine || "";
+      prefill = {
+        name: restaurantName || "",
+        ...(resolvedCity ? { city: resolvedCity } : {}),
+        cuisine: resolvedCuisine,
+        cuisine2: place?.cuisine2 || "",
+        isFusion: !!place?.is_fusion,
+        letter: (resolvedCuisine[0] || "").toUpperCase(),
+      };
+    }
+    setAddPrefill(prefill);
     // Tagger + co-diners, deduplicated, current user excluded (fetchCoDiners already handles that).
     const all = [...(taggerProfile ? [taggerProfile] : []), ...coDiners];
     const seen = new Set();
     setAddInitialDineWith(all.filter(p => p?.id && !seen.has(p.id) && seen.add(p.id)));
     setAddFormKey(k => k + 1);
-    setAddType("restaurant");
+    setAddType(entryType === "cafe" ? "cafe" : "restaurant");
     navigate("/add");
   }
 
@@ -267,7 +280,7 @@ export default function App() {
     // rows (RLS: tagged_id = auth.uid()).
     let q = supabase
       .from("dine_with_tags")
-      .select("city, cuisine, entry_id")
+      .select("city, cuisine, entry_id, entry_type")
       .eq("tagged_id", user.id)
       .eq("tagger_id", notif.from_user_id);
     const lookupQ = meta.entry_id
@@ -283,6 +296,7 @@ export default function App() {
         taggerId: notif.from_user_id,
         entryId: tag?.entry_id || meta.entry_id || null,
         taggerProfile: notif.fromProfile,
+        entryType: tag?.entry_type || meta.entry_type || "restaurant",
       });
     });
   }
@@ -1269,6 +1283,7 @@ export default function App() {
                   taggerId: tag.tagger_id,
                   entryId: tag.entry_id,
                   taggerProfile: tag.taggerProfile,
+                  entryType: tag.entry_type || type,
                 });
               } else {
                 setAddType(type);
@@ -1336,11 +1351,13 @@ export default function App() {
                 onCancel={()=>{setAddPrefill(null);setAddInitialDineWith([]);navigate("/log");}}
                 addType={addType} setAddType={setAddType}
               />
-            :<CafeForm initial={{...INIT_CAFE,city:lastCity.current||profile?.home_city||""}} weights={drinkWeights}
+            :<CafeForm key={addFormKey} initial={{...INIT_CAFE,city:lastCity.current||profile?.home_city||"",...(addPrefill||{})}} initialDineWith={addInitialDineWith} weights={drinkWeights}
                 onPlaceCreated={(p)=>upsertPlace(setCafePlaces, p.id, p)}
                 user={user}
                 tasteBudIds={tasteBudIds}
                 onSave={async e=>{
+                  setAddPrefill(null);
+                  setAddInitialDineWith([]);
                   if (e.city) persistLastCity(e.city);
                   const inserted = await insertCafeEntry(e);
                   if (e.dineWith?.length && inserted?.id) {
@@ -1380,7 +1397,7 @@ export default function App() {
                   }
                   window.scrollTo({top:0,behavior:"smooth"});
                 }}
-                onCancel={()=>navigate("/log")}
+                onCancel={()=>{setAddPrefill(null);setAddInitialDineWith([]);navigate("/log");}}
                 addType={addType} setAddType={setAddType}
                 existingCafes={cafes}
                 existingCities={existingCities}
