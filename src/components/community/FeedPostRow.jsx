@@ -1,0 +1,494 @@
+import { useLang } from "../../contexts/LangContext.jsx";
+import {
+  calcBiteOutOf10,
+  calcCafeOutOf10,
+  scoreColor,
+  scoreLabel,
+} from "../../utils/scoring.js";
+import { CURRENCY_SYMBOLS } from "../../utils/currency.js";
+import { FLAGS } from "../../constants/cuisineConstants.js";
+import { Avatar } from "./Avatar.jsx";
+
+/**
+ * Single feed card — a unified post for restaurant + cafe visits.
+ *
+ * Top-down layout (every row is optional except header / place / pills):
+ *   1. Header  : avatar + display name (bold) over relative date subtitle.
+ *                Tapping the header opens MiniProfileSheet.
+ *   2. Place   : big flag + place name on the left, score chip on the
+ *                right. Subtitle is `cuisine · city` (rest) or
+ *                `category · city` (cafe).
+ *   3. Pills   : compact stat pills — taste, cost, wait, repeatability.
+ *                Wrap to a second line on narrow widths so the row never
+ *                overflows.
+ *   4. Dined-w : translucent banner with co-diner avatar stack +
+ *                "dined with X and Y". Only renders when `coDiners` is
+ *                non-empty (RLS-bypassing RPC may return [] for posts
+ *                with no `dine_with_tags`).
+ *   5. Notes   : italic gray quote, only when `post.notes` is set.
+ *   6. Reactions: heart toggle on the left (filled red when `mine`),
+ *                count next to it; reactor avatar stack + summary text on
+ *                the right.
+ *
+ * BITE score is computed through the viewer's own weights — same
+ * "score it through my lens" pattern used by Compare and Global. Cafes
+ * route to `drinkWeights` or `sweetWeights` by `category`.
+ */
+
+const HEART_RED = "#E85A5A";
+const ACCENT_ORANGE = "#F0997B";
+const SUBTLE_BG = "#252523";
+const CARD_BG = "#1E1E1C";
+const BORDER = "0.5px solid rgba(255,255,255,0.08)";
+
+const REACTOR_AVATAR_LIMIT = 3;
+const COD_INER_AVATAR_LIMIT = 3;
+
+/** Currencies whose smallest unit is whole (no fractional cents). Same set
+ *  used by `formatCost` in `currency.js`. */
+const NO_DECIMALS = new Set(["JPY", "KRW", "VND", "IDR"]);
+
+const REPEAT_LABEL_BY_RATING = {
+  3: "Must return",
+  2: "Would seek out",
+  1: "If occasion calls",
+};
+
+function relativeDate(iso) {
+  if (!iso) return "";
+  const ts = new Date(iso).getTime();
+  if (!Number.isFinite(ts)) return "";
+  const now = new Date();
+  const then = new Date(ts);
+  const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((startOfDay(now) - startOfDay(then)) / 86_400_000);
+  if (days <= 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 7) return `${days} days ago`;
+  if (days < 14) return "Last week";
+  if (days < 30) return `${Math.floor(days / 7)} weeks ago`;
+  return then.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function formatCostInline(amount, code) {
+  if (!Number.isFinite(amount)) return null;
+  const sym = CURRENCY_SYMBOLS[code || "USD"] || "$";
+  const decimals = NO_DECIMALS.has(code) ? 0 : (Number.isInteger(amount) ? 0 : 2);
+  return `${sym} ${amount.toFixed(decimals)}`;
+}
+
+function flagFor(post) {
+  if (post.kind === "rest") return FLAGS[post.cuisine] || "🍽";
+  if (post.category === "Sweets") return "🍰";
+  if (post.category === "Tea") return "🍵";
+  return "☕";
+}
+
+function subtitle(post) {
+  const middle = post.kind === "rest" ? post.cuisine : post.category;
+  return [middle, post.city].filter(Boolean).join(" · ");
+}
+
+function authorProfile(post) {
+  return {
+    id: post.ownerId,
+    username: post.authorUsername,
+    display_name: post.authorDisplayName,
+    avatar_url: post.authorAvatarUrl,
+  };
+}
+
+function computeScore(post, restaurantWeights, drinkWeights, sweetWeights) {
+  if (post.kind === "rest") {
+    return calcBiteOutOf10(
+      post.taste, post.cost, post.portions, post.wait,
+      post.useR, post.repeatability,
+      restaurantWeights, post.currency_code,
+    );
+  }
+  const wts = post.category === "Sweets" ? sweetWeights : drinkWeights;
+  return calcCafeOutOf10(
+    post.taste, post.cost, post.portions, post.wait || 0,
+    post.useR, post.repeatability,
+    wts, post.currency_code,
+  );
+}
+
+function Pill({ icon, children, color }) {
+  return (
+    <span style={{
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 6,
+      padding: "5px 10px",
+      borderRadius: 999,
+      background: SUBTLE_BG,
+      border: BORDER,
+      fontSize: 12,
+      color: color || "#C4C2BA",
+      whiteSpace: "nowrap",
+      lineHeight: 1.2,
+    }}>
+      {icon && <span style={{ fontSize: 11, opacity: 0.85 }}>{icon}</span>}
+      <span>{children}</span>
+    </span>
+  );
+}
+
+function RepeatPill({ rating, useR }) {
+  if (!useR) return null;
+  if (rating === 0) {
+    return (
+      <span style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "5px 10px",
+        borderRadius: 999,
+        background: SUBTLE_BG,
+        border: "0.5px solid rgba(232,90,90,0.3)",
+        fontSize: 12,
+        color: HEART_RED,
+        whiteSpace: "nowrap",
+        lineHeight: 1.2,
+      }}>
+        <span style={{ fontSize: 11 }}>×</span>
+        <span>wouldn't return</span>
+      </span>
+    );
+  }
+  if (![1, 2, 3].includes(rating)) return null;
+  return (
+    <span style={{
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 1,
+      padding: "5px 10px",
+      borderRadius: 999,
+      background: SUBTLE_BG,
+      border: BORDER,
+      fontSize: 12,
+      color: "#EFB347",
+      whiteSpace: "nowrap",
+      lineHeight: 1.2,
+      letterSpacing: 1,
+    }} title={REPEAT_LABEL_BY_RATING[rating]}>
+      {"★".repeat(rating)}
+    </span>
+  );
+}
+
+function AvatarStack({ profiles, size = 20, max = 3 }) {
+  const visible = (profiles || []).slice(0, max);
+  if (!visible.length) return null;
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", flexShrink: 0 }}>
+      {visible.map((p, i) => (
+        <span
+          key={p.id}
+          style={{
+            marginLeft: i === 0 ? 0 : -8,
+            border: "1.5px solid #1E1E1C",
+            borderRadius: "50%",
+            display: "inline-flex",
+            position: "relative",
+            zIndex: visible.length - i,
+          }}
+        >
+          <Avatar profile={p} size={size} />
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function firstName(profile) {
+  const dn = profile?.display_name || profile?.username || "";
+  return dn.split(/\s+/)[0] || dn || "Someone";
+}
+
+function reactorSummary(reactors, count) {
+  if (!count) return "";
+  if (!reactors?.length) return `${count} ${count === 1 ? "heart" : "hearts"}`;
+  const first = firstName(reactors[0]);
+  const others = count - 1;
+  if (others <= 0) return first;
+  if (others === 1) return `${first} + 1 other`;
+  return `${first} + ${others} others`;
+}
+
+function dinedWithSummary(profiles) {
+  if (!profiles?.length) return null;
+  const names = profiles.map((p) => firstName(p));
+  if (names.length === 1) return [names[0]];
+  if (names.length === 2) return [names[0], "and", names[1]];
+  return [names[0], names[1], "and", `${names.length - 2} others`];
+}
+
+function HeartIcon({ filled, size = 16 }) {
+  if (filled) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden>
+        <path
+          fill={HEART_RED}
+          d="M12 21s-7.5-4.6-9.7-9.4C.7 7.5 3.5 3 7.6 3c2.2 0 3.6 1.2 4.4 2.4C12.8 4.2 14.2 3 16.4 3c4.1 0 6.9 4.5 5.3 8.6C19.5 16.4 12 21 12 21z"
+        />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden>
+      <path
+        fill="none"
+        stroke="#888780"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+        d="M12 20.5s-7-4.3-9.1-8.8C1.3 7.7 3.7 3.7 7.4 3.7c2 0 3.4 1.1 4.1 2.2C12.2 4.8 13.6 3.7 15.6 3.7c3.7 0 6.1 4 4.5 8c-2.1 4.5-9.1 8.8-9.1 8.8z"
+      />
+    </svg>
+  );
+}
+
+export function FeedPostRow({
+  post,
+  restaurantWeights,
+  drinkWeights,
+  sweetWeights,
+  coDiners,
+  reactionState,
+  reactionBusy,
+  onOpenProfile,
+  onToggleHeart,
+}) {
+  const { t } = useLang();
+  const author = authorProfile(post);
+  const score = computeScore(post, restaurantWeights, drinkWeights, sweetWeights);
+  const col = score == null ? "#888780" : scoreColor(score);
+  const tier = score == null ? "" : scoreLabel(score, t);
+
+  const cost = formatCostInline(post.cost, post.currency_code);
+  const tasteVal = Number.isFinite(post.taste) ? post.taste.toFixed(1) : null;
+  const wait = Number.isFinite(post.wait) ? post.wait : 0;
+
+  const dinedWith = dinedWithSummary(coDiners);
+  const heartCount = reactionState?.count || 0;
+  const heartMine = !!reactionState?.mine;
+  const reactors = reactionState?.reactors || [];
+
+  return (
+    <div style={{
+      background: CARD_BG,
+      border: BORDER,
+      borderRadius: 14,
+      padding: 14,
+      marginBottom: 12,
+      width: "100%",
+      boxSizing: "border-box",
+      overflow: "hidden",
+    }}>
+      <button
+        type="button"
+        onClick={() => onOpenProfile?.(author)}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          width: "100%",
+          padding: 0,
+          background: "none",
+          border: "none",
+          cursor: "pointer",
+          textAlign: "left",
+          marginBottom: 12,
+        }}
+      >
+        <Avatar profile={author} size={36} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontSize: 14,
+            fontWeight: 600,
+            color: "#F1EFE8",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}>
+            {author.display_name || author.username || "—"}
+          </div>
+          <div style={{
+            fontSize: 11,
+            color: "#888780",
+            marginTop: 2,
+          }}>
+            {relativeDate(post.visitedAt)}
+          </div>
+        </div>
+      </button>
+
+      <div style={{
+        display: "flex",
+        alignItems: "flex-start",
+        gap: 12,
+        marginBottom: 12,
+      }}>
+        <div style={{ fontSize: 38, lineHeight: 1, flexShrink: 0 }}>
+          {flagFor(post)}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontSize: 18,
+            fontWeight: 700,
+            color: "#F1EFE8",
+            lineHeight: 1.2,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}>
+            {post.name || "—"}
+          </div>
+          <div style={{
+            fontSize: 12,
+            color: "#888780",
+            marginTop: 4,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}>
+            {subtitle(post)}
+          </div>
+        </div>
+        <div style={{
+          flexShrink: 0,
+          padding: "8px 12px",
+          borderRadius: 10,
+          background: SUBTLE_BG,
+          textAlign: "center",
+          minWidth: 64,
+        }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: col, lineHeight: 1 }}>
+            {score == null ? "—" : score.toFixed(2)}
+          </div>
+          <div style={{ fontSize: 10, fontWeight: 500, color: col, marginTop: 4, opacity: 0.9 }}>
+            {tier || "BITE"}
+          </div>
+        </div>
+      </div>
+
+      <div style={{
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 6,
+        marginBottom: dinedWith || post.notes ? 12 : 0,
+      }}>
+        {tasteVal && <Pill icon="✦">{tasteVal} taste</Pill>}
+        {cost && <Pill>{cost}</Pill>}
+        <Pill icon="⏱">{wait} min</Pill>
+        <RepeatPill rating={post.repeatability} useR={post.useR} />
+      </div>
+
+      {dinedWith && (
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          padding: "8px 10px",
+          borderRadius: 10,
+          background: SUBTLE_BG,
+          border: BORDER,
+          marginBottom: post.notes ? 12 : 0,
+        }}>
+          <AvatarStack profiles={coDiners} size={20} max={COD_INER_AVATAR_LIMIT} />
+          <div style={{
+            fontSize: 12,
+            color: "#C4C2BA",
+            minWidth: 0,
+            flex: 1,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}>
+            <span style={{ color: "#888780" }}>dined with </span>
+            {dinedWith.map((part, i) => (
+              <span
+                key={i}
+                style={{
+                  color: part === "and" ? "#888780" : ACCENT_ORANGE,
+                  fontWeight: part === "and" ? 400 : 500,
+                }}
+              >
+                {part}
+                {i < dinedWith.length - 1 ? " " : ""}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {post.notes && (
+        <div style={{
+          fontSize: 13,
+          fontStyle: "italic",
+          color: "#C4C2BA",
+          lineHeight: 1.5,
+          marginTop: 4,
+          wordBreak: "break-word",
+        }}>
+          “{post.notes}”
+        </div>
+      )}
+
+      <div style={{
+        marginTop: 12,
+        paddingTop: 10,
+        borderTop: BORDER,
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+      }}>
+        <button
+          type="button"
+          onClick={() => onToggleHeart?.(post)}
+          disabled={reactionBusy}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "4px 6px",
+            background: "none",
+            border: "none",
+            cursor: reactionBusy ? "wait" : "pointer",
+            color: heartCount ? "#F1EFE8" : "#888780",
+            fontSize: 13,
+            fontWeight: 500,
+            opacity: reactionBusy ? 0.6 : 1,
+            flexShrink: 0,
+          }}
+          aria-label={heartMine ? "Unheart" : "Heart"}
+        >
+          <HeartIcon filled={heartMine} size={18} />
+          {heartCount > 0 && <span>{heartCount}</span>}
+        </button>
+        {heartCount > 0 && (
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            flex: 1,
+            minWidth: 0,
+          }}>
+            <AvatarStack profiles={reactors} size={20} max={REACTOR_AVATAR_LIMIT} />
+            <span style={{
+              fontSize: 12,
+              color: "#888780",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              minWidth: 0,
+            }}>
+              {reactorSummary(reactors, heartCount)}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

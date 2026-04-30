@@ -236,7 +236,17 @@ export function CommunityTab({ user, restaurantWeights, drinkWeights, sweetWeigh
           <FeedMockup />
         </GuestPreview>
       )}
-      {active === "feed" && user && <FeedTab />}
+      {active === "feed" && user && (
+        <FeedTab
+          user={user}
+          restaurantWeights={restaurantWeights}
+          drinkWeights={drinkWeights}
+          sweetWeights={sweetWeights}
+          onCompareWith={jumpToCompare}
+          onViewLog={setUserLogTarget}
+          onFollowChange={onFollowChange}
+        />
+      )}
 
       {active === "people" && !user && (
         <GuestPreview message="Sign in to follow friends and see who's eating where" onSignIn={onSignIn}>

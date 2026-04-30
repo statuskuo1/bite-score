@@ -83,7 +83,7 @@ export function mapCafeVisitRow(row) {
   };
 }
 
-async function attachAuthorProfiles(client, rows) {
+export async function attachAuthorProfiles(client, rows) {
   if (!rows?.length) return rows;
   const uids = [...new Set(rows.map((r) => r.user_id).filter(Boolean))];
   if (!uids.length) return rows;
