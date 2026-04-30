@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ConfirmSheet } from "../ConfirmSheet.jsx";
 import { useLang } from "../../contexts/LangContext.jsx";
 import { supabase } from "../../config/supabaseClient.js";
 import {
@@ -33,6 +34,7 @@ function GroupDetail({ user, groupId, onBack, onDeleted }) {
   const [places, setPlaces] = useState([]);
   const [busy, setBusy] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const reload = useCallback(async () => {
     if (!groupId) return;
@@ -191,7 +193,7 @@ function GroupDetail({ user, groupId, onBack, onDeleted }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
           <div style={{ fontSize: 16, fontWeight: 600, color: "#F1EFE8" }}>{data.group.name}</div>
           {isOwner && (
-            <Pill onClick={handleDelete} tone="danger" disabled={busy}>{t.deleteGroup}</Pill>
+            <Pill onClick={() => setConfirmDelete(true)} tone="danger" disabled={busy}>{t.deleteGroup}</Pill>
           )}
         </div>
 
@@ -338,6 +340,15 @@ function GroupDetail({ user, groupId, onBack, onDeleted }) {
             );
           })}
         </div>
+      )}
+      {confirmDelete && (
+        <ConfirmSheet
+          title="Delete group?"
+          body="All members will lose access. This can't be undone."
+          confirmLabel="Delete"
+          onConfirm={async () => { setConfirmDelete(false); await handleDelete(); }}
+          onCancel={() => setConfirmDelete(false)}
+        />
       )}
     </div>
   );

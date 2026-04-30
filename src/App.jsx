@@ -59,6 +59,7 @@ import { DineTagsBanner } from "./components/DineTagsBanner.jsx";
 import { getCurrencyForCity, toUSD, fromUSD, CURRENCY_SYMBOLS } from "./utils/currency.js";
 import { CityInput, resolveCity } from "./components/CityInput.jsx";
 import { CategoryTabs } from "./components/CategoryTabs.jsx";
+import { ConfirmSheet } from "./components/ConfirmSheet.jsx";
 const GUEST_PALETTE_ENTRIES = [
   {id:"gp1",name:"Lilia",             cuisine:"Italian",        letter:"I",city:"NYC",taste:9.2,cost:120,portions:2,wait:20,repeatability:3,useR:true,notes:""},
   {id:"gp2",name:"Don Angie",         cuisine:"Italian",        letter:"I",city:"NYC",taste:8.8,cost:95, portions:2,wait:15,repeatability:3,useR:true,notes:""},
@@ -489,6 +490,7 @@ export default function App() {
     }
   }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const [pendingDelete, setPendingDelete] = useState(null);
   const [editR, setEditR] = useState(null);
   const [editC, setEditC] = useState(null);
   const [editDineWith, setEditDineWith] = useState([]);
@@ -1131,12 +1133,14 @@ export default function App() {
                 return (
                   <RestRow key={e.id} e={e} display={display} user={user} visits={visits} group={grp} weights={weights} homeCurrency={homeCurrency} dinedWithForEntry={(id)=>dinedWithMap.get(id)||[]}
                     onEdit={v=>{const entry=v||e;setEditR(entry);setEditDineWith(dinedWithMap.get(entry.id)||[]);window.scrollTo({top:0,behavior:"smooth"});}}
-                    onDelete={async id=>{
+                    onDelete={id=>{
                       const did=id||e.id;
                       const row=st.entries.find(x=>x.id===did);
                       if(!canMutateVisit(row,user))return;
-                      try{await supabase.from("restaurant_visits").delete().eq("id",did);}catch(err){console.error("restaurant delete threw:",err);}
-                      dispatch({type:"DEL",id:did});
+                      setPendingDelete({onConfirm:async()=>{
+                        try{await supabase.from("restaurant_visits").delete().eq("id",did);}catch(err){console.error("restaurant delete threw:",err);}
+                        dispatch({type:"DEL",id:did});
+                      }});
                     }}/>
                 );
               })}
@@ -1189,11 +1193,13 @@ export default function App() {
               />
               {!sortedDrinks.length&&<p style={{color:"#888780",fontSize:14}}>{cafes.some(e=>DRINK_CATS.includes(e.category))?t.noEntries:t.noDrinks}</p>}
               {drinkGroupsPage.visible.map(([name,grp])=>(
-                <CafeGroupRow key={name} group={grp} cafeSortBy={cafeSortBy} weights={drinkWeights} user={user} dinedWithForEntry={(id)=>dinedWithMap.get(id)||[]} onEdit={e=>{setEditC(e);setEditDineWith(dinedWithMap.get(e.id)||[]);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={async id=>{
+                <CafeGroupRow key={name} group={grp} cafeSortBy={cafeSortBy} weights={drinkWeights} user={user} dinedWithForEntry={(id)=>dinedWithMap.get(id)||[]} onEdit={e=>{setEditC(e);setEditDineWith(dinedWithMap.get(e.id)||[]);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={id=>{
                       const row=cafes.find(x=>x.id===id);
                       if(!canMutateVisit(row,user))return;
-                      try{await supabase.from("cafe_visits").delete().eq("id",id);}catch(err){console.error("cafe delete threw:",err);}
-                      setCafes(p=>p.filter(x=>x.id!==id));
+                      setPendingDelete({onConfirm:async()=>{
+                        try{await supabase.from("cafe_visits").delete().eq("id",id);}catch(err){console.error("cafe delete threw:",err);}
+                        setCafes(p=>p.filter(x=>x.id!==id));
+                      }});
                     }}/>
               ))}
               <ShowMoreButton
@@ -1240,11 +1246,13 @@ export default function App() {
               />
               {!sortedSweets.length&&<p style={{color:"#888780",fontSize:14}}>{cafes.some(e=>e.category==="Sweets")?t.noEntries:t.noSweets}</p>}
               {sweetGroupsPage.visible.map(([name,grp])=>(
-                <CafeGroupRow key={name} group={grp} cafeSortBy={sweetsSortBy} weights={sweetWeights} user={user} dinedWithForEntry={(id)=>dinedWithMap.get(id)||[]} onEdit={e=>{setEditC(e);setEditDineWith(dinedWithMap.get(e.id)||[]);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={async id=>{
+                <CafeGroupRow key={name} group={grp} cafeSortBy={sweetsSortBy} weights={sweetWeights} user={user} dinedWithForEntry={(id)=>dinedWithMap.get(id)||[]} onEdit={e=>{setEditC(e);setEditDineWith(dinedWithMap.get(e.id)||[]);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={id=>{
                       const row=cafes.find(x=>x.id===id);
                       if(!canMutateVisit(row,user))return;
-                      try{await supabase.from("cafe_visits").delete().eq("id",id);}catch(err){console.error("cafe delete threw:",err);}
-                      setCafes(p=>p.filter(x=>x.id!==id));
+                      setPendingDelete({onConfirm:async()=>{
+                        try{await supabase.from("cafe_visits").delete().eq("id",id);}catch(err){console.error("cafe delete threw:",err);}
+                        setCafes(p=>p.filter(x=>x.id!==id));
+                      }});
                     }}/>
               ))}
               <ShowMoreButton
@@ -1653,6 +1661,12 @@ export default function App() {
 
       <AuthModal open={showAuthModal} onClose={()=>setShowAuthModal(false)} />
       <ResetPasswordModal />
+      {pendingDelete && (
+        <ConfirmSheet
+          onConfirm={async()=>{setPendingDelete(null);await pendingDelete.onConfirm();}}
+          onCancel={()=>setPendingDelete(null)}
+        />
+      )}
     </div>
     {notifSheetProfile && (
       <MiniProfileSheet
