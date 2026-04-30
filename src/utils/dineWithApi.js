@@ -47,7 +47,7 @@ export async function insertDineTag(client, { taggerId, taggedId, entryId, entry
       user_id: taggedId,
       from_user_id: taggerId,
       type: "dine_tag",
-      meta: { restaurant_name: restaurantName, entry_type: entryType, city, cuisine },
+      meta: { restaurant_name: restaurantName, entry_type: entryType, city, cuisine, entry_id: entryId || null },
     });
     if (nErr) console.warn("[BITE] insertDineTag notification:", nErr.message);
 
@@ -56,6 +56,23 @@ export async function insertDineTag(client, { taggerId, taggedId, entryId, entry
     console.warn("[BITE] insertDineTag threw:", err);
     return null;
   }
+}
+
+/**
+ * Return profiles of everyone else the tagger tagged on the same entry.
+ * Uses a SECURITY DEFINER RPC to bypass the RLS restriction that prevents
+ * a tagged user from reading other tagged users' rows.
+ * Returns [] when entry_id is null or the RPC fails.
+ */
+export async function fetchCoDiners(client, { taggerId, entryId, excludeUserId }) {
+  if (!taggerId || !entryId) return [];
+  const { data, error } = await client.rpc("fetch_co_diners", {
+    p_tagger_id: taggerId,
+    p_entry_id: entryId,
+    p_exclude_id: excludeUserId,
+  });
+  if (error) { console.warn("[BITE] fetchCoDiners:", error.message); return []; }
+  return data || [];
 }
 
 /**

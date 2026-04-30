@@ -54,10 +54,10 @@ import { countUnreadNotifications, fetchUnreadNotifications, markNotificationsRe
 import { usePaginatedList } from "./components/usePaginatedList.js";
 import { ShowMoreButton } from "./components/ShowMoreButton.jsx";
 import { NotificationPanel } from "./components/NotificationPanel.jsx";
-import { insertDineTag, fetchUnloggedDineTags, countUnloggedDineTags, dismissDineTag } from "./utils/dineWithApi.js";
+import { insertDineTag, fetchUnloggedDineTags, countUnloggedDineTags, dismissDineTag, fetchCoDiners } from "./utils/dineWithApi.js";
 import { DineTagsBanner } from "./components/DineTagsBanner.jsx";
 import { getCurrencyForCity, toUSD, fromUSD, CURRENCY_SYMBOLS } from "./utils/currency.js";
-import { CityInput } from "./components/CityInput.jsx";
+import { CityInput, resolveCity } from "./components/CityInput.jsx";
 import { CategoryTabs } from "./components/CategoryTabs.jsx";
 const GUEST_PALETTE_ENTRIES = [
   {id:"gp1",name:"Lilia",             cuisine:"Italian",        letter:"I",city:"NYC",taste:9.2,cost:120,portions:2,wait:20,repeatability:3,useR:true,notes:""},
@@ -131,6 +131,8 @@ export default function App() {
   const [dineTags, setDineTags] = useState([]);
   const [dineTagCount, setDineTagCount] = useState(0);
   const [addPrefill, setAddPrefill] = useState(null);
+  const [addInitialDineWith, setAddInitialDineWith] = useState([]);
+  const [addFormKey, setAddFormKey] = useState(0);
   const [tasteBudIds, setTasteBudIds] = useState(() => new Set());
   const [homeCurrency, setHomeCurrency] = useState("USD");
   const [extUserLogTarget, setExtUserLogTarget] = useState(null);
@@ -231,17 +233,39 @@ export default function App() {
     }
   }
 
+  async function applyDineTagPrefill({ restaurantName, city, cuisine, taggerId, entryId }) {
+    const [placeRes, coDiners] = await Promise.all([
+      supabase.from("restaurant_places").select("is_fusion, cuisine, cuisine2")
+        .ilike("name", restaurantName || "").limit(1).maybeSingle(),
+      fetchCoDiners(supabase, { taggerId, entryId, excludeUserId: user?.id }),
+    ]);
+    const place = placeRes.data;
+    const resolvedCity = resolveCity(city || "");
+    const resolvedCuisine = cuisine || place?.cuisine || "";
+    setAddPrefill({
+      name: restaurantName || "",
+      ...(resolvedCity ? { city: resolvedCity } : {}),
+      cuisine: resolvedCuisine,
+      cuisine2: place?.cuisine2 || "",
+      isFusion: !!place?.is_fusion,
+      letter: (resolvedCuisine[0] || "").toUpperCase(),
+    });
+    setAddInitialDineWith(coDiners);
+    setAddFormKey(k => k + 1);
+    setAddType("restaurant");
+    navigate("/add");
+  }
+
   function handleDineTagTap(notif) {
     setShowNotifPanel(false);
     const meta = notif.meta || {};
-    setAddPrefill({
-      name: meta.restaurant_name || "",
-      city: meta.city || "",
-      cuisine: meta.cuisine || "",
-      letter: (meta.cuisine?.[0] || "").toUpperCase(),
+    applyDineTagPrefill({
+      restaurantName: meta.restaurant_name,
+      city: meta.city,
+      cuisine: meta.cuisine,
+      taggerId: notif.from_user_id,
+      entryId: meta.entry_id || null,
     });
-    setAddType("restaurant");
-    navigate("/add");
   }
 
   async function handleNotifSheetFollow(targetId) {
@@ -339,6 +363,13 @@ export default function App() {
   // /community with no sub-path → /community/global.
   useEffect(() => {
     if (pathname === "/community") navigate("/community/global", { replace: true });
+  }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (pathname !== "/add") {
+      setAddPrefill(null);
+      setAddInitialDineWith([]);
+    }
   }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [editR, setEditR] = useState(null);
@@ -1211,23 +1242,28 @@ export default function App() {
               setDineTagCount(prev=>Math.max(0,prev-1));
             }}
             onAddType={(type, tag) => {
-              setAddType(type);
-              if (tag) setAddPrefill({
-                name: tag.restaurant_name || "",
-                city: tag.city || "",
-                cuisine: tag.cuisine || "",
-                letter: (tag.cuisine?.[0] || "").toUpperCase(),
-              });
+              if (tag) {
+                applyDineTagPrefill({
+                  restaurantName: tag.restaurant_name,
+                  city: tag.city,
+                  cuisine: tag.cuisine,
+                  taggerId: tag.tagger_id,
+                  entryId: tag.entry_id,
+                });
+              } else {
+                setAddType(type);
+              }
             }}
           />
           {addSaveErr&&<div style={{background:"#3C1F13",border:"1px solid #F0997B",borderRadius:8,padding:"10px 14px",marginBottom:12,fontSize:13,color:"#F0997B"}}>{addSaveErr}</div>}
           {addType==="restaurant"
-            ?<RestForm initial={{...INIT_REST,city:lastCity.current||profile?.home_city||"",...(addPrefill||{})}} weights={weights} existingEntries={st.entries} existingCities={existingCities} places={restaurantPlaces}
+            ?<RestForm key={addFormKey} initial={{...INIT_REST,city:lastCity.current||profile?.home_city||"",...(addPrefill||{})}} initialDineWith={addInitialDineWith} weights={weights} existingEntries={st.entries} existingCities={existingCities} places={restaurantPlaces}
                 onPlaceCreated={(p)=>upsertPlace(setRestaurantPlaces, p.id, p)}
                 user={user}
                 tasteBudIds={tasteBudIds}
                 onSave={async e=>{
                   setAddPrefill(null);
+                  setAddInitialDineWith([]);
                   if (e.city) persistLastCity(e.city);
                   if (!user) return;
                   setAddSaveErr(null);
@@ -1277,7 +1313,7 @@ export default function App() {
                     setAddSaveErr(err?.message || "Save failed — check console");
                   }
                 }}
-                onCancel={()=>{setAddPrefill(null);navigate("/log");}}
+                onCancel={()=>{setAddPrefill(null);setAddInitialDineWith([]);navigate("/log");}}
                 addType={addType} setAddType={setAddType}
               />
             :<CafeForm initial={{...INIT_CAFE,city:lastCity.current||profile?.home_city||""}} weights={drinkWeights}
