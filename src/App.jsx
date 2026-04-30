@@ -133,6 +133,7 @@ export default function App() {
   const [addPrefill, setAddPrefill] = useState(null);
   const [addInitialDineWith, setAddInitialDineWith] = useState([]);
   const [addFormKey, setAddFormKey] = useState(0);
+  const [addTagTaggerId, setAddTagTaggerId] = useState(null);
   const [tasteBudIds, setTasteBudIds] = useState(() => new Set());
   const [homeCurrency, setHomeCurrency] = useState("USD");
   const [extUserLogTarget, setExtUserLogTarget] = useState(null);
@@ -267,6 +268,7 @@ export default function App() {
     const all = [...(taggerProfile ? [taggerProfile] : []), ...coDiners];
     const seen = new Set();
     setAddInitialDineWith(all.filter(p => p?.id && !seen.has(p.id) && seen.add(p.id)));
+    setAddTagTaggerId(taggerId || null);
     setAddFormKey(k => k + 1);
     setAddType(entryType === "cafe" ? "cafe" : "restaurant");
     navigate("/add");
@@ -402,6 +404,7 @@ export default function App() {
     if (pathname !== "/add") {
       setAddPrefill(null);
       setAddInitialDineWith([]);
+      setAddTagTaggerId(null);
     }
   }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1299,6 +1302,8 @@ export default function App() {
                 onSave={async e=>{
                   setAddPrefill(null);
                   setAddInitialDineWith([]);
+                  const sourceTaggerId = addTagTaggerId;
+                  setAddTagTaggerId(null);
                   if (e.city) persistLastCity(e.city);
                   if (!user) return;
                   setAddSaveErr(null);
@@ -1330,8 +1335,9 @@ export default function App() {
                     }
                     if (data) {
                       dispatch({ type: "ADD", e: mapRestaurantVisitRow(data) });
-                      if (e.dineWith?.length) {
-                        await Promise.all(e.dineWith.map(p=>insertDineTag(supabase,{
+                      const toTag = (e.dineWith || []).filter(p => p.id !== sourceTaggerId);
+                      if (toTag.length) {
+                        await Promise.all(toTag.map(p=>insertDineTag(supabase,{
                           taggerId: user.id,
                           taggedId: p.id,
                           entryId: data.id,
@@ -1348,7 +1354,7 @@ export default function App() {
                     setAddSaveErr(err?.message || "Save failed — check console");
                   }
                 }}
-                onCancel={()=>{setAddPrefill(null);setAddInitialDineWith([]);navigate("/log");}}
+                onCancel={()=>{setAddPrefill(null);setAddInitialDineWith([]);setAddTagTaggerId(null);navigate("/log");}}
                 addType={addType} setAddType={setAddType}
               />
             :<CafeForm key={addFormKey} initial={{...INIT_CAFE,city:lastCity.current||profile?.home_city||"",...(addPrefill||{})}} initialDineWith={addInitialDineWith} weights={drinkWeights}
@@ -1358,11 +1364,14 @@ export default function App() {
                 onSave={async e=>{
                   setAddPrefill(null);
                   setAddInitialDineWith([]);
+                  const sourceTaggerId = addTagTaggerId;
+                  setAddTagTaggerId(null);
                   if (e.city) persistLastCity(e.city);
                   const inserted = await insertCafeEntry(e);
-                  if (e.dineWith?.length && inserted?.id) {
+                  const toTag = (e.dineWith || []).filter(p => p.id !== sourceTaggerId);
+                  if (toTag.length && inserted?.id) {
                     try {
-                      await Promise.all(e.dineWith.map(p=>insertDineTag(supabase,{
+                      await Promise.all(toTag.map(p=>insertDineTag(supabase,{
                         taggerId: user.id,
                         taggedId: p.id,
                         entryId: inserted.id,
@@ -1380,9 +1389,10 @@ export default function App() {
                 onSaveAndContinue={async e=>{
                   if (e.city) persistLastCity(e.city);
                   const inserted = await insertCafeEntry(e);
-                  if (e.dineWith?.length && inserted?.id) {
+                  const toTag = (e.dineWith || []).filter(p => p.id !== addTagTaggerId);
+                  if (toTag.length && inserted?.id) {
                     try {
-                      await Promise.all(e.dineWith.map(p=>insertDineTag(supabase,{
+                      await Promise.all(toTag.map(p=>insertDineTag(supabase,{
                         taggerId: user.id,
                         taggedId: p.id,
                         entryId: inserted.id,
@@ -1397,7 +1407,7 @@ export default function App() {
                   }
                   window.scrollTo({top:0,behavior:"smooth"});
                 }}
-                onCancel={()=>{setAddPrefill(null);setAddInitialDineWith([]);navigate("/log");}}
+                onCancel={()=>{setAddPrefill(null);setAddInitialDineWith([]);setAddTagTaggerId(null);navigate("/log");}}
                 addType={addType} setAddType={setAddType}
                 existingCafes={cafes}
                 existingCities={existingCities}
