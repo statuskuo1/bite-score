@@ -1099,6 +1099,7 @@ export default function App() {
       )}
 
       {pathname.startsWith("/log")&&editR&&<RestForm initial={editR} weights={weights} existingEntries={st.entries} existingCities={existingCities} places={restaurantPlaces}
+        user={user} tasteBudIds={tasteBudIds}
         onPlaceCreated={(p)=>upsertPlace(setRestaurantPlaces, p.id, p)}
         onSave={async e=>{
         let resolvedPlaceId = e.placeId;

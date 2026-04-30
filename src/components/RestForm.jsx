@@ -16,10 +16,11 @@ import { getCurrencyForCity, CURRENCY_CODES, CURRENCY_SYMBOLS } from "../utils/c
 
 export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,existingEntries,existingCities,places,onPlaceCreated,user,tasteBudIds}) {
   const {t} = useLang();
+  const isEdit = !!initial.id;
   const [f,setF] = useState(initial);
   const [sub,setSub] = useState(false);
   const [dineWith,setDineWith] = useState([]);
-  const [currencyCode, setCurrencyCode] = useState(() => getCurrencyForCity(initial.city || ""));
+  const [currencyCode, setCurrencyCode] = useState(() => initial.currency_code || getCurrencyForCity(initial.city || ""));
   const inp = (k,v) => setF(p=>({...p,[k]:v}));
   const currSymbol = CURRENCY_SYMBOLS[currencyCode] || currencyCode;
   const score = calcBiteOutOf10(+f.taste,+f.cost,+f.portions,+f.wait,f.useR,+f.repeatability,weights,currencyCode);
@@ -119,9 +120,11 @@ export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,exi
           <FieldLabel>{t.totalCost} <span style={{color:"#888780",fontWeight:400}}>({currencyCode})</span></FieldLabel>
           <div style={{display:"flex",gap:4}}>
             <input type="number" value={f.cost} onChange={e=>inp("cost",e.target.value)} placeholder={currSymbol} style={{...S.wb,flex:1}}/>
-            <select value={currencyCode} onChange={e=>setCurrencyCode(e.target.value)} style={{width:72,fontSize:12,padding:"6px 4px"}}>
-              {CURRENCY_CODES.map(c=><option key={c} value={c}>{c}</option>)}
-            </select>
+            {!isEdit && (
+              <select value={currencyCode} onChange={e=>setCurrencyCode(e.target.value)} style={{width:72,fontSize:12,padding:"6px 4px"}}>
+                {CURRENCY_CODES.map(c=><option key={c} value={c}>{c}</option>)}
+              </select>
+            )}
           </div>
           {sub&&!f.cost&&<div style={S.err}>Required</div>}
         </div>
