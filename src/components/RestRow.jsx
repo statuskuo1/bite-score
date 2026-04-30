@@ -5,8 +5,9 @@ import { calcBiteOutOf10, scoreColor } from "../utils/scoring.js";
 import { canSwipeGroup } from "../utils/rowAccess.js";
 import { EntryCard } from "./EntryCard.jsx";
 import { VisitsModal } from "./VisitsModal.jsx";
+import { formatCost } from "../utils/currency.js";
 
-export function RestRow({ e, display, onEdit, onDelete, user, visits = 1, group, weights, showAuthor = false }) {
+export function RestRow({ e, display, onEdit, onDelete, user, visits = 1, group, weights, showAuthor = false, homeCurrency = "USD" }) {
   const { t } = useLang();
   const [showVisits, setShowVisits] = useState(false);
   const flag = FLAGS[e.cuisine] || (e.letter || e.cuisine?.[0])?.toUpperCase() || "?";
@@ -40,11 +41,11 @@ export function RestRow({ e, display, onEdit, onDelete, user, visits = 1, group,
         name={e.name}
         visits={grp}
         user={user}
-        scoreFn={(v) => calcBiteOutOf10(v.taste, v.cost, v.portions, v.wait, v.useR, v.repeatability, weights)}
+        scoreFn={(v) => calcBiteOutOf10(v.taste, v.cost, v.portions, v.wait, v.useR, v.repeatability, weights, v.currency_code || "USD")}
         scoreColorFn={scoreColor}
         getRows={(v) => [
           [t.taste, v.taste.toFixed(1)],
-          ["Cost", "$" + v.cost],
+          ["Cost", formatCost(v.cost, v.currency_code, homeCurrency)],
           [t.wait, v.wait + " min"],
           ["Repeat", "⭐".repeat(v.repeatability) || "✕"],
         ]}
@@ -63,7 +64,7 @@ export function RestRow({ e, display, onEdit, onDelete, user, visits = 1, group,
         score={display}
         expandedRows={[
           [t.taste, String(e.taste)],
-          ["Cost", "$" + e.cost],
+          ["Cost", formatCost(e.cost, e.currency_code, homeCurrency)],
           [t.portions, e.portions + "x"],
           [t.wait, e.wait + " min"],
           ["Repeat", e.useR ? ("⭐".repeat(e.repeatability) || "✕") : t.off],

@@ -7,11 +7,13 @@ import { S } from "../styles/sharedStyles.js";
 import { DonutChart } from "./DonutChart.jsx";
 import { DrinksPalette } from "./DrinksPalette.jsx";
 import { SweetsPalette } from "./SweetsPalette.jsx";
+import { CategoryTabs } from "./CategoryTabs.jsx";
 import { WeightSliders } from "./WeightSliders.jsx";
 import { StatCard } from "./StatCard.jsx";
 import { CuisineQuestModal } from "./CuisineQuestModal.jsx";
 import { getQuestMetrics } from "../utils/questMetrics.js";
 import { getRestaurantPersonality } from "../utils/tastePersonality.js";
+import { formatCost, toUSD, fromUSD, CURRENCY_SYMBOLS } from "../utils/currency.js";
 
 const WEIGHT_DEFAULTS = { taste: 50, bpb: 40, wait: 10 };
 
@@ -27,6 +29,7 @@ export function PaletteView({
   questL,
   toggleQ,
   onOpenSuggest,
+  homeCurrency = "USD",
 }) {
   const {t} = useLang();
   const navigate = useNavigate();
@@ -66,7 +69,9 @@ export function PaletteView({
     setEditingW(false);
   }
   const avgT=total?(entries.reduce((a,e)=>a+e.taste,0)/total).toFixed(1):"0";
-  const avgC=total?(entries.reduce((a,e)=>a+(e.cost/(e.portions||1)),0)/total).toFixed(0):"0";
+  const sym = CURRENCY_SYMBOLS[homeCurrency] || homeCurrency;
+  const avgCUSD = total ? entries.reduce((a,e)=>a+(toUSD(e.cost,e.currency_code||"USD")/(e.portions||1)),0)/total : 0;
+  const avgC = total ? Math.round(fromUSD(avgCUSD, homeCurrency)).toString() : "0";
   const groupedEntries = Object.values(entries.reduce((acc,e)=>{if(!acc[e.name])acc[e.name]=[];acc[e.name].push(e);return acc;},{}));
   const topB = groupedEntries.map(grp=>({name:grp[0].name,avg:grp.reduce((a,e)=>a+(calcBiteOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights)??0),0)/grp.length})).sort((a,b)=>b.avg-a.avg)[0];
 
@@ -84,10 +89,8 @@ export function PaletteView({
 
   return (
     <div>
-      <div style={{display:"flex",background:"#252523",borderRadius:10,padding:3,gap:2,marginBottom:20}}>
-        {[["restaurants","🍽 "+t.restaurants],["drinks","☕ "+t.drinks],["sweets","🥐 "+t.sweets]].map(([v,l])=>(
-          <button key={v} onClick={()=>navigate(v==="restaurants"?"/taste":"/taste/"+v)} style={{flex:1,padding:"6px 0",textAlign:"center",borderRadius:8,border:"none",background:paletteTab===v?"#3C1F13":"transparent",color:paletteTab===v?"#F0997B":"#888780",fontSize:11,fontWeight:paletteTab===v?500:400,cursor:"pointer",transition:"all 0.15s"}}>{l}</button>
-        ))}
+      <div style={{marginBottom:20}}>
+        <CategoryTabs active={paletteTab} onChange={(v) => navigate(v === "restaurants" ? "/taste" : "/taste/" + v)} />
       </div>
 
       {paletteTab==="restaurants"&&(
@@ -213,7 +216,7 @@ export function PaletteView({
                 [t.topRated, topB ? topB.name : "—"],
                 [t.avgBite, avgBiteStr, "avgBite"],
                 [t.avgTaste, avgT + "/10"],
-                [t.avgSpend, "$" + avgC + " / meal"],
+                [t.avgSpend, sym + avgC + " / meal"],
                 [t.regionsExplored, rCount + " / " + Object.keys(CUISINE_REGIONS).length],
               ];
               return statRows.map(([label, val, key]) => (
@@ -230,8 +233,8 @@ export function PaletteView({
         </div>
       )}
 
-      {paletteTab==="drinks"&&<DrinksPalette cafes={cafes} drinkWeights={drinkWeights} replaceDrinkWeights={replaceDrinkWeights}/>}
-      {paletteTab==="sweets"&&<SweetsPalette cafes={cafes} sweetWeights={sweetWeights} replaceSweetWeights={replaceSweetWeights}/>}
+      {paletteTab==="drinks"&&<DrinksPalette cafes={cafes} drinkWeights={drinkWeights} replaceDrinkWeights={replaceDrinkWeights} homeCurrency={homeCurrency}/>}
+      {paletteTab==="sweets"&&<SweetsPalette cafes={cafes} sweetWeights={sweetWeights} replaceSweetWeights={replaceSweetWeights} homeCurrency={homeCurrency}/>}
     </div>
   );
 }

@@ -3,10 +3,11 @@ import { useLang } from "../contexts/LangContext.jsx";
 import { calcCafeOutOf10, CAFE_WEIGHT_DEFAULTS } from "../utils/scoring.js";
 import { S } from "../styles/sharedStyles.js";
 import { WeightSliders } from "./WeightSliders.jsx";
+import { toUSD, fromUSD, CURRENCY_SYMBOLS } from "../utils/currency.js";
 
 const btnGhost = {fontSize:11,color:"#5B9BD5",background:"none",border:"1px solid rgba(91,155,213,0.45)",borderRadius:8,padding:"5px 12px",cursor:"pointer",fontWeight:500};
 
-export function SweetsPalette({cafes, sweetWeights, replaceSweetWeights}) {
+export function SweetsPalette({cafes, sweetWeights, replaceSweetWeights, homeCurrency="USD"}) {
   const {t,lang} = useLang();
   const sweets = cafes.filter(e=>e.category==="Sweets");
   const total = sweets.length;
@@ -135,8 +136,10 @@ export function SweetsPalette({cafes, sweetWeights, replaceSweetWeights}) {
           const typeEntries=Object.entries(typeCounts).sort((a,b)=>b[1]-a[1]);
           const topType=typeEntries[0];
           const best2=scored[0];
-          const avgBiteSweets=total?(sweets.reduce((a,e)=>a+(calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,sweetWeights)??0),0)/total).toFixed(2):"—";
-          const avgCostSweets=total?"$"+(sweets.reduce((a,e)=>a+(e.cost/(e.portions||1)),0)/total).toFixed(2):"—";
+          const avgBiteSweets=total?(sweets.reduce((a,e)=>a+(calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,sweetWeights,e.currency_code||"USD")??0),0)/total).toFixed(2):"—";
+          const sym = CURRENCY_SYMBOLS[homeCurrency] || homeCurrency;
+          const avgCostSweetsUSD=total?sweets.reduce((a,e)=>a+(toUSD(e.cost,e.currency_code||"USD")/(e.portions||1)),0)/total:null;
+          const avgCostSweets=avgCostSweetsUSD!=null?sym+fromUSD(avgCostSweetsUSD,homeCurrency).toFixed(2):"—";
 
           const S2=160,CX2=80,CY2=80,R2=68,RI2=44;
           let ang2=-Math.PI/2;

@@ -11,17 +11,22 @@ import { SectionLabel } from "./SectionLabel.jsx";
 import { FieldLabel } from "./FieldLabel.jsx";
 import { FormScoreHeader } from "./FormScoreHeader.jsx";
 import { CityInput } from "./CityInput.jsx";
+import { DineWithPicker } from "./DineWithPicker.jsx";
+import { getCurrencyForCity, CURRENCY_CODES, CURRENCY_SYMBOLS } from "../utils/currency.js";
 
-export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,existingEntries,existingCities,places,onPlaceCreated}) {
+export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,existingEntries,existingCities,places,onPlaceCreated,user,tasteBudIds}) {
   const {t} = useLang();
   const [f,setF] = useState(initial);
   const [sub,setSub] = useState(false);
+  const [dineWith,setDineWith] = useState([]);
+  const [currencyCode, setCurrencyCode] = useState(() => getCurrencyForCity(initial.city || ""));
   const inp = (k,v) => setF(p=>({...p,[k]:v}));
-  const score = calcBiteOutOf10(+f.taste,+f.cost,+f.portions,+f.wait,f.useR,+f.repeatability,weights);
+  const currSymbol = CURRENCY_SYMBOLS[currencyCode] || currencyCode;
+  const score = calcBiteOutOf10(+f.taste,+f.cost,+f.portions,+f.wait,f.useR,+f.repeatability,weights,currencyCode);
   const bg = score===null?"#2C2C2A":score>=9.5?"#1A2E0A":score>=8.5?"#1A2E0A":score>=7?"#0C2A3A":score>=4?"#2A1E05":score>=2?"#2C2C2A":"#3C1F13";
   function save() {
     if(!f.name||!f.cost||!f.city){setSub(true);return;}
-    onSave({...f,placeId:f.placeId||null,taste:+f.taste,cost:+f.cost,portions:+f.portions,wait:+f.wait,repeatability:+f.repeatability});
+    onSave({...f,placeId:f.placeId||null,taste:+f.taste,cost:+f.cost,currency_code:currencyCode,portions:+f.portions,wait:+f.wait,repeatability:+f.repeatability,dineWith});
   }
   return (
     <div style={{...S.card,marginBottom:12}}>
@@ -35,7 +40,7 @@ export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,exi
       />
       <div style={{marginBottom:16}}>
         <FieldLabel>{t.city||"City"} *</FieldLabel>
-        <CityInput value={f.city||""} onChange={val=>inp("city",val)} existingCities={existingCities} /> 
+        <CityInput value={f.city||""} onChange={val=>{ inp("city",val); setCurrencyCode(getCurrencyForCity(val)); }} existingCities={existingCities} />
       </div>
       <div style={S.mb16}>
         <FieldLabel>{t.restaurantName}</FieldLabel>
@@ -48,15 +53,9 @@ export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,exi
           onPlaceCreated={onPlaceCreated}
           onChange={({name, placeId, city, cuisine: pickedCuisine, cuisine2: pickedCuisine2, isFusion: pickedFusion})=>{
             if(!placeId){
-              /** Typing or "Add new" — just update name + clear pinned placeId. */
               setF(p=>({...p, name, placeId: null}));
               return;
             }
-            /** Picker-provided fields (a) win for freshly-resolved Google rows
-             *  that aren't in the parent `places` catalog yet, and (b) prefer
-             *  `verified_*` over user-typed for catalog hits. Fall back to the
-             *  catalog lookup so existing rows without verified fields still
-             *  autopopulate cuisine/fusion. */
             const place=(places||[]).find(p=>p.id===placeId);
             const cuisine = pickedCuisine || place?.verifiedCuisine || place?.cuisine || "";
             const cuisine2 = pickedCuisine2 != null ? pickedCuisine2 : place?.cuisine2 || "";
@@ -72,9 +71,6 @@ export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,exi
               cuisine2,
               isFusion,
             }));
-            /** Layer the user's own past-visit metadata on top for visit-level
-             *  fields only (portions, wait, repeatability) — keyed by placeId
-             *  so it survives casing/whitespace drift. */
             const match=(existingEntries||[]).find(e=>e.placeId===placeId);
             if(match){
               setF(p=>({
@@ -89,6 +85,7 @@ export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,exi
         />
         {sub&&!f.name&&<div style={S.err}>Required</div>}
       </div>
+
       <div style={{display:"flex",gap:10,marginBottom:16}}>
         <div style={S.f1}><FieldLabel>{t.cuisine}</FieldLabel><CuisineInput value={f.cuisine} placeholder={t.cuisine} onChange={v=>{inp("cuisine",v);inp("letter",v.trim()[0]?.toUpperCase()||"");}}/></div>
         {f.letter&&<div style={{display:"flex",alignItems:"flex-end",paddingBottom:2}}><div style={{width:36,height:36,borderRadius:8,background:"#3C1F13",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>{FLAGS[f.cuisine]||f.letter}</div></div>}
@@ -98,6 +95,19 @@ export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,exi
         <Toggle on={f.isFusion} onClick={()=>inp("isFusion",!f.isFusion)}/><span style={{fontSize:13,color:"#888780"}}>{t.fusionDish}</span>
       </div>
       {f.isFusion&&<div style={S.mb16}><FieldLabel>{t.secondCuisine}</FieldLabel><CuisineInput value={f.cuisine2||""} placeholder={t.cuisine} onChange={v=>inp("cuisine2",v)}/></div>}
+
+      {user && (
+        <div style={S.mb16}>
+          <FieldLabel>Dined with @</FieldLabel>
+          <DineWithPicker
+            userId={user.id}
+            tasteBudIds={tasteBudIds}
+            selected={dineWith}
+            onChange={setDineWith}
+          />
+        </div>
+      )}
+
       <div style={S.sec}><SectionLabel>{t.scoreInputs}</SectionLabel></div>
       <div style={S.mb16}>
         <FieldLabel>Taste — <span style={{color:"#F0997B"}}>{f.taste} · {tasteLabel(f.taste,t)}</span></FieldLabel>
@@ -105,7 +115,16 @@ export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,exi
         <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#888780",marginTop:4}}><span>0 sucks</span><span>5 avg</span><span>10 incredible</span></div>
       </div>
       <div style={{display:"flex",gap:10,marginBottom:16}}>
-        <div style={S.f1}><FieldLabel>{t.totalCost}</FieldLabel><input type="number" value={f.cost} onChange={e=>inp("cost",e.target.value)} placeholder="$ e.g. 45" style={S.wb}/>{sub&&!f.cost&&<div style={S.err}>Required</div>}</div>
+        <div style={S.f1}>
+          <FieldLabel>{t.totalCost} <span style={{color:"#888780",fontWeight:400}}>({currencyCode})</span></FieldLabel>
+          <div style={{display:"flex",gap:4}}>
+            <input type="number" value={f.cost} onChange={e=>inp("cost",e.target.value)} placeholder={currSymbol} style={{...S.wb,flex:1}}/>
+            <select value={currencyCode} onChange={e=>setCurrencyCode(e.target.value)} style={{width:72,fontSize:12,padding:"6px 4px"}}>
+              {CURRENCY_CODES.map(c=><option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          {sub&&!f.cost&&<div style={S.err}>Required</div>}
+        </div>
         <div style={S.f1}><FieldLabel>{t.portions}</FieldLabel><input type="number" min="0.5" step="0.5" value={f.portions} onChange={e=>inp("portions",e.target.value)} style={S.wb}/></div>
         <div style={S.f1}><FieldLabel>{t.waitMins}</FieldLabel><input type="number" min="0" step="1" value={f.wait} onChange={e=>inp("wait",e.target.value)} style={S.wb}/></div>
       </div>

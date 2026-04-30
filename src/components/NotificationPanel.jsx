@@ -35,9 +35,12 @@ function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile, alreadyFollow
     }
   }
 
-  const message = isTasteBuds
-    ? `You and @${p?.username || "someone"} are now Taste Buds! 🎉`
-    : `@${p?.username || "someone"} followed you`;
+  const isDineTag = notif.type === "dine_tag";
+  const message = isDineTag
+    ? `@${p?.username || "someone"} tagged you at ${notif.meta?.restaurant_name || "a place"}`
+    : isTasteBuds
+      ? `You and @${p?.username || "someone"} are now Taste Buds! 🎉`
+      : `@${p?.username || "someone"} followed you`;
 
   return (
     <div style={{

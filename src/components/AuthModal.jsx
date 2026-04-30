@@ -3,6 +3,8 @@ import { useLang } from "../contexts/LangContext.jsx";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { supabase } from "../config/supabaseClient.js";
 import { accountUsesOauthOnly, fetchEmailForUsername, suggestAvailableUsernames, updateOwnProfile, validateUsername } from "../utils/profileApi.js";
+import { CURRENCY_SYMBOLS, getCurrencyForCity } from "../utils/currency.js";
+import { CityInput } from "./CityInput.jsx";
 import { listFollows } from "../utils/followsApi.js";
 import { computeFoodStats, fetchRestaurantVisitsForUser } from "../utils/visitPlacesApi.js";
 import { FoodStatsBlock } from "./FoodStatsBlock.jsx";
@@ -103,6 +105,7 @@ export function AuthModal({ open, onClose }) {
   // Profile editor state
   const [usernameDraft, setUsernameDraft] = useState("");
   const [displayNameDraft, setDisplayNameDraft] = useState("");
+  const [homeCityDraft, setHomeCityDraft] = useState("");
   const [saveBusy, setSaveBusy] = useState(false);
   const [saveError, setSaveError] = useState(null);
   const [saveOk, setSaveOk] = useState(false);
@@ -181,7 +184,8 @@ export function AuthModal({ open, onClose }) {
   );
   const isDirty =
     usernameTrim !== (profile?.username ?? "").trim() ||
-    displayNameTrim !== (profile?.display_name ?? "").trim();
+    displayNameTrim !== (profile?.display_name ?? "").trim() ||
+    homeCityDraft.trim() !== (profile?.home_city ?? "").trim();
   const canSave = !!user && usernameLooksValid && isDirty && !saveBusy;
 
   const usernameInlineErr = (() => {
@@ -348,9 +352,12 @@ export function AuthModal({ open, onClose }) {
     setSaveOk(false);
     setSaveBusy(true);
     try {
+      const inferredCurrency = getCurrencyForCity(homeCityDraft) || "USD";
       const res = await updateOwnProfile(supabase, user.id, {
         username: usernameTrim,
         displayName: displayNameTrim,
+        homeCurrency: inferredCurrency,
+        homeCity: homeCityDraft.trim(),
       });
       if (!res.ok) {
         if (res.code === "network") setErr(t.profileSavingErr);
@@ -610,7 +617,7 @@ export function AuthModal({ open, onClose }) {
                   <p style={{ fontSize: 12, color: "#97C459", margin: "0 0 8px", textAlign: "center" }}>{t.profileSaved}</p>
                 )}
                 <div style={{ display: "flex", gap: 8 }}>
-                  <button type="button" onClick={() => setEditMode(true)}
+                  <button type="button" onClick={() => { setHomeCityDraft(profile?.home_city || ""); setEditMode(true); }}
                     style={{ ...btn, flex: 1, marginBottom: 0, background: "#3C1F13", color: "#F0997B", border: "none" }}>
                     Edit profile
                   </button>
@@ -658,12 +665,23 @@ export function AuthModal({ open, onClose }) {
                     style={{ width: "100%", boxSizing: "border-box", marginBottom: 3, fontSize: 13, padding: "6px 10px" }}
                   />
                   <div style={{ fontSize: 11, color: "#666663", marginBottom: 10, lineHeight: 1.4 }}>{t.profileDisplayNameHelp}</div>
+                  <label style={{ fontSize: 11, color: "#C4C2BA", display: "block", marginBottom: 4 }}>Location</label>
+                  <CityInput value={homeCityDraft} onChange={setHomeCityDraft} placeholder="e.g. NYC, Tokyo, London" />
+                  {(() => {
+                    const cc = getCurrencyForCity(homeCityDraft);
+                    const sym = CURRENCY_SYMBOLS[cc] || cc;
+                    return (
+                      <div style={{ fontSize: 11, color: "#666663", marginTop: 5, marginBottom: 10, lineHeight: 1.4 }}>
+                        {homeCityDraft.trim() ? `Currency: ${sym} ${cc}` : "Currency: $ USD (default)"}
+                      </div>
+                    );
+                  })()}
                   <label style={{ fontSize: 11, color: "#C4C2BA", display: "block", marginBottom: 3 }}>{t.profileEmailLabel}</label>
                   <div style={{ fontSize: 13, color: "#F1EFE8", wordBreak: "break-all" }}>{user?.email || "—"}</div>
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <button type="button"
-                    onClick={() => { setEditMode(false); setSaveError(null); setSuggestions([]); setUsernameDraft(profile?.username ?? username ?? ""); setDisplayNameDraft(profile?.display_name ?? ""); }}
+                    onClick={() => { setEditMode(false); setSaveError(null); setSuggestions([]); setUsernameDraft(profile?.username ?? username ?? ""); setDisplayNameDraft(profile?.display_name ?? ""); setHomeCityDraft(profile?.home_city || ""); }}
                     style={{ ...btn, flex: 1, marginBottom: 0, background: "transparent", color: "#C4C2BA", border: "0.5px solid rgba(255,255,255,0.2)" }}>
                     Cancel
                   </button>

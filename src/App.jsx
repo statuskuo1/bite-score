@@ -54,6 +54,11 @@ import { countUnreadNotifications, fetchUnreadNotifications, markNotificationsRe
 import { usePaginatedList } from "./components/usePaginatedList.js";
 import { ShowMoreButton } from "./components/ShowMoreButton.jsx";
 import { NotificationPanel } from "./components/NotificationPanel.jsx";
+import { insertDineTag, fetchUnloggedDineTags, countUnloggedDineTags, dismissDineTag } from "./utils/dineWithApi.js";
+import { DineTagsBanner } from "./components/DineTagsBanner.jsx";
+import { getCurrencyForCity, toUSD, fromUSD, CURRENCY_SYMBOLS } from "./utils/currency.js";
+import { CityInput } from "./components/CityInput.jsx";
+import { CategoryTabs } from "./components/CategoryTabs.jsx";
 const GUEST_PALETTE_ENTRIES = [
   {id:"gp1",name:"Lilia",             cuisine:"Italian",        letter:"I",city:"NYC",taste:9.2,cost:120,portions:2,wait:20,repeatability:3,useR:true,notes:""},
   {id:"gp2",name:"Don Angie",         cuisine:"Italian",        letter:"I",city:"NYC",taste:8.8,cost:95, portions:2,wait:15,repeatability:3,useR:true,notes:""},
@@ -108,6 +113,7 @@ export default function App() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showWelcome, setShowWelcome] = useState(true);
   const [welcomeOverride, setWelcomeOverride] = useState({});
+  const [welcomeCity, setWelcomeCity] = useState("");
   /** Unseen-followers count drives the red badge on the Community tab in the
    *  bottom nav. Refreshed on auth + after every follow/unfollow action; the
    *  Friends sub-tab additionally calls markFollowersSeen on mount to clear it. */
@@ -122,6 +128,10 @@ export default function App() {
   const [notifSheetProfile, setNotifSheetProfile] = useState(null);
   const [notifSheetRelation, setNotifSheetRelation] = useState("none");
   const [notifSheetBusy, setNotifSheetBusy] = useState(false);
+  const [dineTags, setDineTags] = useState([]);
+  const [dineTagCount, setDineTagCount] = useState(0);
+  const [tasteBudIds, setTasteBudIds] = useState(() => new Set());
+  const [homeCurrency, setHomeCurrency] = useState("USD");
   const [extUserLogTarget, setExtUserLogTarget] = useState(null);
   const [extCompareTarget, setExtCompareTarget] = useState(null);
   /** Mandarin localization is temporarily stashed while EN gets polish.
@@ -250,6 +260,23 @@ export default function App() {
     await Promise.all([refreshUnseenFollowers(), refreshNotifCount()]);
   }, [refreshUnseenFollowers, refreshNotifCount]);
 
+  const refreshDineTags = useCallback(async () => {
+    if (!user?.id) { setDineTags([]); setDineTagCount(0); return; }
+    const [tags, count, followingIds] = await Promise.all([
+      fetchUnloggedDineTags(supabase, user.id),
+      countUnloggedDineTags(supabase, user.id),
+      fetchFollowingIds(supabase, user.id),
+    ]);
+    setDineTags(tags);
+    setDineTagCount(count);
+    // tasteBudIds = ids that follow user AND user follows them.
+    // fetchFollowingIds returns who the user follows; we intersect with followers separately.
+    // For simplicity, load follower ids too and intersect.
+    setTasteBudIds(followingIds);
+  }, [user?.id]);
+
+  useEffect(() => { refreshDineTags(); }, [refreshDineTags]);
+
   /** Bundled `translations.js` by default. Supabase `welcome_*` only when hosting sets `VITE_WELCOME_USE_SUPABASE=true` (opt-in). */
   const welcomeUseDbCopy = import.meta.env.VITE_WELCOME_USE_SUPABASE === 'true';
   const welcomeTitleDisplay = (welcomeUseDbCopy && welcomeOverride[lang+"_title"]) || t.welcome1;
@@ -258,7 +285,8 @@ export default function App() {
   useEffect(() => {
     if (!authReady || !user?.id) return;
     try {
-      if (localStorage.getItem(`bite_welcomeDismissed_${user.id}`)) setShowWelcome(false);
+      const dismissed = localStorage.getItem(`bite_welcomeDismissed_${user.id}`);
+      setShowWelcome(!dismissed);
     } catch (e) { /* ignore */ }
   }, [authReady, user?.id]);
 
@@ -269,6 +297,11 @@ export default function App() {
     if (user?.id) {
       try { localStorage.setItem(`bite_welcomeDismissed_${user.id}`, "1"); }
       catch (e) { console.error("welcome dismissed save:", e); }
+      const inferredCurrency = getCurrencyForCity(welcomeCity) || "USD";
+      setHomeCurrency(inferredCurrency);
+      const patch = { home_currency: inferredCurrency };
+      if (welcomeCity.trim()) patch.home_city = welcomeCity.trim();
+      supabase.from("profiles").update(patch).eq("id", user.id);
     }
   }
 
@@ -358,6 +391,16 @@ export default function App() {
         }
 
         if (user) {
+          // Load home currency from profile.
+          try {
+            const { data: prof } = await supabase
+              .from("profiles")
+              .select("home_currency")
+              .eq("id", user.id)
+              .maybeSingle();
+            if (prof?.home_currency) setHomeCurrency(prof.home_currency);
+          } catch (e) { console.error("home_currency load:", e); }
+
           try {
             const rw = localStorage.getItem(`bite_restaurantWeights_${user.id}`);
             if (rw) setWeights(JSON.parse(rw));
@@ -486,9 +529,9 @@ export default function App() {
     let d=0;
     // For each field, d>0 means a should come FIRST in descending (default ↓) order
     // i.e. d = "a is better than b"
-    if(sortBy==="bite") d=(calcBiteOutOf10(a.taste,a.cost,a.portions,a.wait,a.useR,a.repeatability,weights)??0)-(calcBiteOutOf10(b.taste,b.cost,b.portions,b.wait,b.useR,b.repeatability,weights)??0);
+    if(sortBy==="bite") d=(calcBiteOutOf10(a.taste,a.cost,a.portions,a.wait,a.useR,a.repeatability,weights,a.currency_code||"USD")??0)-(calcBiteOutOf10(b.taste,b.cost,b.portions,b.wait,b.useR,b.repeatability,weights,b.currency_code||"USD")??0);
     else if(sortBy==="taste") d=a.taste-b.taste;
-    else if(sortBy==="bpb") d=(b.cost/b.portions)-(a.cost/a.portions); // lower cost = better
+    else if(sortBy==="bpb") d=(toUSD(b.cost,b.currency_code||"USD")/b.portions)-(toUSD(a.cost,a.currency_code||"USD")/a.portions); // lower USD cost = better
     else if(sortBy==="wait") d=b.wait-a.wait; // lower wait = better
     else if(sortBy==="repeat") d=a.repeatability-b.repeatability;
     // sortAsc=false (↓) = best first (d descending), sortAsc=true (↑) = worst first
@@ -504,7 +547,7 @@ export default function App() {
     return [...m.entries()].sort((a, b) => b[1] - a[1]);
   }, [st.entries]);
   const filtered = sortedR.filter(e=>{
-    if(tiers.size>0&&!tiers.has(scoreLabel(calcBiteOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights),t)))return false;
+    if(tiers.size>0&&!tiers.has(scoreLabel(calcBiteOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights,e.currency_code||"USD"),t)))return false;
     if(cityFilter.size>0&&!cityFilter.has(e.city||"NYC"))return false;
     if(search.trim()){const q=search.trim().toLowerCase();return e.name.toLowerCase().includes(q)||e.cuisine.toLowerCase().includes(q)||(e.city||'NYC').toLowerCase().includes(q)||(e.notes&&e.notes.toLowerCase().includes(q));}
     return true;
@@ -523,7 +566,7 @@ export default function App() {
   }, [cafes]);
   const sortedDrinks = [...cafes].filter(e=>DRINK_CATS.includes(e.category)).sort((a,b)=>{
     let d=0;
-    if(cafeSortBy==="bite") d=(calcCafeOutOf10(b.taste,b.cost,b.portions,b.wait,b.useR,b.repeatability,drinkWeights)??0)-(calcCafeOutOf10(a.taste,a.cost,a.portions,a.wait,a.useR,a.repeatability,drinkWeights)??0);
+    if(cafeSortBy==="bite") d=(calcCafeOutOf10(b.taste,b.cost,b.portions,b.wait,b.useR,b.repeatability,drinkWeights,b.currency_code||"USD")??0)-(calcCafeOutOf10(a.taste,a.cost,a.portions,a.wait,a.useR,a.repeatability,drinkWeights,a.currency_code||"USD")??0);
     else if(cafeSortBy==="taste") d=b.taste-a.taste;
     else if(cafeSortBy==="bpb") d=(a.cost/a.portions)-(b.cost/b.portions);
     else if(cafeSortBy==="wait") d=a.wait-b.wait;
@@ -558,14 +601,14 @@ export default function App() {
   }, [st.entries, cafes]);
   const sortedSweets = [...cafes].filter(e=>e.category==="Sweets").sort((a,b)=>{
     let d=0;
-    if(sweetsSortBy==="bite") d=(calcCafeOutOf10(b.taste,b.cost,b.portions,b.wait,b.useR,b.repeatability,sweetWeights)??0)-(calcCafeOutOf10(a.taste,a.cost,a.portions,a.wait,a.useR,a.repeatability,sweetWeights)??0);
+    if(sweetsSortBy==="bite") d=(calcCafeOutOf10(b.taste,b.cost,b.portions,b.wait,b.useR,b.repeatability,sweetWeights,b.currency_code||"USD")??0)-(calcCafeOutOf10(a.taste,a.cost,a.portions,a.wait,a.useR,a.repeatability,sweetWeights,a.currency_code||"USD")??0);
     else if(sweetsSortBy==="taste") d=b.taste-a.taste;
     else if(sweetsSortBy==="bpb") d=(a.cost/a.portions)-(b.cost/b.portions);
     else if(sweetsSortBy==="wait") d=a.wait-b.wait;
     else if(sweetsSortBy==="repeat") d=b.repeatability-a.repeatability;
     return sweetsSortAsc?-d:d;
   }).filter(e=>{
-    if(sweetsTiers.size>0&&!sweetsTiers.has(scoreLabel(calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,sweetWeights),t)))return false;
+    if(sweetsTiers.size>0&&!sweetsTiers.has(scoreLabel(calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,sweetWeights,e.currency_code||"USD"),t)))return false;
     if(sweetsCityFilter.size>0&&!sweetsCityFilter.has(e.city||"NYC"))return false;
     if(sweetsSearch.trim()){const q=sweetsSearch.trim().toLowerCase();return e.name.toLowerCase().includes(q)||e.order.toLowerCase().includes(q)||(e.city||"NYC").toLowerCase().includes(q);}
     return true;
@@ -579,7 +622,7 @@ export default function App() {
     filtered.forEach((e) => { const k = e.name; if (!groups[k]) groups[k] = []; groups[k].push(e); });
     return Object.values(groups).map((grp) => {
       const e = grp[grp.length - 1];
-      const biteVals = grp.map((x) => calcBiteOutOf10(x.taste, x.cost, x.portions, x.wait, x.useR, x.repeatability, weights)).filter((v) => v != null);
+      const biteVals = grp.map((x) => calcBiteOutOf10(x.taste, x.cost, x.portions, x.wait, x.useR, x.repeatability, weights, x.currency_code||"USD")).filter((v) => v != null);
       const avgBite = biteVals.length ? biteVals.reduce((a, b) => a + b, 0) / biteVals.length : 0;
       const avgTaste = grp.reduce((a, x) => a + x.taste, 0) / grp.length;
       const avgBpb = grp.reduce((a, x) => a + (x.cost / x.portions), 0) / grp.length;
@@ -604,7 +647,7 @@ export default function App() {
       if (cafeSortBy === "bpb") return -avg((e) => e.cost / e.portions);
       if (cafeSortBy === "wait") return -avg((e) => e.wait);
       if (cafeSortBy === "repeat") return avg((e) => e.repeatability) + (grp.length * 0.001);
-      return avg((e) => calcCafeOutOf10(e.taste, e.cost, e.portions, e.wait, e.useR, e.repeatability, drinkWeights) ?? 0);
+      return avg((e) => calcCafeOutOf10(e.taste, e.cost, e.portions, e.wait, e.useR, e.repeatability, drinkWeights, e.currency_code||"USD") ?? 0);
     };
     return Object.entries(groups).sort((a, b) => cafeSortAsc ? getSortVal(a[1]) - getSortVal(b[1]) : getSortVal(b[1]) - getSortVal(a[1]));
   }, [sortedDrinks, cafeSortBy, cafeSortAsc, drinkWeights]);
@@ -618,7 +661,7 @@ export default function App() {
       if (sweetsSortBy === "bpb") return -avg((e) => e.cost / e.portions);
       if (sweetsSortBy === "wait") return -avg((e) => e.wait);
       if (sweetsSortBy === "repeat") return avg((e) => e.repeatability) + (grp.length * 0.001);
-      return avg((e) => calcCafeOutOf10(e.taste, e.cost, e.portions, e.wait, e.useR, e.repeatability, sweetWeights) ?? 0);
+      return avg((e) => calcCafeOutOf10(e.taste, e.cost, e.portions, e.wait, e.useR, e.repeatability, sweetWeights, e.currency_code||"USD") ?? 0);
     };
     return Object.entries(groups).sort((a, b) => sweetsSortAsc ? getSortVal(a[1]) - getSortVal(b[1]) : getSortVal(b[1]) - getSortVal(a[1]));
   }, [sortedSweets, sweetsSortBy, sweetsSortAsc, sweetWeights]);
@@ -643,10 +686,10 @@ export default function App() {
 
   function getDisplay(e) {
     if(sortBy==="taste"){const tv=e.taste,lbl=tasteLabel(tv,t),col=tasteColor(tv);return{val:tv.toFixed(1),label:lbl,color:col};}
-    if(sortBy==="bpb") return{val:"$"+(e.cost/e.portions).toFixed(2),label:t.perPortion,color:"#5B9BD5"};
+    if(sortBy==="bpb"){const sym=CURRENCY_SYMBOLS[homeCurrency]||"$";const usdPP=toUSD(e.cost,e.currency_code||"USD")/e.portions;const pp=fromUSD(usdPP,homeCurrency);return{val:sym+pp.toFixed(2),label:t.perPortion,color:"#5B9BD5"};}
     if(sortBy==="wait") return{val:e.wait+" min",label:t.waitLabel,color:"#888780"};
     if(sortBy==="repeat") return{val:e.useR?("⭐".repeat(e.repeatability)||"✕"):t.off,label:e.useR?(e.repeatability===3?t.mustReturnLabel:e.repeatability===2?t.wouldSeekOutLabel:e.repeatability===1?t.ifOccasionCallsLabel:t.wouldntReturnLabel):"off",color:"#EF9F27"};
-    const sc=calcBiteOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights);
+    const sc=calcBiteOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights,e.currency_code||"USD");
     return{val:sc!=null?sc.toFixed(2):"—",label:scoreLabel(sc,t),color:scoreColor(sc)};
   }
 
@@ -675,7 +718,7 @@ export default function App() {
   }
 
   async function insertCafeEntry(entry) {
-    if (!user) return;
+    if (!user) return null;
     try {
       const placeId = await ensureCafePlace(supabase, {
         placeId: entry.placeId || null,
@@ -693,8 +736,10 @@ export default function App() {
       if (error) console.error("cafe insert error:", error);
       const mapped = (data || []).map((row) => mapCafeVisitRow(row));
       setCafes((p) => [...p, ...mapped]);
+      return mapped[0] || null;
     } catch (err) {
       console.error("cafe insert threw:", err);
+      return null;
     }
   }
 
@@ -779,6 +824,11 @@ export default function App() {
               <p style={{fontSize:16,fontWeight:600,color:"#F1EFE8",margin:0,lineHeight:1.5,textAlign:"center"}}>{welcomeTitleDisplay}</p>
               <InfoBubble content={welcomeBodyDisplay.split("\n\n")[0]||""}/>
             </div>
+            <div style={{marginBottom:14}}>
+              <div style={{fontSize:13,color:"#C4C2BA",marginBottom:6,fontWeight:500}}>Location</div>
+              <CityInput value={welcomeCity} onChange={setWelcomeCity} existingCities={existingCities}/>
+              {(()=>{const cc=getCurrencyForCity(welcomeCity);const sym=CURRENCY_SYMBOLS[cc]||cc;return(<div style={{fontSize:12,color:"#666663",marginTop:6}}>{welcomeCity.trim()?`Currency: ${sym} ${cc}`:"Currency: $ USD (default)"}</div>);})()}
+            </div>
             <div style={{borderTop:"0.5px solid rgba(255,255,255,0.08)",paddingTop:14,marginBottom:14}}>
               <WeightSliders weights={weights} labels={[[t.taste,"taste"],[t.bangBuck,"bpb"],[t.wait,"wait"]]} onUpdate={updW} onReset={resetWeights} defaults={{taste:50,bpb:40,wait:10}} careHeadingPx={15}/>
               <div style={{fontSize:12,color:canProceedWelcome?"#97C459":"#EF9F27",textAlign:"center",marginTop:8}}>
@@ -807,8 +857,11 @@ export default function App() {
           return (
             <button key={v} onClick={()=>{navigate(to);setEditR(null);setEditC(null);window.scrollTo({top:0,behavior:"instant"});}} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",padding:"4px 8px",minWidth:56}}>
               {v==="add"?(
-                <div style={{width:44,height:44,borderRadius:"50%",background:"#F0997B",border:"2px solid #F0997B",display:"flex",alignItems:"center",justifyContent:"center",marginTop:-8,marginBottom:2}}>
-                  <span style={{fontSize:22,lineHeight:1,color:"#141413"}}>➕</span>
+                <div style={{position:"relative",marginTop:-8,marginBottom:2}}>
+                  <div style={{width:44,height:44,borderRadius:"50%",background:"#F0997B",border:"2px solid #F0997B",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    <span style={{fontSize:22,lineHeight:1,color:"#141413"}}>➕</span>
+                  </div>
+                  {dineTagCount>0&&<span style={{position:"absolute",top:-2,right:-2,width:10,height:10,borderRadius:"50%",background:"#F0997B",border:"2px solid #1A1A18"}}/>}
                 </div>
               ):(
                 <span style={{fontSize:20,lineHeight:1,position:"relative",display:"inline-block"}}>
@@ -831,14 +884,12 @@ export default function App() {
       {pathname.startsWith("/log")&&!editR&&!editC&&!user&&(
         <GuestPreview message="Sign in to start logging your own restaurant ratings" onSignIn={() => setShowAuthModal(true)}>
           <div>
-            <div style={{display:"flex",background:"#252523",borderRadius:10,padding:3,gap:2,marginBottom:8}}>
-              {[["restaurants","🍽 Restaurants"],["drinks","☕ Drinks"],["sweets","🥐 Sweets"]].map(([v,l])=>(
-                <button key={v} style={{flex:1,padding:"6px 0",textAlign:"center",borderRadius:8,border:"none",background:v==="restaurants"?"#3C1F13":"transparent",color:v==="restaurants"?"#F0997B":"#888780",fontSize:11,fontWeight:v==="restaurants"?700:500,cursor:"pointer"}}>{l}</button>
-              ))}
+            <div style={{marginBottom:8}}>
+              <CategoryTabs active="restaurants" onChange={() => {}} />
             </div>
             <div style={{borderBottom:"0.5px solid rgba(255,255,255,0.08)",marginBottom:12}}/>
             {GUEST_PALETTE_ENTRIES.map(e=>{
-              const sc=calcBiteOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights);
+              const sc=calcBiteOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights,e.currency_code||"USD");
               return(
                 <RestRow key={e.id} e={e} display={{val:sc!=null?sc.toFixed(2):"—",label:scoreLabel(sc,t),color:scoreColor(sc)}} user={null} weights={weights}/>
               );
@@ -856,10 +907,8 @@ export default function App() {
       {pathname.startsWith("/log")&&!editR&&!editC&&user&&dbLoaded&&(
         <div>
           <div style={{marginBottom:12}}>
-            <div style={{display:"flex",background:"#252523",borderRadius:10,padding:3,gap:2,marginBottom:8}}>
-              {[["restaurants","🍽 "+t.restaurants],["drinks","☕ "+t.drinks],["sweets","🥐 "+t.sweets]].map(([v,l])=>(
-                <button key={v} onClick={()=>navigate(v==="restaurants"?"/log":"/log/"+v)} style={{flex:1,padding:"6px 0",textAlign:"center",borderRadius:8,border:"none",background:logTab===v?"#3C1F13":"transparent",color:logTab===v?"#F0997B":"#888780",fontSize:11,fontWeight:logTab===v?700:500,cursor:"pointer",transition:"all 0.15s"}}>{l}</button>
-              ))}
+            <div style={{marginBottom:8}}>
+              <CategoryTabs active={logTab} onChange={(v) => navigate(v === "restaurants" ? "/log" : "/log/" + v)} />
             </div>
             {user&&<p style={{fontSize:12,color:"#888780",margin:0}}>{t.swipeHint}</p>}
           </div>
@@ -884,7 +933,7 @@ export default function App() {
                     </div>
                     {tierFilterRows.map(([tier,col])=>{
                       const on=tiers.has(tier);
-                      const cnt=sortedR.filter(e=>scoreLabel(calcBiteOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights),t)===tier).length;
+                      const cnt=sortedR.filter(e=>scoreLabel(calcBiteOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights,e.currency_code||"USD"),t)===tier).length;
                       return(
                         <div key={tier} onClick={()=>setTiers(p=>{const n=new Set(p);on?n.delete(tier):n.add(tier);return n;})} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderBottom:"0.5px solid rgba(255,255,255,0.1)",cursor:"pointer",background:on?"rgba(255,255,255,0.03)":"transparent"}}>
                           <div style={{width:13,height:13,borderRadius:3,border:"1.5px solid "+(on?col:"rgba(255,255,255,0.1)"),background:on?col:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{on&&<span style={{color:"#141413",fontSize:9,fontWeight:700,lineHeight:1}}>✓</span>}</div>
@@ -904,7 +953,7 @@ export default function App() {
                 const visits=grp.length;
                 const display=getDisplay(e);
                 return (
-                  <RestRow key={e.id} e={e} display={display} user={user} visits={visits} group={grp} weights={weights}
+                  <RestRow key={e.id} e={e} display={display} user={user} visits={visits} group={grp} weights={weights} homeCurrency={homeCurrency}
                     onEdit={v=>{setEditR(v||e);window.scrollTo({top:0,behavior:"smooth"});}}
                     onDelete={async id=>{
                       const did=id||e.id;
@@ -998,7 +1047,7 @@ export default function App() {
                     </div>
                     {tierFilterRows.map(([tier,col])=>{
                       const on=sweetsTiers.has(tier);
-                      const cnt=cafes.filter(e=>e.category==="Sweets"&&scoreLabel(calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,sweetWeights),t)===tier).length;
+                      const cnt=cafes.filter(e=>e.category==="Sweets"&&scoreLabel(calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,sweetWeights,e.currency_code||"USD"),t)===tier).length;
                       return(
                         <div key={tier} onClick={()=>setSweetsTiers(p=>{const n=new Set(p);on?n.delete(tier):n.add(tier);return n;})} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderBottom:"0.5px solid rgba(255,255,255,0.1)",cursor:"pointer",background:on?"rgba(255,255,255,0.03)":"transparent"}}>
                           <div style={{width:13,height:13,borderRadius:3,border:"1.5px solid "+(on?col:"rgba(255,255,255,0.1)"),background:on?col:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{on&&<span style={{color:"#141413",fontSize:9,fontWeight:700,lineHeight:1}}>✓</span>}</div>
@@ -1129,9 +1178,19 @@ export default function App() {
       )}
       {pathname==="/add"&&user&&(
         <div>
+          <DineTagsBanner
+            tags={dineTags}
+            onDismiss={(tagId)=>{
+              setDineTags(prev=>prev.filter(t=>t.id!==tagId));
+              setDineTagCount(prev=>Math.max(0,prev-1));
+            }}
+            onAddType={(type)=>setAddType(type)}
+          />
           {addType==="restaurant"
             ?<RestForm initial={{...INIT_REST,city:lastCity.current}} weights={weights} existingEntries={st.entries} existingCities={existingCities} places={restaurantPlaces}
                 onPlaceCreated={(p)=>upsertPlace(setRestaurantPlaces, p.id, p)}
+                user={user}
+                tasteBudIds={tasteBudIds}
                 onSave={async e=>{
                   if (e.city) lastCity.current = e.city;
                   if (!user) return;
@@ -1159,6 +1218,17 @@ export default function App() {
                     if (error) console.error("restaurant insert error:", error);
                     if (data) {
                       dispatch({ type: "ADD", e: mapRestaurantVisitRow(data) });
+                      if (e.dineWith?.length) {
+                        await Promise.all(e.dineWith.map(p=>insertDineTag(supabase,{
+                          taggerId: user.id,
+                          taggedId: p.id,
+                          entryId: data.id,
+                          entryType: "restaurant",
+                          restaurantName: e.name,
+                          city: e.city||"",
+                          cuisine: e.cuisine||"",
+                        })));
+                      }
                       navigate("/log");
                     }
                   } catch (err) {
@@ -1170,14 +1240,38 @@ export default function App() {
               />
             :<CafeForm initial={{...INIT_CAFE,city:lastCity.current}} weights={drinkWeights}
                 onPlaceCreated={(p)=>upsertPlace(setCafePlaces, p.id, p)}
+                user={user}
+                tasteBudIds={tasteBudIds}
                 onSave={async e=>{
                   if (e.city) lastCity.current = e.city;
-                  await insertCafeEntry(e);
+                  const inserted = await insertCafeEntry(e);
+                  if (e.dineWith?.length && inserted?.id) {
+                    await Promise.all(e.dineWith.map(p=>insertDineTag(supabase,{
+                      taggerId: user.id,
+                      taggedId: p.id,
+                      entryId: inserted.id,
+                      entryType: "cafe",
+                      restaurantName: e.name,
+                      city: e.city||"",
+                      cuisine: e.category||"",
+                    })));
+                  }
                   navigate(e.category==="Sweets"?"/log/sweets":"/log/drinks");
                 }}
                 onSaveAndContinue={async e=>{
                   if (e.city) lastCity.current = e.city;
-                  await insertCafeEntry(e);
+                  const inserted = await insertCafeEntry(e);
+                  if (e.dineWith?.length && inserted?.id) {
+                    await Promise.all(e.dineWith.map(p=>insertDineTag(supabase,{
+                      taggerId: user.id,
+                      taggedId: p.id,
+                      entryId: inserted.id,
+                      entryType: "cafe",
+                      restaurantName: e.name,
+                      city: e.city||"",
+                      cuisine: e.category||"",
+                    })));
+                  }
                   window.scrollTo({top:0,behavior:"smooth"});
                 }}
                 onCancel={()=>navigate("/log")}
@@ -1226,6 +1320,7 @@ export default function App() {
           questL={questL}
           toggleQ={toggleQ}
           onOpenSuggest={()=>setShowSuggest(true)}
+          homeCurrency={homeCurrency}
         />
       )}
 

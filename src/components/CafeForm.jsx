@@ -15,6 +15,8 @@ import { FormScoreHeader } from "./FormScoreHeader.jsx";
 import { BEAN_ORIGINS } from "../constants/coffeeConstants.js";
 import { CityInput } from "./CityInput.jsx";
 import { SelectField } from "./SelectField.jsx";
+import { DineWithPicker } from "./DineWithPicker.jsx";
+import { getCurrencyForCity, CURRENCY_CODES, CURRENCY_SYMBOLS } from "../utils/currency.js";
 
 
 const ROAST_LEVELS = [
@@ -129,12 +131,15 @@ function FlavorDropdown({ activeNotes, onToggle, t }) {
   );
 }
 
-export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addType,setAddType,existingCafes,existingCities,places,onPlaceCreated}) {
+export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addType,setAddType,existingCafes,existingCities,places,onPlaceCreated,user,tasteBudIds}) {
   const {t} = useLang();
   const [f, setF] = useState({...INIT_CAFE, ...initial});
   const [sub, setSub] = useState(false);
+  const [dineWith, setDineWith] = useState([]);
+  const [currencyCode, setCurrencyCode] = useState(() => getCurrencyForCity(initial.city || ""));
+  const currSymbol = CURRENCY_SYMBOLS[currencyCode] || currencyCode;
   const inp = (k, v) => setF(p => ({...p, [k]: v}));
-  const score = calcCafeOutOf10(+f.taste,+f.cost,+f.portions,+f.wait,f.useR,+f.repeatability,weights);
+  const score = calcCafeOutOf10(+f.taste,+f.cost,+f.portions,+f.wait,f.useR,+f.repeatability,weights,currencyCode);
   const isEdit = !!initial.id;
 
   const cafesList = existingCafes || [];
@@ -175,6 +180,8 @@ export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addT
       sweetness: f.sweetness != null ? +f.sweetness : null,
       flavorNotes: Array.isArray(f.flavorNotes) ? f.flavorNotes : [],
       letter: "", cuisine2: "", isFusion: false,
+      dineWith,
+      currency_code: currencyCode,
     };
   }
   function validate() {
@@ -224,7 +231,7 @@ export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addT
       />
       <div style={{marginBottom:16}}>
         <FieldLabel>{t.city||"City"} *</FieldLabel>
-        <CityInput value={f.city||""} onChange={val=>inp("city",val)} existingCities={existingCities} />
+        <CityInput value={f.city||""} onChange={val=>{ inp("city",val); setCurrencyCode(getCurrencyForCity(val)); }} existingCities={existingCities} />
       </div>
       <div style={S.mb16}>
         <FieldLabel>{t.cafeName}</FieldLabel>
@@ -329,6 +336,18 @@ export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addT
         </details>
       )}
 
+      {user && (
+        <div style={S.mb16}>
+          <FieldLabel>Dined with @</FieldLabel>
+          <DineWithPicker
+            userId={user.id}
+            tasteBudIds={tasteBudIds}
+            selected={dineWith}
+            onChange={setDineWith}
+          />
+        </div>
+      )}
+
       <div style={S.sec}><SectionLabel>{t.scoreInputs}</SectionLabel></div>
       <div style={S.mb16}>
         <FieldLabel>Taste — <span style={{color:"#F0997B"}}>{f.taste} · {tasteLabel(f.taste,t)}</span></FieldLabel>
@@ -336,7 +355,16 @@ export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addT
         <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#888780",marginTop:4}}><span>0 sucks</span><span>5 avg</span><span>10 incredible</span></div>
       </div>
       <div style={{display:"flex",gap:10,marginBottom:16}}>
-        <div style={S.f1}><FieldLabel>{t.totalCost}</FieldLabel><input type="number" value={f.cost} onChange={e=>inp("cost",e.target.value)} placeholder="$" style={S.wb}/>{sub&&!f.cost&&<div style={S.err}>Required</div>}</div>
+        <div style={S.f1}>
+          <FieldLabel>{t.totalCost} <span style={{color:"#888780",fontWeight:400}}>({currencyCode})</span></FieldLabel>
+          <div style={{display:"flex",gap:4}}>
+            <input type="number" value={f.cost} onChange={e=>inp("cost",e.target.value)} placeholder={currSymbol} style={{...S.wb,flex:1}}/>
+            <select value={currencyCode} onChange={e=>setCurrencyCode(e.target.value)} style={{width:72,fontSize:12,padding:"6px 4px"}}>
+              {CURRENCY_CODES.map(c=><option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          {sub&&!f.cost&&<div style={S.err}>Required</div>}
+        </div>
         <div style={S.f1}><FieldLabel>{t.portions}</FieldLabel><input type="number" min="0.5" step="0.5" value={f.portions} onChange={e=>inp("portions",e.target.value)} style={S.wb}/></div>
         <div style={S.f1}><FieldLabel>{t.waitMins}</FieldLabel><input type="number" min="0" step="1" value={f.wait} onChange={e=>inp("wait",e.target.value)} style={S.wb}/></div>
       </div>

@@ -148,7 +148,7 @@ export async function accountUsesOauthOnly(client, identifier) {
  * pre-check↔update race window. This means the UX still works even on installs
  * where the partial unique index hasn't been applied yet.
  */
-export async function updateOwnProfile(client, userId, { username, displayName }) {
+export async function updateOwnProfile(client, userId, { username, displayName, homeCurrency, homeCity }) {
   if (!userId) return { ok: false, code: "network", data: null };
 
   const u = String(username ?? "").trim().toLowerCase();
@@ -171,6 +171,8 @@ export async function updateOwnProfile(client, userId, { username, displayName }
   const patch = {
     username: u,
     display_name: dn === "" ? null : dn.slice(0, 120),
+    ...(homeCurrency ? { home_currency: homeCurrency } : {}),
+    ...(homeCity !== undefined ? { home_city: String(homeCity).trim().slice(0, 100) } : {}),
   };
 
   const { error } = await client.from("profiles").update(patch).eq("id", userId);
@@ -181,6 +183,16 @@ export async function updateOwnProfile(client, userId, { username, displayName }
   }
   const fresh = await fetchProfileById(client, userId);
   return { ok: true, code: null, data: fresh };
+}
+
+/** Save home_currency alone without touching username/displayName. */
+export async function updateHomeCurrency(client, userId, currencyCode) {
+  if (!userId) return;
+  const { error } = await client
+    .from("profiles")
+    .update({ home_currency: currencyCode })
+    .eq("id", userId);
+  if (error) console.warn("[BITE] updateHomeCurrency:", error.message);
 }
 
 /** Lowercase, strip to allowed alphabet, drop trailing separators, cap at 22 chars (room for suffixes within 30). */

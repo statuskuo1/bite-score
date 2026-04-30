@@ -4,10 +4,11 @@ import { WeightSliders } from "./WeightSliders.jsx";
 import { calcCafeOutOf10, tasteLabel, CAFE_WEIGHT_DEFAULTS } from "../utils/scoring.js";
 import { S } from "../styles/sharedStyles.js";
 import { BEAN_REGIONS, BEAN_REGION_COLORS, regionOf } from "../constants/coffeeConstants.js";
+import { toUSD, fromUSD, CURRENCY_SYMBOLS } from "../utils/currency.js";
 
 const btnGhost = {fontSize:11,color:"#5B9BD5",background:"none",border:"1px solid rgba(91,155,213,0.45)",borderRadius:8,padding:"5px 12px",cursor:"pointer",fontWeight:500};
 
-export function DrinksPalette({cafes,drinkWeights,replaceDrinkWeights}) {
+export function DrinksPalette({cafes,drinkWeights,replaceDrinkWeights,homeCurrency="USD"}) {
   const {t,lang} = useLang();
   const drinks = cafes.filter(e=>["Coffee","Tea","Other"].includes(e.category));
   const total = drinks.length;
@@ -65,7 +66,9 @@ export function DrinksPalette({cafes,drinkWeights,replaceDrinkWeights}) {
   );
 
   const avgT=(drinks.reduce((a,e)=>a+e.taste,0)/total).toFixed(1);
-  const avgC=(drinks.reduce((a,e)=>a+(e.cost/(e.portions||1)),0)/total).toFixed(2);
+  const sym = CURRENCY_SYMBOLS[homeCurrency] || homeCurrency;
+  const avgCUSD = drinks.reduce((a,e)=>a+(toUSD(e.cost,e.currency_code||"USD")/(e.portions||1)),0)/total;
+  const avgC = fromUSD(avgCUSD, homeCurrency).toFixed(2);
 
   const orderCounts={};drinks.forEach(e=>{const k=e.order||e.category;orderCounts[k]=(orderCounts[k]||0)+1;});
   const topOrder=Object.entries(orderCounts).sort((a,b)=>b[1]-a[1])[0];
@@ -134,7 +137,8 @@ export function DrinksPalette({cafes,drinkWeights,replaceDrinkWeights}) {
           const bestByBean=topBeanRegion?scored2.filter(e=>regionOf(e.beanRegion)===topBeanRegion[0]).sort((a,b)=>(b.sc??0)-(a.sc??0))[0]:null;
           const avgBiteBean=coffeeTotal?(scored2.reduce((a,e)=>a+(e.sc??0),0)/coffeeTotal).toFixed(2):"—";
           const avgTasteBean=coffeeTotal?(coffeeOnly.reduce((a,e)=>a+e.taste,0)/coffeeTotal).toFixed(1):"—";
-          const avgSpendBean=coffeeTotal?"$"+(coffeeOnly.reduce((a,e)=>a+(e.cost/(e.portions||1)),0)/coffeeTotal).toFixed(2):"—";
+          const avgSpendBeanUSD=coffeeTotal?(coffeeOnly.reduce((a,e)=>a+(toUSD(e.cost,e.currency_code||"USD")/(e.portions||1)),0)/coffeeTotal):null;
+          const avgSpendBean=avgSpendBeanUSD!=null?sym+fromUSD(avgSpendBeanUSD,homeCurrency).toFixed(2):"—";
           const regionsLogged=Object.keys(bc).filter(k=>k!=="Other"&&k!=="Blend").length;
 
           // Simple donut
@@ -191,7 +195,7 @@ export function DrinksPalette({cafes,drinkWeights,replaceDrinkWeights}) {
           ["Top rated", best?best.name:"—"],
           ["Avg BITE", (drinks.reduce((a,e)=>a+(calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,drinkWeights)??0),0)/total).toFixed(2)],
           [t.avgTaste, avgT+"/10"],
-          [t.avgCost, "$"+avgC],
+          [t.avgCost, sym+avgC],
           [t.totalDrinks, String(total)],
         ].map(([label,val])=>(
           <div key={label} style={{background:"#1E1E1C",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"12px 14px"}}>
