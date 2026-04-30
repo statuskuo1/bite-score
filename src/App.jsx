@@ -1210,7 +1210,15 @@ export default function App() {
               setDineTags(prev=>prev.filter(t=>t.id!==tagId));
               setDineTagCount(prev=>Math.max(0,prev-1));
             }}
-            onAddType={(type)=>setAddType(type)}
+            onAddType={(type, tag) => {
+              setAddType(type);
+              if (tag) setAddPrefill({
+                name: tag.restaurant_name || "",
+                city: tag.city || "",
+                cuisine: tag.cuisine || "",
+                letter: (tag.cuisine?.[0] || "").toUpperCase(),
+              });
+            }}
           />
           {addSaveErr&&<div style={{background:"#3C1F13",border:"1px solid #F0997B",borderRadius:8,padding:"10px 14px",marginBottom:12,fontSize:13,color:"#F0997B"}}>{addSaveErr}</div>}
           {addType==="restaurant"

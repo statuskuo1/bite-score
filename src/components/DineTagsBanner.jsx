@@ -52,7 +52,7 @@ export function DineTagsBanner({ tags, onDismiss, onAddType }) {
             <div style={{ display: "flex", gap: 8 }}>
               <button
                 type="button"
-                onClick={() => onAddType(tag.entry_type)}
+                onClick={() => onAddType(tag.entry_type, tag)}
                 style={{
                   flex: 1, padding: "8px 12px", borderRadius: 8, border: "none",
                   background: "#F0997B", color: "#141413", fontSize: 13, fontWeight: 600, cursor: "pointer",
