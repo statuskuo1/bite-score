@@ -113,6 +113,15 @@ export async function fetchReactionsForPosts(client, posts, viewerId) {
  *
  * Optimistic callers should compute the next state locally (count ± 1, mine
  * flip) and reconcile with the returned value when the request resolves.
+ *
+ * Side effect: when adding a heart on someone else's post, also inserts a
+ * 'heart_reaction' notification so the post owner sees it in the bell.
+ * Removing a heart leaves prior notifications untouched (matches IG /
+ * Strava convention — once seen, a like notification is permanent).
+ *
+ * Failures log the full error object (not just `.message`) so missing
+ * migrations surface their PostgREST error code (e.g. `42P01` for "relation
+ * does not exist") in the browser console.
  */
 export async function toggleHeart(client, viewerId, post, currentlyMine) {
   if (!viewerId || !post?.id) return null;
@@ -128,7 +137,7 @@ export async function toggleHeart(client, viewerId, post, currentlyMine) {
       .eq("post_type", dbType)
       .eq("reaction", "heart");
     if (error) {
-      console.warn("[BITE] toggleHeart delete:", error.message);
+      console.warn("[BITE] toggleHeart delete:", error);
       return null;
     }
     return { mine: false };
@@ -143,11 +152,31 @@ export async function toggleHeart(client, viewerId, post, currentlyMine) {
       reaction: "heart",
     });
   if (error) {
-    /** 23505 = unique violation — already hearted (race). Treat as success. */
-    if (error.code !== "23505") {
-      console.warn("[BITE] toggleHeart insert:", error.message);
-      return null;
-    }
+    /** 23505 = unique violation — already hearted (race). Treat as success
+     *  and skip the notification (the recipient already got one when the
+     *  original heart landed). */
+    if (error.code === "23505") return { mine: true };
+    console.warn("[BITE] toggleHeart insert:", error);
+    return null;
   }
+
+  /** Notify the post owner. Skip self-hearts and skip silently on any
+   *  notification failure — the heart itself succeeded, so we don't want
+   *  to surface a false rollback to the optimistic UI. */
+  if (post.ownerId && post.ownerId !== viewerId) {
+    const { error: nErr } = await client.from("notifications").insert({
+      user_id: post.ownerId,
+      from_user_id: viewerId,
+      type: "heart_reaction",
+      meta: {
+        post_id: post.id,
+        post_type: dbType,
+        place_name: post.name || "",
+        city: post.city || "",
+      },
+    });
+    if (nErr) console.warn("[BITE] toggleHeart notification:", nErr);
+  }
+
   return { mine: true };
 }

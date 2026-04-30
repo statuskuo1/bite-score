@@ -282,8 +282,11 @@ export function FeedTab({
    *  the top of the feed reads as a card header, not a label. */
   let lastBucket = null;
 
+  /** Horizontal inset on top of the App container's 16px global padding so
+   *  the cards don't read as flush against the viewport edge on phones.
+   *  Total breathing room from viewport edge is therefore ~24px. */
   return (
-    <div style={{ width: "100%", boxSizing: "border-box" }}>
+    <div style={{ width: "100%", boxSizing: "border-box", padding: "0 8px" }}>
       {loading && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {[1, 2, 3, 4].map((i) => (

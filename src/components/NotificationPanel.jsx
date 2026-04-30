@@ -52,7 +52,8 @@ function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile, onDineTagTap,
   const isDineTagBack = notif.type === "dine_tag_back";
   const isDineTagAccepted = notif.type === "dine_tag_accepted";
   const isDineTagMutual = notif.type === "dine_tag_mutual";
-  const restaurantName = notif.meta?.restaurant_name || "a place";
+  const isHeartReaction = notif.type === "heart_reaction";
+  const restaurantName = notif.meta?.restaurant_name || notif.meta?.place_name || "a place";
   const message = isDineTag
     ? `All bark no BITE 🐶 @${p?.username || "someone"} tagged you at ${restaurantName}. Log your BITE?`
     : isDineTagMutual
@@ -61,9 +62,11 @@ function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile, onDineTagTap,
         ? `@${p?.username || "someone"} tagged you back at ${restaurantName} 🤝`
         : isDineTagAccepted
           ? `@${p?.username || "someone"} logged ${restaurantName} 🍽`
-          : isTasteBuds
-            ? `You and @${p?.username || "someone"} are now Taste Buds! 🎉`
-            : `@${p?.username || "someone"} followed you`;
+          : isHeartReaction
+            ? `@${p?.username || "someone"} hearted your bite at ${restaurantName} ❤️`
+            : isTasteBuds
+              ? `You and @${p?.username || "someone"} are now Taste Buds! 🎉`
+              : `@${p?.username || "someone"} followed you`;
 
   const handleRowTap = isDineTag
     ? () => onDineTagTap?.(notif)
