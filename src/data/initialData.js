@@ -36,4 +36,4 @@ export const CAFES_INIT = [
 ];
 
 export const INIT_REST = {name:"",letter:"",cuisine:"",taste:5,cost:"",portions:1,wait:0,repeatability:1,useR:true,notes:"",isFusion:false,cuisine2:"",city:""};
-export const INIT_CAFE = {name:"",category:"Coffee",order:"",taste:5,cost:"",portions:1,wait:0,beanRegion:"",roast:"",acidity:5,body:5,sweetness:5,flavorNotes:[],repeatability:1,useR:true,notes:"",city:""};
+export const INIT_CAFE = {name:"",category:"Coffee",order:"",taste:5,cost:"",portions:1,wait:0,beanRegion:[],roast:"",acidity:5,body:5,sweetness:5,flavorNotes:[],repeatability:1,useR:true,notes:"",city:""};

@@ -78,7 +78,7 @@ export function DrinksPalette({cafes,drinkWeights,replaceDrinkWeights,homeCurren
   const milkEntries=Object.entries(milkCounts).sort((a,b)=>b[1]-a[1]);
   const topMilk=milkEntries[0]; // most common logged milk level
   const noneCount=milkCounts["None"]||0; // only actual "None" selections, not blanks
-  const beanCounts={};drinks.forEach(e=>{if(e.beanRegion)beanCounts[e.beanRegion]=(beanCounts[e.beanRegion]||0)+1;});
+  const beanCounts={};drinks.forEach(e=>{const origins=Array.isArray(e.beanRegion)?e.beanRegion:(e.beanRegion?[e.beanRegion]:[]);origins.forEach(o=>{if(o)beanCounts[o]=(beanCounts[o]||0)+1;});});
   const beanEntries=Object.entries(beanCounts).sort((a,b)=>b[1]-a[1]);
   const topBean=beanEntries[0];
   const scored=drinks.map(e=>({...e,sc:calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,drinkWeights)})).sort((a,b)=>(b.sc??0)-(a.sc??0));
@@ -129,12 +129,12 @@ export function DrinksPalette({cafes,drinkWeights,replaceDrinkWeights,homeCurren
         {(()=>{
           const BEAN_COLORS=BEAN_REGION_COLORS;
           const ALL_BEANS=BEAN_REGIONS;
-          const coffeeOnly=drinks.filter(e=>e.category==="Coffee"&&e.beanRegion);
+          const coffeeOnly=drinks.filter(e=>e.category==="Coffee"&&(Array.isArray(e.beanRegion)?e.beanRegion.length>0:!!e.beanRegion));
           const coffeeTotal=coffeeOnly.length;
-          const bc={};coffeeOnly.forEach(e=>{const r=regionOf(e.beanRegion);bc[r]=(bc[r]||0)+1;});
+          const bc={};coffeeOnly.forEach(e=>{const origins=Array.isArray(e.beanRegion)?e.beanRegion:(e.beanRegion?[e.beanRegion]:[]);const regions=[...new Set(origins.map(regionOf))].filter(Boolean);if(!regions.length)return;const w=1/regions.length;regions.forEach(r=>{bc[r]=(bc[r]||0)+w;});});
           const scored2=coffeeOnly.map(e=>({...e,sc:calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,drinkWeights)}));
           const topBeanRegion=Object.entries(bc).sort((a,b)=>b[1]-a[1])[0];
-          const bestByBean=topBeanRegion?scored2.filter(e=>regionOf(e.beanRegion)===topBeanRegion[0]).sort((a,b)=>(b.sc??0)-(a.sc??0))[0]:null;
+          const bestByBean=topBeanRegion?scored2.filter(e=>{const origins=Array.isArray(e.beanRegion)?e.beanRegion:(e.beanRegion?[e.beanRegion]:[]);return origins.some(o=>regionOf(o)===topBeanRegion[0]);}).sort((a,b)=>(b.sc??0)-(a.sc??0))[0]:null;
           const avgBiteBean=coffeeTotal?(scored2.reduce((a,e)=>a+(e.sc??0),0)/coffeeTotal).toFixed(2):"—";
           const avgTasteBean=coffeeTotal?(coffeeOnly.reduce((a,e)=>a+e.taste,0)/coffeeTotal).toFixed(1):"—";
           const avgSpendBeanUSD=coffeeTotal?(coffeeOnly.reduce((a,e)=>a+(toUSD(e.cost,e.currency_code||"USD")/(e.portions||1)),0)/coffeeTotal):null;
@@ -177,7 +177,7 @@ export function DrinksPalette({cafes,drinkWeights,replaceDrinkWeights,homeCurren
                     <div key={b} style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
                       <div style={{width:8,height:8,borderRadius:2,background:hasData?(BEAN_COLORS[b]||"#888780"):"#2C2C2A",flexShrink:0}}/>
                       <span style={{fontSize:12,color:hasData?"#888780":"#444441",flex:1}}>{b}</span>
-                      <span style={{fontSize:12,color:hasData?"#F1EFE8":"#444441",fontWeight:500}}>{hasData?count:0}</span>
+                      <span style={{fontSize:12,color:hasData?"#F1EFE8":"#444441",fontWeight:500}}>{hasData?Math.round(count):0}</span>
                       <span style={{fontSize:11,color:"#444441",width:30,textAlign:"right"}}>{hasData?Math.round(count/coffeeTotal*100)+"%":"0%"}</span>
                     </div>
                   );})}

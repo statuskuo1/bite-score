@@ -748,7 +748,7 @@ export default function App() {
     return cafeSortAsc?-d:d;
   }).filter(e=>{
     if(cafeFilterMilk&&e.milkLevel!==cafeFilterMilk)return false;
-    if(cafeFilterBean&&regionOf(e.beanRegion)!==cafeFilterBean)return false;
+    if(cafeFilterBean){const origins=Array.isArray(e.beanRegion)?e.beanRegion:(e.beanRegion?[e.beanRegion]:[]);if(!origins.some(o=>regionOf(o)===cafeFilterBean))return false;}
     if(cafeCityFilter.size>0&&!cafeCityFilter.has(e.city||"NYC"))return false;
     if(cafeSearch.trim()){const q=cafeSearch.trim().toLowerCase();return e.name.toLowerCase().includes(q)||e.order.toLowerCase().includes(q)||(e.city||"NYC").toLowerCase().includes(q);}
     return true;

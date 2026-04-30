@@ -10,9 +10,8 @@ import { RepeatPicker } from "./RepeatPicker.jsx";
 import { SectionLabel } from "./SectionLabel.jsx";
 import { FieldLabel } from "./FieldLabel.jsx";
 import { FormScoreHeader } from "./FormScoreHeader.jsx";
-import { BEAN_ORIGINS } from "../constants/coffeeConstants.js";
+import { BEAN_ORIGINS, BEAN_ORIGIN_GROUPS } from "../constants/coffeeConstants.js";
 import { CityInput } from "./CityInput.jsx";
-import { SelectField } from "./SelectField.jsx";
 import { DineWithPicker } from "./DineWithPicker.jsx";
 import { getCurrencyForCity, CURRENCY_SYMBOLS } from "../utils/currency.js";
 
@@ -123,6 +122,126 @@ function FlavorDropdown({ activeNotes, onToggle, t }) {
               </div>
             );
           })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const GEO_COLS = [
+  [
+    { label: "North America", origins: ["Hawaii"] },
+    { label: "Latin America", origins: ["Brazil", "Colombia", "Central America"] },
+    { label: "Other", origins: ["Blend", "Other"] },
+  ],
+  [
+    { label: "Asia & Pacific", origins: ["Vietnam", "Indonesia", "Papua New Guinea"] },
+    { label: "Africa & Middle East", origins: ["Ethiopia", "Kenya", "Yemen"] },
+  ],
+];
+
+function BeanOriginDropdown({ active, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handler(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const count = active.length;
+
+  function toggle(origin) {
+    onChange(active.includes(origin) ? active.filter(x => x !== origin) : [...active, origin]);
+  }
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "9px 12px", background: "#1E1E1C",
+          border: "0.5px solid rgba(255,255,255,0.12)",
+          borderRadius: 8,
+          borderBottomLeftRadius: open ? 0 : 8, borderBottomRightRadius: open ? 0 : 8,
+          cursor: "pointer",
+        }}
+      >
+        <span style={{ fontSize: 13, color: count === 0 ? "#666663" : "#F1EFE8" }}>
+          {count === 0 ? "Select origins" : `${count} selected`}
+        </span>
+        <span style={{ fontSize: 10, color: "#888780", display: "inline-block", transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s", flexShrink: 0, marginLeft: 6 }}>▼</span>
+      </button>
+
+      {open && (
+        <div style={{
+          position: "absolute", top: "100%", left: 0, right: 0, zIndex: 60,
+          background: "#1E1E1C", border: "0.5px solid rgba(255,255,255,0.12)",
+          borderTop: "none", borderRadius: "0 0 8px 8px",
+        }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
+            {GEO_COLS.map((col, ci) => (
+              <div key={ci} style={{ borderRight: ci === 0 ? "0.5px solid rgba(255,255,255,0.08)" : "none" }}>
+                {col.map((section, si) => (
+                  <div key={section.label} style={{ borderTop: si > 0 ? "0.5px solid rgba(255,255,255,0.08)" : "none" }}>
+                    <div style={{ padding: "6px 10px 2px", fontSize: 9, color: "#555552", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                      {section.label}
+                    </div>
+                    {section.origins.map(origin => {
+                      const on = active.includes(origin);
+                      return (
+                        <div
+                          key={origin}
+                          onClick={() => toggle(origin)}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 8,
+                            padding: "7px 10px", cursor: "pointer",
+                            background: on ? "rgba(240,153,123,0.06)" : "transparent",
+                            borderBottom: "0.5px solid rgba(255,255,255,0.04)",
+                          }}
+                        >
+                          <div style={{
+                            width: 14, height: 14, borderRadius: 3, flexShrink: 0,
+                            border: "1.5px solid " + (on ? "#F0997B" : "rgba(255,255,255,0.25)"),
+                            background: on ? "#F0997B" : "transparent",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                          }}>
+                            {on && <span style={{ color: "#141413", fontSize: 9, lineHeight: 1, fontWeight: 700 }}>✓</span>}
+                          </div>
+                          <span style={{ fontSize: 12, color: on ? "#F0997B" : "#C8C4BC" }}>{origin}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {count > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+          {active.map(val => (
+            <div key={val} style={{
+              display: "flex", alignItems: "center", gap: 3,
+              padding: "3px 6px 3px 10px", borderRadius: 20,
+              background: "#3C1F13", border: "1px solid rgba(240,153,123,0.35)",
+            }}>
+              <span style={{ fontSize: 12, color: "#F0997B" }}>{val}</span>
+              <button
+                type="button"
+                onClick={e => { e.stopPropagation(); toggle(val); }}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(240,153,123,0.7)", fontSize: 15, lineHeight: 1, padding: "0 2px", display: "flex", alignItems: "center" }}
+              >×</button>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -250,7 +369,7 @@ export function CafeForm({initial,initialDineWith=[],onSave,onSaveAndContinue,on
                   ...p,
                   city: city || last.city || p.city || "",
                   category: p.category || last.category || "Coffee",
-                  beanRegion: p.beanRegion || last.beanRegion || "",
+                  beanRegion: (Array.isArray(p.beanRegion)&&p.beanRegion.length>0)?p.beanRegion:(Array.isArray(last.beanRegion)?last.beanRegion:[]),
                   portions: last.portions || 1,
                 }));
               }
@@ -322,16 +441,9 @@ export function CafeForm({initial,initialDineWith=[],onSave,onSaveAndContinue,on
 
           <div style={{marginTop:12}}>
             <FieldLabel>{t.beanRegion}</FieldLabel>
-            <SelectField
-              value={f.beanRegion || ""}
+            <BeanOriginDropdown
+              active={Array.isArray(f.beanRegion) ? f.beanRegion : (f.beanRegion ? [f.beanRegion] : [])}
               onChange={v => inp("beanRegion", v)}
-              options={[
-                ...BEAN_ORIGINS.map(b => ({ value: b, label: b })),
-                ...(f.beanRegion && !BEAN_ORIGINS.includes(f.beanRegion)
-                  ? [{ value: f.beanRegion, label: `${f.beanRegion} (legacy)` }]
-                  : []),
-              ]}
-              placeholder="Select a region"
             />
           </div>
         </details>
