@@ -22,35 +22,40 @@
  * @param {string} [tag.cuisine]
  */
 export async function insertDineTag(client, { taggerId, taggedId, entryId, entryType, restaurantName, city = "", cuisine = "" }) {
-  const { data, error } = await client
-    .from("dine_with_tags")
-    .insert({
-      tagger_id: taggerId,
-      tagged_id: taggedId,
-      entry_id: entryId || null,
-      entry_type: entryType,
-      restaurant_name: restaurantName,
-      city,
-      cuisine,
-    })
-    .select("id")
-    .single();
+  try {
+    const { data, error } = await client
+      .from("dine_with_tags")
+      .insert({
+        tagger_id: taggerId,
+        tagged_id: taggedId,
+        entry_id: entryId || null,
+        entry_type: entryType,
+        restaurant_name: restaurantName,
+        city,
+        cuisine,
+      })
+      .select("id")
+      .single();
 
-  if (error) {
-    console.warn("[BITE] insertDineTag:", error.message);
+    if (error) {
+      console.warn("[BITE] insertDineTag:", error.message);
+      return null;
+    }
+
+    // Insert notification for tagged user.
+    const { error: nErr } = await client.from("notifications").insert({
+      user_id: taggedId,
+      from_user_id: taggerId,
+      type: "dine_tag",
+      meta: { restaurant_name: restaurantName, entry_type: entryType },
+    });
+    if (nErr) console.warn("[BITE] insertDineTag notification:", nErr.message);
+
+    return data?.id ?? null;
+  } catch (err) {
+    console.warn("[BITE] insertDineTag threw:", err);
     return null;
   }
-
-  // Insert notification for tagged user.
-  const { error: nErr } = await client.from("notifications").insert({
-    user_id: taggedId,
-    from_user_id: taggerId,
-    type: "dine_tag",
-    meta: { restaurant_name: restaurantName, entry_type: entryType },
-  });
-  if (nErr) console.warn("[BITE] insertDineTag notification:", nErr.message);
-
-  return data?.id ?? null;
 }
 
 /**

@@ -323,6 +323,8 @@ export default function App() {
   const [editR, setEditR] = useState(null);
   const [editC, setEditC] = useState(null);
   const [addType, setAddType] = useState("restaurant");
+  const [addSaveErr, setAddSaveErr] = useState(null);
+  useEffect(() => { setAddSaveErr(null); }, [addType]);
   const [sortBy, setSortBy] = useState("bite");
   const [sortAsc, setSortAsc] = useState(false);
   const [tiers, setTiers] = useState(new Set());
@@ -1192,6 +1194,7 @@ export default function App() {
             }}
             onAddType={(type)=>setAddType(type)}
           />
+          {addSaveErr&&<div style={{background:"#3C1F13",border:"1px solid #F0997B",borderRadius:8,padding:"10px 14px",marginBottom:12,fontSize:13,color:"#F0997B"}}>{addSaveErr}</div>}
           {addType==="restaurant"
             ?<RestForm initial={{...INIT_REST,city:profile?.home_city||lastCity.current}} weights={weights} existingEntries={st.entries} existingCities={existingCities} places={restaurantPlaces}
                 onPlaceCreated={(p)=>upsertPlace(setRestaurantPlaces, p.id, p)}
@@ -1200,6 +1203,7 @@ export default function App() {
                 onSave={async e=>{
                   if (e.city) lastCity.current = e.city;
                   if (!user) return;
+                  setAddSaveErr(null);
                   try {
                     const placeId = await ensureRestaurantPlace(supabase, {
                       placeId: e.placeId || null,
@@ -1221,28 +1225,29 @@ export default function App() {
                       .insert([restaurantVisitInsertPayload(placeId, user.id, e)])
                       .select(RESTAURANT_VISIT_SELECT)
                       .single();
-                    if (error) console.error("restaurant insert error:", error);
+                    if (error) {
+                      console.error("restaurant insert error:", error);
+                      setAddSaveErr(error.message || "Save failed — check console");
+                      return;
+                    }
                     if (data) {
                       dispatch({ type: "ADD", e: mapRestaurantVisitRow(data) });
                       if (e.dineWith?.length) {
-                        try {
-                          await Promise.all(e.dineWith.map(p=>insertDineTag(supabase,{
-                            taggerId: user.id,
-                            taggedId: p.id,
-                            entryId: data.id,
-                            entryType: "restaurant",
-                            restaurantName: e.name,
-                            city: e.city||"",
-                            cuisine: e.cuisine||"",
-                          })));
-                        } catch (tagErr) {
-                          console.error("dine tag insert error:", tagErr);
-                        }
+                        await Promise.all(e.dineWith.map(p=>insertDineTag(supabase,{
+                          taggerId: user.id,
+                          taggedId: p.id,
+                          entryId: data.id,
+                          entryType: "restaurant",
+                          restaurantName: e.name,
+                          city: e.city||"",
+                          cuisine: e.cuisine||"",
+                        })));
                       }
                       navigate("/log");
                     }
                   } catch (err) {
                     console.error("restaurant insert threw:", err);
+                    setAddSaveErr(err?.message || "Save failed — check console");
                   }
                 }}
                 onCancel={()=>navigate("/log")}
