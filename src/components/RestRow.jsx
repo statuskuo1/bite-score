@@ -7,12 +7,19 @@ import { EntryCard } from "./EntryCard.jsx";
 import { VisitsModal } from "./VisitsModal.jsx";
 import { formatCost } from "../utils/currency.js";
 
-export function RestRow({ e, display, onEdit, onDelete, user, visits = 1, group, weights, showAuthor = false, homeCurrency = "USD" }) {
+export function RestRow({ e, display, onEdit, onDelete, user, visits = 1, group, weights, showAuthor = false, homeCurrency = "USD", dinedWithForEntry }) {
   const { t } = useLang();
   const [showVisits, setShowVisits] = useState(false);
   const flag = FLAGS[e.cuisine] || (e.letter || e.cuisine?.[0])?.toUpperCase() || "?";
   const grp = group || [e];
   const swipeOk = canSwipeGroup(grp, user);
+
+  const getDiners = dinedWithForEntry || (() => []);
+  const unionDiners = (() => {
+    const seen = new Set(); const result = [];
+    for (const v of grp) for (const p of getDiners(v.id)) if (!seen.has(p.id)) { seen.add(p.id); result.push(p); }
+    return result;
+  })();
 
   const badges = [];
   if (visits > 1) {
@@ -41,14 +48,17 @@ export function RestRow({ e, display, onEdit, onDelete, user, visits = 1, group,
         name={e.name}
         visits={grp}
         user={user}
+        icon={flag}
         scoreFn={(v) => calcBiteOutOf10(v.taste, v.cost, v.portions, v.wait, v.useR, v.repeatability, weights, v.currency_code || "USD")}
         scoreColorFn={scoreColor}
         getRows={(v) => [
           [t.taste, v.taste.toFixed(1)],
           ["Cost", formatCost(v.cost, v.currency_code, homeCurrency)],
+          [t.portions, v.portions + "x"],
           [t.wait, v.wait + " min"],
-          ["Repeat", "⭐".repeat(v.repeatability) || "✕"],
+          ["Repeat", v.useR ? ("⭐".repeat(v.repeatability) || "✕") : t.off],
         ]}
+        getDiners={getDiners}
         onEdit={(v) => { onEdit(v); window.scrollTo({ top: 0, behavior: "smooth" }); }}
         onDelete={onDelete}
       />
@@ -70,6 +80,7 @@ export function RestRow({ e, display, onEdit, onDelete, user, visits = 1, group,
           ["Repeat", e.useR ? ("⭐".repeat(e.repeatability) || "✕") : t.off],
         ]}
         notes={e.notes}
+        diners={visits === 1 ? unionDiners : []}
         mutable={swipeOk}
         onEdit={() => {
           if (visits > 1) {

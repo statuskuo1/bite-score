@@ -14,10 +14,12 @@ function relativeTime(ts) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile, onDineTagTap, alreadyFollowed, onMarkFollowed, followingIds }) {
+function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile, onDineTagTap, onTagMutualBack, alreadyFollowed, onMarkFollowed, followingIds }) {
   const [followed, setFollowed] = useState(false);
   const [isTasteBuds, setIsTasteBuds] = useState(notif.type === "taste_buds");
   const [busy, setBusy] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [taggedBack, setTaggedBack] = useState(false);
   const p = notif.fromProfile;
   const isFollowed = followed || alreadyFollowed || (followingIds?.has(notif.from_user_id) ?? false);
 
@@ -35,60 +37,113 @@ function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile, onDineTagTap,
     }
   }
 
+  async function handleTagBack() {
+    setBusy(true);
+    try {
+      await onTagMutualBack?.(notif);
+      setTaggedBack(true);
+      setShowConfirm(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const isDineTag = notif.type === "dine_tag";
+  const isDineTagBack = notif.type === "dine_tag_back";
+  const isDineTagAccepted = notif.type === "dine_tag_accepted";
+  const isDineTagMutual = notif.type === "dine_tag_mutual";
   const restaurantName = notif.meta?.restaurant_name || "a place";
   const message = isDineTag
     ? `All bark no BITE 🐶 @${p?.username || "someone"} tagged you at ${restaurantName}. Log your BITE?`
-    : isTasteBuds
-      ? `You and @${p?.username || "someone"} are now Taste Buds! 🎉`
-      : `@${p?.username || "someone"} followed you`;
+    : isDineTagMutual
+      ? `@${p?.username || "someone"} tagged you at ${restaurantName}. Looks like you already logged! Tag them back?`
+      : isDineTagBack
+        ? `@${p?.username || "someone"} tagged you back at ${restaurantName} 🤝`
+        : isDineTagAccepted
+          ? `@${p?.username || "someone"} logged ${restaurantName} 🍽`
+          : isTasteBuds
+            ? `You and @${p?.username || "someone"} are now Taste Buds! 🎉`
+            : `@${p?.username || "someone"} followed you`;
 
   const handleRowTap = isDineTag
     ? () => onDineTagTap?.(notif)
-    : () => p && onOpenProfile(p);
+    : isDineTagMutual
+      ? () => { if (!taggedBack) setShowConfirm((v) => !v); }
+      : () => p && onOpenProfile(p);
 
   return (
     <div style={{
-      display: "flex", alignItems: "center", gap: 10,
       padding: "10px 12px",
       borderLeft: notif.read ? "none" : "2px solid #F0997B",
       paddingLeft: notif.read ? 12 : 10,
       borderBottom: "0.5px solid rgba(255,255,255,0.07)",
     }}>
-      <button
-        type="button"
-        onClick={handleRowTap}
-        style={{ flexShrink: 0, background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 0 }}
-      >
-        <Avatar profile={p} size={36} />
-      </button>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <button
+          type="button"
+          onClick={handleRowTap}
+          style={{ flexShrink: 0, background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 0 }}
+        >
+          <Avatar profile={p} size={36} />
+        </button>
 
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, color: "#F1EFE8", lineHeight: 1.4 }}>
-          <button
-            type="button"
-            onClick={handleRowTap}
-            style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "inherit", fontSize: "inherit", textAlign: "left" }}
-          >
-            {message}
-          </button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, color: "#F1EFE8", lineHeight: 1.4 }}>
+            <button
+              type="button"
+              onClick={handleRowTap}
+              style={{ background: "none", border: "none", padding: 0, cursor: isDineTagMutual || isDineTag ? "pointer" : "default", color: "inherit", fontSize: "inherit", textAlign: "left" }}
+            >
+              {message}
+            </button>
+          </div>
+          <div style={{ fontSize: 11, color: "#666663", marginTop: 2 }}>
+            {relativeTime(notif.created_at)}
+          </div>
         </div>
-        <div style={{ fontSize: 11, color: "#666663", marginTop: 2 }}>
-          {relativeTime(notif.created_at)}
-        </div>
+
+        {notif.type === "follow" && !isFollowed && (
+          <div style={{ flexShrink: 0 }}>
+            {busy ? (
+              <span style={{ fontSize: 11, color: "#888780" }}>…</span>
+            ) : (
+              <Pill onClick={handleFollowBack} tone="primary">Follow back</Pill>
+            )}
+          </div>
+        )}
+        {notif.type === "follow" && isFollowed && !isTasteBuds && (
+          <span style={{ fontSize: 11, color: "#888780", flexShrink: 0 }}>Following</span>
+        )}
+        {isDineTagMutual && taggedBack && (
+          <span style={{ fontSize: 11, color: "#888780", flexShrink: 0 }}>Tagged ✓</span>
+        )}
       </div>
 
-      {notif.type === "follow" && !isFollowed && (
-        <div style={{ flexShrink: 0 }}>
-          {busy ? (
-            <span style={{ fontSize: 11, color: "#888780" }}>…</span>
-          ) : (
-            <Pill onClick={handleFollowBack} tone="primary">Follow back</Pill>
-          )}
+      {isDineTagMutual && showConfirm && !taggedBack && (
+        <div style={{ display: "flex", gap: 8, marginTop: 8, paddingLeft: 46 }}>
+          <button
+            type="button"
+            onClick={handleTagBack}
+            disabled={busy}
+            style={{
+              flex: 1, padding: "7px 10px", borderRadius: 8, border: "none",
+              background: "#F0997B", color: "#141413", fontSize: 12, fontWeight: 600, cursor: "pointer",
+            }}
+          >
+            {busy ? "…" : "Tag them back ✓"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowConfirm(false)}
+            style={{
+              padding: "7px 12px", borderRadius: 8,
+              background: "transparent", border: "0.5px solid rgba(255,255,255,0.1)",
+              color: "#888780", fontSize: 12, cursor: "pointer",
+            }}
+          >
+            Skip
+          </button>
         </div>
-      )}
-      {notif.type === "follow" && isFollowed && !isTasteBuds && (
-        <span style={{ fontSize: 11, color: "#888780", flexShrink: 0 }}>Following</span>
       )}
     </div>
   );
@@ -96,7 +151,7 @@ function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile, onDineTagTap,
 
 export function NotificationPanel({
   notifications, loading, onClose, onFollowBack, onRefetch,
-  onOpenProfile, onDineTagTap, sheetOpen, anchorPos, followingIds,
+  onOpenProfile, onDineTagTap, onTagMutualBack, sheetOpen, anchorPos, followingIds,
 }) {
   const { t } = useLang();
   const panelRef = useRef(null);
@@ -163,6 +218,7 @@ export function NotificationPanel({
             onRefetch={onRefetch}
             onOpenProfile={onOpenProfile}
             onDineTagTap={onDineTagTap}
+            onTagMutualBack={onTagMutualBack}
             alreadyFollowed={followedIds.has(n.id)}
             onMarkFollowed={markFollowed}
             followingIds={followingIds}

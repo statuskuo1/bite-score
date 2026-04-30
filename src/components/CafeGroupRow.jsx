@@ -6,7 +6,7 @@ import { canSwipeGroup } from "../utils/rowAccess.js";
 import { EntryCard } from "./EntryCard.jsx";
 import { VisitsModal } from "./VisitsModal.jsx";
 
-export function CafeGroupRow({ group, cafeSortBy, onEdit, onDelete, user, weights, showAuthor = false }) {
+export function CafeGroupRow({ group, cafeSortBy, onEdit, onDelete, user, weights, showAuthor = false, dinedWithForEntry }) {
   const { t } = useLang();
   const [showVisits, setShowVisits] = useState(false);
   const icon = getCafeIcon(group[0].category, group[0].order);
@@ -21,6 +21,13 @@ export function CafeGroupRow({ group, cafeSortBy, onEdit, onDelete, user, weight
   const avgWait = group.reduce((a, e) => a + e.wait, 0) / visits;
   const avgRepeat = Math.round(group.reduce((a, e) => a + e.repeatability, 0) / visits);
   const avgPortions = group.reduce((a, e) => a + (+e.portions || 1), 0) / visits;
+
+  const getDiners = dinedWithForEntry || (() => []);
+  const unionDiners = (() => {
+    const seen = new Set(); const result = [];
+    for (const v of group) for (const p of getDiners(v.id)) if (!seen.has(p.id)) { seen.add(p.id); result.push(p); }
+    return result;
+  })();
 
   function getDisplay() {
     if (cafeSortBy === "taste") {
@@ -49,15 +56,18 @@ export function CafeGroupRow({ group, cafeSortBy, onEdit, onDelete, user, weight
         name={group[0].name}
         visits={group}
         user={user}
+        icon={icon}
         scoreFn={(v) => calcCafeOutOf10(v.taste, v.cost, v.portions, v.wait, v.useR, v.repeatability, weights)}
         scoreColorFn={cafeScoreColor}
         getRows={(v) => [
           [t.taste, v.taste.toFixed(1)],
           ["Cost", "$" + v.cost],
+          [t.portions, (+v.portions || 1).toFixed(1) + "x"],
           [t.wait, v.wait + " min"],
           ["Repeat", "⭐".repeat(v.repeatability) || "✕"],
         ]}
         suffix={(v) => (v.order ? " · " + v.order : "")}
+        getDiners={getDiners}
         onEdit={onEdit}
         onDelete={onDelete}
       />
@@ -79,6 +89,7 @@ export function CafeGroupRow({ group, cafeSortBy, onEdit, onDelete, user, weight
           ["Repeat", "⭐".repeat(avgRepeat) || "✕"],
         ]}
         notes={group[group.length - 1].notes}
+        diners={visits === 1 ? unionDiners : []}
         mutable={swipeOk}
         onEdit={() => onEdit(group[group.length - 1])}
         onDelete={() => onDelete(group[group.length - 1].id)}

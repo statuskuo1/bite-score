@@ -2,6 +2,8 @@ import { useState } from "react";
 import { S } from "../styles/sharedStyles.js";
 import { SwipeRow } from "./SwipeRow.jsx";
 import { ScoreDisplay } from "./ScoreDisplay.jsx";
+import { Avatar } from "./community/Avatar.jsx";
+import { DinersSheet } from "./DinersSheet.jsx";
 
 /**
  * Shared row chrome used by RestRow / CafeGroupRow.
@@ -28,11 +30,13 @@ export function EntryCard({
   score,
   expandedRows,
   notes,
+  diners,
   mutable,
   onEdit,
   onDelete,
 }) {
   const [exp, setExp] = useState(false);
+  const [showDiners, setShowDiners] = useState(false);
   return (
     <SwipeRow mutable={mutable} onEdit={onEdit} onDelete={onDelete}>
       <div style={{
@@ -100,7 +104,32 @@ export function EntryCard({
                   <div style={S.val}>{v}</div>
                 </div>
               ))}
+              <div
+                onClick={diners?.length > 0 ? (e) => { e.stopPropagation(); setShowDiners(true); } : undefined}
+                style={{ cursor: diners?.length > 0 ? "pointer" : "default" }}
+              >
+                <div style={{ fontSize: 11, color: "#888780" }}>With</div>
+                {diners?.length > 0 ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 3, marginTop: 3 }}>
+                    <Avatar profile={diners[0]} size={16} />
+                    {diners.length === 1 && (
+                      <span style={{ fontSize: 12, color: "#F1EFE8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {diners[0].display_name || diners[0].username}
+                      </span>
+                    )}
+                    {diners.length === 2 && <Avatar profile={diners[1]} size={16} />}
+                    {diners.length > 2 && (
+                      <span style={{ fontSize: 12, color: "#888780" }}>+{diners.length - 1}</span>
+                    )}
+                  </div>
+                ) : (
+                  <div style={S.val}>—</div>
+                )}
+              </div>
             </div>
+            {showDiners && (
+              <DinersSheet diners={diners} onClose={() => setShowDiners(false)} />
+            )}
             {notes && (
               <div style={{ marginTop: 10, fontSize: 11, color: "#888780" }}>
                 <span style={{ fontWeight: 500 }}>Note: </span>{notes}

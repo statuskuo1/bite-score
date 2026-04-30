@@ -54,7 +54,7 @@ import { countUnreadNotifications, fetchUnreadNotifications, markNotificationsRe
 import { usePaginatedList } from "./components/usePaginatedList.js";
 import { ShowMoreButton } from "./components/ShowMoreButton.jsx";
 import { NotificationPanel } from "./components/NotificationPanel.jsx";
-import { insertDineTag, fetchUnloggedDineTags, countUnloggedDineTags, dismissDineTag, fetchCoDiners } from "./utils/dineWithApi.js";
+import { insertDineTag, fetchUnloggedDineTags, countUnloggedDineTags, dismissDineTag, fetchCoDiners, fetchDinedWithByEntry } from "./utils/dineWithApi.js";
 import { DineTagsBanner } from "./components/DineTagsBanner.jsx";
 import { getCurrencyForCity, toUSD, fromUSD, CURRENCY_SYMBOLS } from "./utils/currency.js";
 import { CityInput, resolveCity } from "./components/CityInput.jsx";
@@ -123,6 +123,21 @@ export default function App() {
   const [notifAnchorPos, setNotifAnchorPos] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [notifFollowingIds, setNotifFollowingIds] = useState(() => new Set());
+  // Re-type dine_tag → dine_tag_mutual when the current user already has a logged entry
+  // for that restaurant. This handles the case where A tags B but B already logged the
+  // place (no reverse dine_with_tags row exists yet, so insertDineTag can't detect it).
+  const annotatedNotifications = useMemo(() => {
+    if (!notifications.length) return notifications;
+    return notifications.map((n) => {
+      if (n.type !== "dine_tag") return n;
+      const name = (n.meta?.restaurant_name || "").trim().toLowerCase();
+      if (!name) return n;
+      const found =
+        (st.entries || []).some((e) => (e.name || "").trim().toLowerCase() === name) ||
+        (cafes || []).some((e) => (e.name || "").trim().toLowerCase() === name);
+      return found ? { ...n, type: "dine_tag_mutual" } : n;
+    });
+  }, [notifications, st.entries, cafes]);
   const [notifLoading, setNotifLoading] = useState(false);
   const notifContainerRef = useRef(null);
   const [notifSheetProfile, setNotifSheetProfile] = useState(null);
@@ -131,6 +146,7 @@ export default function App() {
   const [dineTags, setDineTags] = useState([]);
   const [dineTagCount, setDineTagCount] = useState(0);
   const [dineTagsReady, setDineTagsReady] = useState(false);
+  const [dinedWithMap, setDinedWithMap] = useState(new Map());
   const [addPrefill, setAddPrefill] = useState(null);
   const [addInitialDineWith, setAddInitialDineWith] = useState([]);
   const [addFormKey, setAddFormKey] = useState(0);
@@ -309,6 +325,26 @@ export default function App() {
     });
   }
 
+  async function handleDineTagMutualBack(notif) {
+    if (!user?.id) return;
+    const fromUserId = notif.from_user_id;
+    const restaurantName = notif.meta?.restaurant_name || "";
+    const [{ data: incomingTag }, { data: outgoingTag }] = await Promise.all([
+      supabase.from("dine_with_tags").select("id").eq("tagger_id", fromUserId).eq("tagged_id", user.id).ilike("restaurant_name", restaurantName).eq("dismissed", false).maybeSingle(),
+      supabase.from("dine_with_tags").select("id").eq("tagger_id", user.id).eq("tagged_id", fromUserId).ilike("restaurant_name", restaurantName).maybeSingle(),
+    ]);
+    await Promise.all([
+      incomingTag && dismissDineTag(supabase, incomingTag.id),
+      outgoingTag && dismissDineTag(supabase, outgoingTag.id),
+      supabase.from("notifications").insert({
+        user_id: fromUserId, from_user_id: user.id,
+        type: "dine_tag_back",
+        meta: { restaurant_name: restaurantName, city: notif.meta?.city || "" },
+      }),
+    ].filter(Boolean));
+    setDineTags((prev) => prev.filter((t) => t.tagger_id !== fromUserId || (t.restaurant_name || "").toLowerCase() !== restaurantName.toLowerCase()));
+  }
+
   async function handleNotifSheetFollow(targetId) {
     if (!user?.id) return;
     setNotifSheetBusy(true);
@@ -454,6 +490,7 @@ export default function App() {
 
   const [editR, setEditR] = useState(null);
   const [editC, setEditC] = useState(null);
+  const [editDineWith, setEditDineWith] = useState([]);
   const [addType, setAddType] = useState("restaurant");
   const [addSaveErr, setAddSaveErr] = useState(null);
   useEffect(() => { setAddSaveErr(null); }, [addType]);
@@ -509,11 +546,12 @@ export default function App() {
           // Profile sync is owned by AuthContext; we just read visits here.
           // Shared `*_places` catalog is read in parallel for the PlacePicker
           // typeahead — RLS allows authenticated SELECT on all rows.
-          const [entries, cafeRows, rPlaces, cPlaces] = await Promise.all([
+          const [entries, cafeRows, rPlaces, cPlaces, dwMap] = await Promise.all([
             fetchRestaurantVisitsJoined(supabase, user.id),
             fetchCafeVisitsJoined(supabase, user.id),
             fetchAllRestaurantPlaces(supabase),
             fetchAllCafePlaces(supabase),
+            fetchDinedWithByEntry(supabase, user.id),
           ]);
           if (import.meta.env.DEV) {
             console.log("[BITE] load() fetched rows", {
@@ -529,6 +567,7 @@ export default function App() {
           setCafes(cafeRows);
           setRestaurantPlaces(rPlaces);
           setCafePlaces(cPlaces);
+          setDinedWithMap(dwMap);
           if (import.meta.env.DEV) {
             console.log("[BITE] reducer LOAD applied", { entriesLength: entries.length });
           }
@@ -927,13 +966,14 @@ export default function App() {
               </button>
               {showNotifPanel && (
                 <NotificationPanel
-                  notifications={notifications}
+                  notifications={annotatedNotifications}
                   loading={notifLoading}
                   onClose={() => setShowNotifPanel(false)}
                   onFollowBack={handleNotifFollowBack}
                   onRefetch={refetchNotifications}
                   onOpenProfile={handleOpenNotifProfile}
                   onDineTagTap={handleDineTagTap}
+                  onTagMutualBack={handleDineTagMutualBack}
                   sheetOpen={!!notifSheetProfile}
                   anchorPos={notifAnchorPos}
                   followingIds={notifFollowingIds}
@@ -1088,8 +1128,8 @@ export default function App() {
                 const visits=grp.length;
                 const display=getDisplay(e);
                 return (
-                  <RestRow key={e.id} e={e} display={display} user={user} visits={visits} group={grp} weights={weights} homeCurrency={homeCurrency}
-                    onEdit={v=>{setEditR(v||e);window.scrollTo({top:0,behavior:"smooth"});}}
+                  <RestRow key={e.id} e={e} display={display} user={user} visits={visits} group={grp} weights={weights} homeCurrency={homeCurrency} dinedWithForEntry={(id)=>dinedWithMap.get(id)||[]}
+                    onEdit={v=>{const entry=v||e;setEditR(entry);setEditDineWith(dinedWithMap.get(entry.id)||[]);window.scrollTo({top:0,behavior:"smooth"});}}
                     onDelete={async id=>{
                       const did=id||e.id;
                       const row=st.entries.find(x=>x.id===did);
@@ -1148,7 +1188,7 @@ export default function App() {
               />
               {!sortedDrinks.length&&<p style={{color:"#888780",fontSize:14}}>{cafes.some(e=>DRINK_CATS.includes(e.category))?t.noEntries:t.noDrinks}</p>}
               {drinkGroupsPage.visible.map(([name,grp])=>(
-                <CafeGroupRow key={name} group={grp} cafeSortBy={cafeSortBy} weights={drinkWeights} user={user} onEdit={e=>{setEditC(e);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={async id=>{
+                <CafeGroupRow key={name} group={grp} cafeSortBy={cafeSortBy} weights={drinkWeights} user={user} dinedWithForEntry={(id)=>dinedWithMap.get(id)||[]} onEdit={e=>{setEditC(e);setEditDineWith(dinedWithMap.get(e.id)||[]);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={async id=>{
                       const row=cafes.find(x=>x.id===id);
                       if(!canMutateVisit(row,user))return;
                       try{await supabase.from("cafe_visits").delete().eq("id",id);}catch(err){console.error("cafe delete threw:",err);}
@@ -1199,7 +1239,7 @@ export default function App() {
               />
               {!sortedSweets.length&&<p style={{color:"#888780",fontSize:14}}>{cafes.some(e=>e.category==="Sweets")?t.noEntries:t.noSweets}</p>}
               {sweetGroupsPage.visible.map(([name,grp])=>(
-                <CafeGroupRow key={name} group={grp} cafeSortBy={sweetsSortBy} weights={sweetWeights} user={user} onEdit={e=>{setEditC(e);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={async id=>{
+                <CafeGroupRow key={name} group={grp} cafeSortBy={sweetsSortBy} weights={sweetWeights} user={user} dinedWithForEntry={(id)=>dinedWithMap.get(id)||[]} onEdit={e=>{setEditC(e);setEditDineWith(dinedWithMap.get(e.id)||[]);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={async id=>{
                       const row=cafes.find(x=>x.id===id);
                       if(!canMutateVisit(row,user))return;
                       try{await supabase.from("cafe_visits").delete().eq("id",id);}catch(err){console.error("cafe delete threw:",err);}
@@ -1233,7 +1273,7 @@ export default function App() {
         />
       )}
 
-      {pathname.startsWith("/log")&&editR&&<RestForm initial={editR} weights={weights} existingEntries={st.entries} existingCities={existingCities} places={restaurantPlaces}
+      {pathname.startsWith("/log")&&editR&&<RestForm initial={editR} initialDineWith={editDineWith} weights={weights} existingEntries={st.entries} existingCities={existingCities} places={restaurantPlaces}
         user={user} tasteBudIds={tasteBudIds}
         onPlaceCreated={(p)=>upsertPlace(setRestaurantPlaces, p.id, p)}
         onSave={async e=>{
@@ -1265,9 +1305,9 @@ export default function App() {
           }
         }
         dispatch({ type: "UPD", e: { ...e, placeId: resolvedPlaceId, ownerId: e.ownerId ?? user?.id ?? null } });
-        setEditR(null);
-      }} onCancel={()=>{setEditR(null);window.scrollTo({top:0,behavior:"smooth"});}}/>}
-      {pathname.startsWith("/log")&&editC&&<CafeForm initial={editC} weights={editC?.category==="Sweets"?sweetWeights:drinkWeights}
+        setEditR(null); setEditDineWith([]);
+      }} onCancel={()=>{setEditR(null);setEditDineWith([]);window.scrollTo({top:0,behavior:"smooth"});}}/>}
+      {pathname.startsWith("/log")&&editC&&<CafeForm initial={editC} initialDineWith={editDineWith} weights={editC?.category==="Sweets"?sweetWeights:drinkWeights}
         user={user} tasteBudIds={tasteBudIds}
         onPlaceCreated={(p)=>upsertPlace(setCafePlaces, p.id, p)}
         onSave={async e=>{
@@ -1293,8 +1333,8 @@ export default function App() {
             console.error("cafe update threw:", err);
           }
         }
-        setCafes(p=>p.map(x=>x.id===e.id?{...e,id:x.id,placeId:resolvedPlaceId??x.placeId,ownerId:e.ownerId??user?.id??x.ownerId}:x)); setEditC(null);
-      }} onCancel={()=>{setEditC(null);window.scrollTo({top:0,behavior:"smooth"});}} existingCafes={cafes} existingCities={existingCities} places={cafePlaces}/>}
+        setCafes(p=>p.map(x=>x.id===e.id?{...e,id:x.id,placeId:resolvedPlaceId??x.placeId,ownerId:e.ownerId??user?.id??x.ownerId}:x)); setEditC(null); setEditDineWith([]);
+      }} onCancel={()=>{setEditC(null);setEditDineWith([]);window.scrollTo({top:0,behavior:"smooth"});}} existingCafes={cafes} existingCities={existingCities} places={cafePlaces}/>}
 
       {/* ── Add Rating ── */}
       {pathname==="/add"&&!user&&(
@@ -1317,6 +1357,9 @@ export default function App() {
         <div>
           {dineTagsReady&&<DineTagsBanner
             tags={dineTags}
+            entries={st.entries}
+            cafes={cafes}
+            userId={user.id}
             onDismiss={(tagId)=>{
               setDineTags(prev=>prev.filter(t=>t.id!==tagId));
               setDineTagCount(prev=>Math.max(0,prev-1));
@@ -1347,12 +1390,6 @@ export default function App() {
             }}
           />}
           {addSaveErr&&<div style={{background:"#3C1F13",border:"1px solid #F0997B",borderRadius:8,padding:"10px 14px",marginBottom:12,fontSize:13,color:"#F0997B"}}>{addSaveErr}</div>}
-          {addDraftData&&!addPrefill&&(
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#1E2A1E",border:"0.5px solid rgba(151,196,89,0.35)",borderRadius:8,padding:"8px 12px",marginBottom:12,fontSize:12,color:"#97C459"}}>
-              <span>Draft restored</span>
-              <button type="button" onClick={()=>{if(user?.id){try{localStorage.removeItem(`bite_addRating_draft_${user.id}`);}catch{}}setAddDraftData(null);setAddFormKey(k=>k+1);}} style={{background:"none",border:"none",color:"#97C459",fontSize:12,cursor:"pointer",padding:0,textDecoration:"underline"}}>Clear</button>
-            </div>
-          )}
           {addType==="restaurant"
             ?<RestForm key={addFormKey} initial={{...INIT_REST,city:lastCity.current||profile?.home_city||"",...(addPrefill||(addDraftData?.addType==="restaurant"?addDraftData.f:null)||{})}} initialDineWith={addInitialDineWith.length?addInitialDineWith:(addDraftData?.addType==="restaurant"&&!addPrefill?addDraftData.dineWith||[]:[])} weights={weights} existingEntries={st.entries} existingCities={existingCities} places={restaurantPlaces}
                 onPlaceCreated={(p)=>upsertPlace(setRestaurantPlaces, p.id, p)}
@@ -1408,7 +1445,25 @@ export default function App() {
                           city: e.city||"",
                           cuisine: e.cuisine||"",
                         })));
+                        fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
                       }
+                      if (sourceTaggerId) {
+                        await Promise.all([
+                          supabase.from("dine_with_tags").insert({
+                            tagger_id: user.id, tagged_id: sourceTaggerId,
+                            entry_id: data.id, entry_type: "restaurant",
+                            restaurant_name: e.name, city: e.city||"", cuisine: e.cuisine||"",
+                            dismissed: true,
+                          }),
+                          supabase.from("notifications").insert({
+                            user_id: sourceTaggerId, from_user_id: user.id,
+                            type: "dine_tag_accepted",
+                            meta: { restaurant_name: e.name, entry_type: "restaurant", city: e.city||"" },
+                          }),
+                        ]);
+                        fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
+                      }
+                      formStateRef.current = null;
                       navigate("/log");
                     }
                   } catch (err) {
@@ -1416,7 +1471,7 @@ export default function App() {
                     setAddSaveErr(err?.message || "Save failed — check console");
                   }
                 }}
-                onCancel={()=>{setAddPrefill(null);setAddInitialDineWith([]);setAddTagTaggerId(null);navigate("/log");}}
+                onCancel={()=>{formStateRef.current=null;setAddPrefill(null);setAddInitialDineWith([]);setAddTagTaggerId(null);navigate("/log");}}
                 addType={addType} setAddType={setAddType}
               />
             :<CafeForm key={addFormKey} initial={{...INIT_CAFE,city:lastCity.current||profile?.home_city||"",...(addPrefill||(addDraftData?.addType==="cafe"?addDraftData.f:null)||{})}} initialDineWith={addInitialDineWith.length?addInitialDineWith:(addDraftData?.addType==="cafe"&&!addPrefill?addDraftData.dineWith||[]:[])} weights={drinkWeights}
@@ -1445,10 +1500,28 @@ export default function App() {
                         city: e.city||"",
                         cuisine: e.category||"",
                       })));
+                      fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
                     } catch (tagErr) {
                       console.error("dine tag insert error:", tagErr);
                     }
                   }
+                  if (sourceTaggerId && inserted?.id) {
+                    await Promise.all([
+                      supabase.from("dine_with_tags").insert({
+                        tagger_id: user.id, tagged_id: sourceTaggerId,
+                        entry_id: inserted.id, entry_type: "cafe",
+                        restaurant_name: e.name, city: e.city||"", cuisine: e.category||"",
+                        dismissed: true,
+                      }),
+                      supabase.from("notifications").insert({
+                        user_id: sourceTaggerId, from_user_id: user.id,
+                        type: "dine_tag_accepted",
+                        meta: { restaurant_name: e.name, entry_type: "cafe", city: e.city||"" },
+                      }),
+                    ]);
+                    fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
+                  }
+                  formStateRef.current = null;
                   navigate(e.category==="Sweets"?"/log/sweets":"/log/drinks");
                 }}
                 onSaveAndContinue={async e=>{
@@ -1470,9 +1543,13 @@ export default function App() {
                       console.error("dine tag insert error:", tagErr);
                     }
                   }
+                  formStateRef.current = null;
+                  if (user?.id) { try { localStorage.removeItem(`bite_addRating_draft_${user.id}`); } catch {} }
+                  setAddDraftData(null);
+                  setAddFormKey(k => k + 1);
                   window.scrollTo({top:0,behavior:"smooth"});
                 }}
-                onCancel={()=>{setAddPrefill(null);setAddInitialDineWith([]);setAddTagTaggerId(null);navigate("/log");}}
+                onCancel={()=>{formStateRef.current=null;setAddPrefill(null);setAddInitialDineWith([]);setAddTagTaggerId(null);navigate("/log");}}
                 addType={addType} setAddType={setAddType}
                 existingCafes={cafes}
                 existingCities={existingCities}

@@ -21,7 +21,7 @@
  * @param {string} [tag.city]
  * @param {string} [tag.cuisine]
  */
-export async function insertDineTag(client, { taggerId, taggedId, entryId, entryType, restaurantName, city = "", cuisine = "" }) {
+export async function insertDineTag(client, { taggerId, taggedId, entryId, entryType, restaurantName, city = "", cuisine = "", notify = true }) {
   try {
     const { data, error } = await client
       .from("dine_with_tags")
@@ -42,14 +42,25 @@ export async function insertDineTag(client, { taggerId, taggedId, entryId, entry
       return null;
     }
 
-    // Insert notification for tagged user.
-    const { error: nErr } = await client.from("notifications").insert({
-      user_id: taggedId,
-      from_user_id: taggerId,
-      type: "dine_tag",
-      meta: { restaurant_name: restaurantName, entry_type: entryType, city, cuisine, entry_id: entryId || null },
-    });
-    if (nErr) console.warn("[BITE] insertDineTag notification:", nErr.message);
+    if (notify) {
+      // If the tagged user already has an outgoing tag back to us, this is a mutual
+      // confirmation — use dine_tag_back so they don't see "all bark no bite" again.
+      const { data: reverseRow } = await client
+        .from("dine_with_tags")
+        .select("id")
+        .eq("tagger_id", taggedId)
+        .eq("tagged_id", taggerId)
+        .ilike("restaurant_name", restaurantName)
+        .maybeSingle();
+
+      const { error: nErr } = await client.from("notifications").insert({
+        user_id: taggedId,
+        from_user_id: taggerId,
+        type: reverseRow ? "dine_tag_mutual" : "dine_tag",
+        meta: { restaurant_name: restaurantName, entry_type: entryType, city, cuisine, entry_id: entryId || null },
+      });
+      if (nErr) console.warn("[BITE] insertDineTag notification:", nErr.message);
+    }
 
     return data?.id ?? null;
   } catch (err) {
@@ -123,6 +134,36 @@ export async function countUnloggedDineTags(client, userId) {
     return 0;
   }
   return count || 0;
+}
+
+/**
+ * Build a Map<entryId, Profile[]> of everyone the user tagged on each of
+ * their own visits. Used to display "Dined with" on expanded entry cards.
+ */
+export async function fetchDinedWithByEntry(client, userId) {
+  if (!userId) return new Map();
+  const { data, error } = await client
+    .from("dine_with_tags")
+    .select("entry_id, tagged_id")
+    .eq("tagger_id", userId)
+    .not("entry_id", "is", null);
+  if (error || !data?.length) return new Map();
+  const allIds = [...new Set(data.map((r) => r.tagged_id))];
+  const { data: profiles } = await client
+    .from("profiles")
+    .select("id, username, display_name, avatar_url")
+    .in("id", allIds);
+  const profMap = Object.fromEntries((profiles || []).map((p) => [p.id, p]));
+  const map = new Map();
+  for (const { entry_id, tagged_id } of data) {
+    const profile = profMap[tagged_id];
+    if (!profile) continue;
+    if (!map.has(entry_id)) map.set(entry_id, []);
+    if (!map.get(entry_id).some((p) => p.id === profile.id)) {
+      map.get(entry_id).push(profile);
+    }
+  }
+  return map;
 }
 
 /**

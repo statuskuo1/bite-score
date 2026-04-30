@@ -58,35 +58,6 @@ export function DineWithPicker({ userId, tasteBudIds = new Set(), selected = [],
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
-      {/* Selected pills */}
-      {selected.length > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
-          {selected.map((p) => (
-            <div
-              key={p.id}
-              style={{
-                display: "flex", alignItems: "center", gap: 6,
-                background: "#2C2C2A", border: "0.5px solid rgba(255,255,255,0.15)",
-                borderRadius: 20, padding: "4px 10px 4px 6px",
-              }}
-            >
-              <Avatar profile={p} size={18} />
-              <span style={{ fontSize: 12, color: "#F1EFE8" }}>
-                {p.display_name || p.username}
-                {tasteBudIds.has(p.id) && <span style={{ color: "#F0997B", marginLeft: 4 }}>★</span>}
-              </span>
-              <button
-                type="button"
-                onClick={() => removeUser(p.id)}
-                style={{ background: "none", border: "none", color: "#888780", fontSize: 14, cursor: "pointer", lineHeight: 1, padding: 0, marginLeft: 2 }}
-              >
-                ×
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
       {/* Search input */}
       <div style={{ position: "relative" }}>
         <style>{`
@@ -151,6 +122,35 @@ export function DineWithPicker({ userId, tasteBudIds = new Set(), selected = [],
           padding: "10px 12px", fontSize: 13, color: "#888780",
         }}>
           No users found
+        </div>
+      )}
+
+      {/* Selected pills — below the input so the box never shifts */}
+      {selected.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+          {selected.map((p) => (
+            <div
+              key={p.id}
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                background: "#2C2C2A", border: "0.5px solid rgba(255,255,255,0.15)",
+                borderRadius: 20, padding: "4px 10px 4px 6px",
+              }}
+            >
+              <Avatar profile={p} size={18} />
+              <span style={{ fontSize: 12, color: "#F1EFE8" }}>
+                {p.display_name || p.username}
+                {tasteBudIds.has(p.id) && <span style={{ color: "#F0997B", marginLeft: 4 }}>★</span>}
+              </span>
+              <button
+                type="button"
+                onClick={() => removeUser(p.id)}
+                style={{ background: "none", border: "none", color: "#888780", fontSize: 14, cursor: "pointer", lineHeight: 1, padding: 0, marginLeft: 2 }}
+              >
+                ×
+              </button>
+            </div>
+          ))}
         </div>
       )}
     </div>
