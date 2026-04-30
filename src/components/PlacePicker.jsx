@@ -318,8 +318,8 @@ export function PlacePicker({
   );
 }
 
-const ellipsis = { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
-const cityChip = { fontSize: 11, color: "#888780", flexShrink: 0 };
+const ellipsis = { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%" };
+const cityChip = { fontSize: 11, color: "#888780", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%" };
 
 function rowStyle(isPicked) {
   return {
@@ -328,9 +328,9 @@ function rowStyle(isPicked) {
     color: "#F1EFE8",
     cursor: "pointer",
     display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 8,
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 2,
     background: isPicked ? "#2C2C2A" : "transparent",
   };
 }
