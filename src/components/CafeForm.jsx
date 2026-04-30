@@ -4,8 +4,6 @@ import { CAFE_ORDERS, CAFE_ICONS } from "../constants/cafeCatalog.js";
 import { INIT_CAFE } from "../data/initialData.js";
 import { calcCafeOutOf10, cafeScoreColor, cafeScoreLabel, tasteLabel } from "../utils/scoring.js";
 import { S } from "../styles/sharedStyles.js";
-import { supabase } from "../config/supabaseClient.js";
-import { fetchPopularOrdersForPlace } from "../utils/visitPlacesApi.js";
 import { PlacePicker } from "./PlacePicker.jsx";
 import { OrderCombobox } from "./OrderCombobox.jsx";
 import { RepeatPicker } from "./RepeatPicker.jsx";
@@ -143,28 +141,18 @@ export function CafeForm({initial,initialDineWith=[],onSave,onSaveAndContinue,on
   const isEdit = !!initial.id;
 
   const cafesList = existingCafes || [];
-  /** With PlacePicker, `f.placeId` is the source of truth for which place is
-   *  attached. Past orders/cuisine autofill all key off that id (survives
-   *  casing/whitespace drift in `name`). */
   const activePlaceId = f.placeId || null;
-  const pastOrdersAtCafe = activePlaceId
-    ? cafesList.filter(e => e.placeId === activePlaceId && e.order).map(e => e.order)
+  const cafeName = (f.name || "").trim().toLowerCase();
+  // Past orders from this user at this specific cafe — matched by placeId when
+  // available, otherwise by cafe name. Never crosses into other cafes.
+  const pastOrdersAtCafe = cafeName
+    ? cafesList.filter(e =>
+        e.order && (
+          (activePlaceId && e.placeId === activePlaceId) ||
+          e.name?.trim().toLowerCase() === cafeName
+        )
+      ).map(e => e.order)
     : [];
-  const pastOrdersForCategory = cafesList
-    .filter(e => e.category === f.category && e.order)
-    .map(e => e.order);
-
-  // Tier 2: cross-user popular orders at the picked cafe. Re-fetched whenever
-  // we resolve a different placeId or category. Failures are silent.
-  const [popularAtCafe, setPopularAtCafe] = useState([]);
-  useEffect(() => {
-    if (!activePlaceId) { setPopularAtCafe([]); return; }
-    let cancelled = false;
-    fetchPopularOrdersForPlace(supabase, activePlaceId, f.category).then(items => {
-      if (!cancelled) setPopularAtCafe(items);
-    });
-    return () => { cancelled = true; };
-  }, [activePlaceId, f.category]);
 
   function buildEntry() {
     return {
@@ -301,8 +289,6 @@ export function CafeForm({initial,initialDineWith=[],onSave,onSaveAndContinue,on
           onChange={v=>inp("order",v)}
           presets={CAFE_ORDERS[f.category] || []}
           pastOrdersAtCafe={pastOrdersAtCafe}
-          popularAtCafe={popularAtCafe}
-          pastOrdersForCategory={pastOrdersForCategory}
           placeholder="Select an order"
         />
       </div>
