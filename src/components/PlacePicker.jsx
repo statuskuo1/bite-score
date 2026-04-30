@@ -100,7 +100,8 @@ export function PlacePicker({
      *  - typed text is too short / empty
      *  - the typed text exactly matches a catalog row (no need)
      *  - we already know we're capped for this page load */
-    if (q.length < 3 || exactMatch || cappedRef.current) {
+    const minLen = /[　-鿿가-힯぀-ヿ]/.test(q) ? 1 : 3;
+    if (q.length < minLen || exactMatch || cappedRef.current) {
       setGooglePredictions([]);
       setGoogleLoading(false);
       return;
