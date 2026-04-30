@@ -8,6 +8,7 @@ import { pairCompatibility, restaurantOverlap } from "../../utils/compatibility.
 import { tasteColor } from "../../utils/scoring.js";
 import { FLAGS } from "../../constants/cuisineConstants.js";
 import { Pill } from "./Pill.jsx";
+import { Toggle } from "../Toggle.jsx";
 import { Avatar } from "./Avatar.jsx";
 import { UserIdentity } from "./UserIdentity.jsx";
 import { usePaginatedList } from "../usePaginatedList.js";
@@ -163,6 +164,8 @@ export function CompareTab({ user, initialTarget, onClearTarget, onFollowChange 
     return initialTarget?.id && uv.has(initialTarget.id) ? uv.get(initialTarget.id) : [];
   });
   const [loading, setLoading] = useState(false);
+  const [dinedTogetherOnly, setDinedTogetherOnly] = useState(false);
+  const [dinedTogetherPlaceIds, setDinedTogetherPlaceIds] = useState(new Set());
 
   useEffect(() => {
     if (!user?.id) return;
@@ -216,6 +219,29 @@ export function CompareTab({ user, initialTarget, onClearTarget, onFollowChange 
     }
   }, [initialTarget?.id]);  // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    setDinedTogetherOnly(false);
+    if (!user?.id || !target?.id) { setDinedTogetherPlaceIds(new Set()); return; }
+    let cancelled = false;
+    (async () => {
+      const { data: tags } = await supabase
+        .from("dine_with_tags")
+        .select("entry_id")
+        .or(`and(tagger_id.eq.${user.id},tagged_id.eq.${target.id}),and(tagger_id.eq.${target.id},tagged_id.eq.${user.id})`)
+        .not("entry_id", "is", null);
+      if (cancelled) return;
+      if (!tags?.length) { setDinedTogetherPlaceIds(new Set()); return; }
+      const { data: visits } = await supabase
+        .from("restaurant_visits")
+        .select("place_id")
+        .in("id", tags.map((r) => r.entry_id));
+      if (!cancelled) {
+        setDinedTogetherPlaceIds(new Set((visits || []).map((v) => v.place_id).filter(Boolean)));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id, target?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const compat = useMemo(() => {
     if (!target?.id) return null;
     return pairCompatibility(myVisits, theirVisits);
@@ -226,12 +252,17 @@ export function CompareTab({ user, initialTarget, onClearTarget, onFollowChange 
     return restaurantOverlap(myVisits, theirVisits);
   }, [myVisits, theirVisits, target?.id]);
 
+  const filteredBoth = useMemo(() => {
+    if (!dinedTogetherOnly) return overlap?.both || [];
+    return (overlap?.both || []).filter((r) => dinedTogetherPlaceIds.has(r.placeId));
+  }, [overlap?.both, dinedTogetherOnly, dinedTogetherPlaceIds]);
+
   /** Pagination tails. Hooks live above the early-return picker view so
    *  the order stays stable between the picker and the compare view. The
    *  buds picker resets when the bud set size changes; the per-target
    *  lists reset when the target changes. */
   const budsPage = usePaginatedList(buds, String(buds.length));
-  const bothPage = usePaginatedList(overlap?.both || [], target?.id || "");
+  const bothPage = usePaginatedList(filteredBoth, `${target?.id || ""}_${dinedTogetherOnly}`);
   const onlyTheirsPage = usePaginatedList(overlap?.onlyTheirs || [], target?.id || "", 3);
   const onlyMinePage = usePaginatedList(overlap?.onlyMine || [], target?.id || "", 3);
 
@@ -349,9 +380,19 @@ export function CompareTab({ user, initialTarget, onClearTarget, onFollowChange 
       {!loading && !insufficientMine && overlap && (
         <>
           <section style={{ marginBottom: 18 }}>
-            <div style={SECTION_LABEL_STYLE}>{t.bothVisited}</div>
-            {overlap.both.length === 0 ? (
-              <p style={{ fontSize: 12, color: "#888780", margin: 0 }}>{t.noOverlapYet}</p>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              <div style={{ ...SECTION_LABEL_STYLE, marginBottom: 0 }}>{t.bothVisited}</div>
+              {dinedTogetherPlaceIds.size > 0 && (
+                <>
+                  <Toggle on={dinedTogetherOnly} onClick={() => setDinedTogetherOnly((v) => !v)} />
+                  <span style={{ fontSize: 11, color: "#888780" }}>Dined together</span>
+                </>
+              )}
+            </div>
+            {filteredBoth.length === 0 ? (
+              <p style={{ fontSize: 12, color: "#888780", margin: 0 }}>
+                {dinedTogetherOnly ? "No shared restaurants dined together yet." : t.noOverlapYet}
+              </p>
             ) : (
               <>
                 <div style={{
