@@ -168,26 +168,29 @@ export async function updateOwnProfile(client, userId, { username, displayName, 
   if (clash) return { ok: false, code: "username_taken", data: null };
 
   const dn = String(displayName ?? "").trim();
-  const corePatch = {
-    username: u,
-    display_name: dn === "" ? null : dn.slice(0, 120),
-    ...(homeCurrency ? { home_currency: homeCurrency } : {}),
-  };
 
-  const { error } = await client.from("profiles").update(corePatch).eq("id", userId);
+  // Core fields — always present on profiles table.
+  const { error } = await client
+    .from("profiles")
+    .update({
+      username: u,
+      display_name: dn === "" ? null : dn.slice(0, 120),
+    })
+    .eq("id", userId);
   if (error) {
     if (error.code === "23505") return { ok: false, code: "username_taken", data: null };
     console.warn("[BITE] updateOwnProfile:", error.message);
     return { ok: false, code: "network", data: null };
   }
 
-  // home_city is in a separate call so a missing column never blocks the core save.
-  if (homeCity !== undefined) {
-    const { error: cityErr } = await client
-      .from("profiles")
-      .update({ home_city: String(homeCity).trim().slice(0, 100) })
-      .eq("id", userId);
-    if (cityErr) console.warn("[BITE] updateOwnProfile home_city:", cityErr.message);
+  // Optional columns (added via migrations — silently skip if not yet applied).
+  const optPatch = {
+    ...(homeCurrency ? { home_currency: homeCurrency } : {}),
+    ...(homeCity !== undefined ? { home_city: String(homeCity).trim().slice(0, 100) } : {}),
+  };
+  if (Object.keys(optPatch).length > 0) {
+    const { error: optErr } = await client.from("profiles").update(optPatch).eq("id", userId);
+    if (optErr) console.warn("[BITE] updateOwnProfile optional fields:", optErr.message);
   }
 
   const fresh = await fetchProfileById(client, userId);
