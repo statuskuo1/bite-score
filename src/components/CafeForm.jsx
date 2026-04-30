@@ -129,7 +129,7 @@ function FlavorDropdown({ activeNotes, onToggle, t }) {
   );
 }
 
-export function CafeForm({initial,initialDineWith=[],onSave,onSaveAndContinue,onCancel,weights,addType,setAddType,existingCafes,existingCities,places,onPlaceCreated,user,tasteBudIds}) {
+export function CafeForm({initial,initialDineWith=[],onSave,onSaveAndContinue,onCancel,onFormChange,weights,addType,setAddType,existingCafes,existingCities,places,onPlaceCreated,user,tasteBudIds}) {
   const {t} = useLang();
   const [f, setF] = useState({...INIT_CAFE, ...initial});
   const [sub, setSub] = useState(false);
@@ -139,6 +139,9 @@ export function CafeForm({initial,initialDineWith=[],onSave,onSaveAndContinue,on
   const inp = (k, v) => setF(p => ({...p, [k]: v}));
   const score = calcCafeOutOf10(+f.taste,+f.cost,+f.portions,+f.wait,f.useR,+f.repeatability,weights,currencyCode);
   const isEdit = !!initial.id;
+  useEffect(() => {
+    if (!isEdit) onFormChange?.({ addType: "cafe", f, dineWith });
+  }, [f, dineWith]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const cafesList = existingCafes || [];
   const activePlaceId = f.placeId || null;

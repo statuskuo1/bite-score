@@ -134,10 +134,14 @@ export default function App() {
   const [addInitialDineWith, setAddInitialDineWith] = useState([]);
   const [addFormKey, setAddFormKey] = useState(0);
   const [addTagTaggerId, setAddTagTaggerId] = useState(null);
+  const formStateRef = useRef(null);
+  const [addDraftData, setAddDraftData] = useState(null);
   const [tasteBudIds, setTasteBudIds] = useState(() => new Set());
   const [homeCurrency, setHomeCurrency] = useState("USD");
   const [extUserLogTarget, setExtUserLogTarget] = useState(null);
   const [extCompareTarget, setExtCompareTarget] = useState(null);
+  const lastLogPath = useRef("/log");
+  const lastTastePath = useRef("/taste");
   /** Mandarin localization is temporarily stashed while EN gets polish.
    *  `T.zh` and components' `lang === "zh"` branches are intentionally preserved
    *  so reviving = restore lang state + UI toggles. See
@@ -269,6 +273,7 @@ export default function App() {
     const seen = new Set();
     setAddInitialDineWith(all.filter(p => p?.id && !seen.has(p.id) && seen.add(p.id)));
     setAddTagTaggerId(taggerId || null);
+    setAddDraftData(null);
     setAddFormKey(k => k + 1);
     setAddType(entryType === "cafe" ? "cafe" : "restaurant");
     navigate("/add");
@@ -401,10 +406,33 @@ export default function App() {
   }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    if (pathname.startsWith("/log")) lastLogPath.current = pathname;
+    if (pathname.startsWith("/taste")) lastTastePath.current = pathname;
     if (pathname !== "/add") {
+      // Save draft if form has meaningful content
+      if (formStateRef.current?.f?.name && user?.id) {
+        try {
+          localStorage.setItem(`bite_addRating_draft_${user.id}`, JSON.stringify(formStateRef.current));
+        } catch {}
+      }
+      formStateRef.current = null;
       setAddPrefill(null);
       setAddInitialDineWith([]);
       setAddTagTaggerId(null);
+    } else {
+      // Navigated TO /add — restore draft if no prefill is active
+      if (user?.id && !addPrefill) {
+        try {
+          const raw = localStorage.getItem(`bite_addRating_draft_${user.id}`);
+          if (raw) {
+            const draft = JSON.parse(raw);
+            if (draft?.f?.name) {
+              setAddDraftData(draft);
+              setAddType(draft.addType || "restaurant");
+            }
+          }
+        } catch {}
+      }
     }
   }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -946,7 +974,7 @@ export default function App() {
           const badge = v==="community" && unseenFollowers > 0 ? unseenFollowers : 0;
           const active = v==="log"?pathname.startsWith("/log"):v==="community"?pathname.startsWith("/community"):v==="palette"?pathname.startsWith("/taste"):pathname===to;
           return (
-            <button key={v} onClick={()=>{navigate(to);setEditR(null);setEditC(null);window.scrollTo({top:0,behavior:"instant"});}} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",padding:"4px 8px",minWidth:56}}>
+            <button key={v} onClick={()=>{const dest=v==="log"?lastLogPath.current:v==="palette"?lastTastePath.current:to;navigate(dest);setEditR(null);setEditC(null);window.scrollTo({top:0,behavior:"instant"});}} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",padding:"4px 8px",minWidth:56}}>
               {v==="add"?(
                 <div style={{position:"relative",marginTop:-8,marginBottom:2}}>
                   <div style={{width:44,height:44,borderRadius:"50%",background:"#F0997B",border:"2px solid #F0997B",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -1294,9 +1322,16 @@ export default function App() {
             }}
           />
           {addSaveErr&&<div style={{background:"#3C1F13",border:"1px solid #F0997B",borderRadius:8,padding:"10px 14px",marginBottom:12,fontSize:13,color:"#F0997B"}}>{addSaveErr}</div>}
+          {addDraftData&&!addPrefill&&(
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#1E2A1E",border:"0.5px solid rgba(151,196,89,0.35)",borderRadius:8,padding:"8px 12px",marginBottom:12,fontSize:12,color:"#97C459"}}>
+              <span>Draft restored</span>
+              <button type="button" onClick={()=>{if(user?.id){try{localStorage.removeItem(`bite_addRating_draft_${user.id}`);}catch{}}setAddDraftData(null);setAddFormKey(k=>k+1);}} style={{background:"none",border:"none",color:"#97C459",fontSize:12,cursor:"pointer",padding:0,textDecoration:"underline"}}>Clear</button>
+            </div>
+          )}
           {addType==="restaurant"
-            ?<RestForm key={addFormKey} initial={{...INIT_REST,city:lastCity.current||profile?.home_city||"",...(addPrefill||{})}} initialDineWith={addInitialDineWith} weights={weights} existingEntries={st.entries} existingCities={existingCities} places={restaurantPlaces}
+            ?<RestForm key={addFormKey} initial={{...INIT_REST,city:lastCity.current||profile?.home_city||"",...(addPrefill||(addDraftData?.addType==="restaurant"?addDraftData.f:null)||{})}} initialDineWith={addInitialDineWith.length?addInitialDineWith:(addDraftData?.addType==="restaurant"&&!addPrefill?addDraftData.dineWith||[]:[])}} weights={weights} existingEntries={st.entries} existingCities={existingCities} places={restaurantPlaces}
                 onPlaceCreated={(p)=>upsertPlace(setRestaurantPlaces, p.id, p)}
+                onFormChange={(s)=>{formStateRef.current=s;}}
                 user={user}
                 tasteBudIds={tasteBudIds}
                 onSave={async e=>{
@@ -1335,6 +1370,8 @@ export default function App() {
                     }
                     if (data) {
                       dispatch({ type: "ADD", e: mapRestaurantVisitRow(data) });
+                      if (user?.id) { try { localStorage.removeItem(`bite_addRating_draft_${user.id}`); } catch {} }
+                      setAddDraftData(null);
                       const toTag = (e.dineWith || []).filter(p => p.id !== sourceTaggerId);
                       if (toTag.length) {
                         await Promise.all(toTag.map(p=>insertDineTag(supabase,{
@@ -1357,8 +1394,9 @@ export default function App() {
                 onCancel={()=>{setAddPrefill(null);setAddInitialDineWith([]);setAddTagTaggerId(null);navigate("/log");}}
                 addType={addType} setAddType={setAddType}
               />
-            :<CafeForm key={addFormKey} initial={{...INIT_CAFE,city:lastCity.current||profile?.home_city||"",...(addPrefill||{})}} initialDineWith={addInitialDineWith} weights={drinkWeights}
+            :<CafeForm key={addFormKey} initial={{...INIT_CAFE,city:lastCity.current||profile?.home_city||"",...(addPrefill||(addDraftData?.addType==="cafe"?addDraftData.f:null)||{})}} initialDineWith={addInitialDineWith.length?addInitialDineWith:(addDraftData?.addType==="cafe"&&!addPrefill?addDraftData.dineWith||[]:[])}} weights={drinkWeights}
                 onPlaceCreated={(p)=>upsertPlace(setCafePlaces, p.id, p)}
+                onFormChange={(s)=>{formStateRef.current=s;}}
                 user={user}
                 tasteBudIds={tasteBudIds}
                 onSave={async e=>{
@@ -1366,6 +1404,8 @@ export default function App() {
                   setAddInitialDineWith([]);
                   const sourceTaggerId = addTagTaggerId;
                   setAddTagTaggerId(null);
+                  if (user?.id) { try { localStorage.removeItem(`bite_addRating_draft_${user.id}`); } catch {} }
+                  setAddDraftData(null);
                   if (e.city) persistLastCity(e.city);
                   const inserted = await insertCafeEntry(e);
                   const toTag = (e.dineWith || []).filter(p => p.id !== sourceTaggerId);

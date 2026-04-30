@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLang } from "../contexts/LangContext.jsx";
 import { FLAGS } from "../constants/cuisineConstants.js";
 import { calcBiteOutOf10, scoreColor, scoreLabel, tasteLabel } from "../utils/scoring.js";
@@ -14,12 +14,15 @@ import { CityInput } from "./CityInput.jsx";
 import { DineWithPicker } from "./DineWithPicker.jsx";
 import { getCurrencyForCity, CURRENCY_SYMBOLS } from "../utils/currency.js";
 
-export function RestForm({initial,initialDineWith=[],onSave,onCancel,weights,addType,setAddType,existingEntries,existingCities,places,onPlaceCreated,user,tasteBudIds}) {
+export function RestForm({initial,initialDineWith=[],onSave,onCancel,onFormChange,weights,addType,setAddType,existingEntries,existingCities,places,onPlaceCreated,user,tasteBudIds}) {
   const {t} = useLang();
   const isEdit = !!initial.id;
   const [f,setF] = useState(initial);
   const [sub,setSub] = useState(false);
   const [dineWith,setDineWith] = useState(initialDineWith);
+  useEffect(() => {
+    if (!isEdit) onFormChange?.({ addType: "restaurant", f, dineWith });
+  }, [f, dineWith]); // eslint-disable-line react-hooks/exhaustive-deps
   const [currencyCode, setCurrencyCode] = useState(() => initial.currency_code || getCurrencyForCity(initial.city || ""));
   const inp = (k,v) => setF(p=>({...p,[k]:v}));
   const currSymbol = CURRENCY_SYMBOLS[currencyCode] || currencyCode;
