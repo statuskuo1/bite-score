@@ -1137,6 +1137,7 @@ export default function App() {
         setEditR(null);
       }} onCancel={()=>{setEditR(null);window.scrollTo({top:0,behavior:"smooth"});}}/>}
       {pathname.startsWith("/log")&&editC&&<CafeForm initial={editC} weights={editC?.category==="Sweets"?sweetWeights:drinkWeights}
+        user={user} tasteBudIds={tasteBudIds}
         onPlaceCreated={(p)=>upsertPlace(setCafePlaces, p.id, p)}
         onSave={async e=>{
         if (e.city) lastCity.current = e.city;
@@ -1224,15 +1225,19 @@ export default function App() {
                     if (data) {
                       dispatch({ type: "ADD", e: mapRestaurantVisitRow(data) });
                       if (e.dineWith?.length) {
-                        await Promise.all(e.dineWith.map(p=>insertDineTag(supabase,{
-                          taggerId: user.id,
-                          taggedId: p.id,
-                          entryId: data.id,
-                          entryType: "restaurant",
-                          restaurantName: e.name,
-                          city: e.city||"",
-                          cuisine: e.cuisine||"",
-                        })));
+                        try {
+                          await Promise.all(e.dineWith.map(p=>insertDineTag(supabase,{
+                            taggerId: user.id,
+                            taggedId: p.id,
+                            entryId: data.id,
+                            entryType: "restaurant",
+                            restaurantName: e.name,
+                            city: e.city||"",
+                            cuisine: e.cuisine||"",
+                          })));
+                        } catch (tagErr) {
+                          console.error("dine tag insert error:", tagErr);
+                        }
                       }
                       navigate("/log");
                     }
@@ -1251,15 +1256,19 @@ export default function App() {
                   if (e.city) lastCity.current = e.city;
                   const inserted = await insertCafeEntry(e);
                   if (e.dineWith?.length && inserted?.id) {
-                    await Promise.all(e.dineWith.map(p=>insertDineTag(supabase,{
-                      taggerId: user.id,
-                      taggedId: p.id,
-                      entryId: inserted.id,
-                      entryType: "cafe",
-                      restaurantName: e.name,
-                      city: e.city||"",
-                      cuisine: e.category||"",
-                    })));
+                    try {
+                      await Promise.all(e.dineWith.map(p=>insertDineTag(supabase,{
+                        taggerId: user.id,
+                        taggedId: p.id,
+                        entryId: inserted.id,
+                        entryType: "cafe",
+                        restaurantName: e.name,
+                        city: e.city||"",
+                        cuisine: e.category||"",
+                      })));
+                    } catch (tagErr) {
+                      console.error("dine tag insert error:", tagErr);
+                    }
                   }
                   navigate(e.category==="Sweets"?"/log/sweets":"/log/drinks");
                 }}
@@ -1267,15 +1276,19 @@ export default function App() {
                   if (e.city) lastCity.current = e.city;
                   const inserted = await insertCafeEntry(e);
                   if (e.dineWith?.length && inserted?.id) {
-                    await Promise.all(e.dineWith.map(p=>insertDineTag(supabase,{
-                      taggerId: user.id,
-                      taggedId: p.id,
-                      entryId: inserted.id,
-                      entryType: "cafe",
-                      restaurantName: e.name,
-                      city: e.city||"",
-                      cuisine: e.category||"",
-                    })));
+                    try {
+                      await Promise.all(e.dineWith.map(p=>insertDineTag(supabase,{
+                        taggerId: user.id,
+                        taggedId: p.id,
+                        entryId: inserted.id,
+                        entryType: "cafe",
+                        restaurantName: e.name,
+                        city: e.city||"",
+                        cuisine: e.category||"",
+                      })));
+                    } catch (tagErr) {
+                      console.error("dine tag insert error:", tagErr);
+                    }
                   }
                   window.scrollTo({top:0,behavior:"smooth"});
                 }}
