@@ -55,7 +55,6 @@ export function OrderCombobox({
       {/* Class selector beats the global element selector, so these !important rules win. */}
       <style>{`
         .bite-order-input { font-size: 13px !important; color: #F1EFE8 !important; }
-        .bite-order-input::placeholder { color: #666663 !important; font-size: 13px !important; }
       `}</style>
       <div style={{ position: "relative" }}>
         <input

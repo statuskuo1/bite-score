@@ -1,6 +1,7 @@
 import { useLang } from "../contexts/LangContext.jsx";
 import { canMutateVisit } from "../utils/rowAccess.js";
 import { S } from "../styles/sharedStyles.js";
+import { ScoreDisplay } from "./ScoreDisplay.jsx";
 
 /**
  * Per-entry visit-history modal shared by RestRow / CafeGroupRow.
@@ -90,10 +91,9 @@ export function VisitsModal({
                   <div style={{ fontSize: 13, fontWeight: 500, color: "#F1EFE8" }}>
                     {heading}{suffixStr}
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ fontSize: 16, fontWeight: 500, color: scoreColorFn(sc) }}>
-                      {sc != null ? sc.toFixed(2) : "—"}
-                    </div>
+                  <div style={S.row8c}>
+                    <ScoreDisplay value={sc} color={scoreColorFn(sc)} size="sm" />
+
                     {canMutateVisit(v, user) && (
                       <button
                         onClick={() => { onClose(); onEdit(v); }}

@@ -13,15 +13,7 @@ import { Avatar } from "./Avatar.jsx";
 import { UserIdentity } from "./UserIdentity.jsx";
 import { usePaginatedList } from "../usePaginatedList.js";
 import { ShowMoreButton } from "../ShowMoreButton.jsx";
-
-const SECTION_LABEL_STYLE = {
-  fontSize: 11,
-  color: "#F0997B",
-  textTransform: "uppercase",
-  letterSpacing: "0.06em",
-  fontWeight: 600,
-  marginBottom: 8,
-};
+import { SectionLabel } from "../SectionLabel.jsx";
 
 const FLAG_BOX_STYLE = {
   width: 36,
@@ -387,7 +379,7 @@ export function CompareTab({ user, initialTarget, onClearTarget, onFollowChange 
         <>
           <section style={{ marginBottom: 18 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-              <div style={{ ...SECTION_LABEL_STYLE, marginBottom: 0 }}>{t.bothVisited}</div>
+              <SectionLabel style={{ marginBottom: 0 }}>{t.bothVisited}</SectionLabel>
               {dinedTogetherPlaceIds.size > 0 && (
                 <>
                   <Toggle on={dinedTogetherOnly} onClick={() => setDinedTogetherOnly((v) => !v)} />
@@ -431,9 +423,9 @@ export function CompareTab({ user, initialTarget, onClearTarget, onFollowChange 
           </section>
 
           <section style={{ marginBottom: 18 }}>
-            <div style={SECTION_LABEL_STYLE}>
+            <SectionLabel>
               {fmtTemplate(t.theyTriedYouHavent || "{name} tried, you haven't", { name: friendName })}
-            </div>
+            </SectionLabel>
             {onlyTheirs.length === 0 ? (
               <p style={{ fontSize: 12, color: "#888780", margin: 0 }}>{t.nothingNewFromThem}</p>
             ) : (
@@ -462,9 +454,9 @@ export function CompareTab({ user, initialTarget, onClearTarget, onFollowChange 
           </section>
 
           <section style={{ marginBottom: 16 }}>
-            <div style={SECTION_LABEL_STYLE}>
+            <SectionLabel>
               {fmtTemplate(t.youTriedTheyHavent || "You tried, {name} hasn't", { name: friendName })}
-            </div>
+            </SectionLabel>
             {onlyMine.length === 0 ? (
               <p style={{ fontSize: 12, color: "#888780", margin: 0 }}>{t.nothingNewFromYou}</p>
             ) : (

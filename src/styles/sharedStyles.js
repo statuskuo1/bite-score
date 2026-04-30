@@ -7,12 +7,16 @@ export const c = {
 
 export const S = {
   wb:{width:"100%",boxSizing:"border-box"},
+  mb8:{marginBottom:8},
+  mb12:{marginBottom:12},
   mb16:{marginBottom:16},
   blk4:{display:"block",marginBottom:4},
   f1:{flex:1},
   sec:{borderTop:"0.5px solid rgba(255,255,255,0.1)",paddingTop:16,marginBottom:4},
   sm:{fontSize:11,color:"#888780"},
   row8:{display:"flex",gap:8},
+  row8c:{display:"flex",alignItems:"center",gap:8},
+  row12c:{display:"flex",alignItems:"center",gap:12},
   val:{fontSize:13,fontWeight:500,color:"#F1EFE8"},
   err:{fontSize:11,color:"#F0997B",marginTop:4},
   chips:{display:"flex",gap:6,flexWrap:"wrap"},

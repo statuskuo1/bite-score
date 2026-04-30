@@ -882,9 +882,9 @@ export default function App() {
     <div style={{fontFamily:"var(--font-sans)",maxWidth:640,margin:"0 auto",padding:user?"1.25rem 1rem max(8rem, env(safe-area-inset-bottom)) 1rem":"1.25rem 1rem 2rem 1rem",background:"#141413",minHeight:"100vh",color:"#F1EFE8",overflowX:"hidden"}}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&display=swap');
-        input,select,textarea{background:#252523!important;color:#F1EFE8!important;border:1px solid rgba(255,255,255,0.2)!important;border-radius:8px;padding:9px 12px;font-size:16px!important;}
+        input,select,textarea{background:#252523!important;color:#F1EFE8!important;border:1px solid rgba(255,255,255,0.2)!important;border-radius:8px;padding:9px 12px;font-size:16px!important;font-family:inherit!important;}
         input:focus,textarea:focus{border-color:#F0997B!important;outline:none;}
-        input::placeholder,textarea::placeholder{color:#666663!important;}
+        input::placeholder,textarea::placeholder{color:#666663!important;font-size:13px!important;}
         input[type=range]{accent-color:#F0997B;padding:0;border:none!important;background:transparent!important;}
         @keyframes pulse{0%,100%{opacity:0.4}50%{opacity:0.7}}
       `}</style>
@@ -1083,7 +1083,7 @@ export default function App() {
                 sortAsc={sortAsc}
                 onToggleSortAsc={()=>setSortAsc(a=>!a)}
               />
-              {filtered.length===0&&<p style={{color:"#888780",fontSize:14}}>{t.noEntries}</p>}
+              {filtered.length===0&&<p style={{color:"#888780",fontSize:14}}>{sortedR.length===0?t.noRestaurantsYet:t.noEntries}</p>}
               {restaurantGroupsPage.visible.map(({grp,e})=>{
                 const visits=grp.length;
                 const display=getDisplay(e);
@@ -1146,7 +1146,7 @@ export default function App() {
                 sortAsc={cafeSortAsc}
                 onToggleSortAsc={()=>setCafeSortAsc(a=>!a)}
               />
-              {!sortedDrinks.length&&<p style={{color:"#888780",fontSize:14}}>{t.noDrinks}</p>}
+              {!sortedDrinks.length&&<p style={{color:"#888780",fontSize:14}}>{cafes.some(e=>DRINK_CATS.includes(e.category))?t.noEntries:t.noDrinks}</p>}
               {drinkGroupsPage.visible.map(([name,grp])=>(
                 <CafeGroupRow key={name} group={grp} cafeSortBy={cafeSortBy} weights={drinkWeights} user={user} onEdit={e=>{setEditC(e);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={async id=>{
                       const row=cafes.find(x=>x.id===id);
@@ -1197,7 +1197,7 @@ export default function App() {
                 sortAsc={sweetsSortAsc}
                 onToggleSortAsc={()=>setSweetsSortAsc(a=>!a)}
               />
-              {!sortedSweets.length&&<p style={{color:"#888780",fontSize:14}}>{t.noSweets}</p>}
+              {!sortedSweets.length&&<p style={{color:"#888780",fontSize:14}}>{cafes.some(e=>e.category==="Sweets")?t.noEntries:t.noSweets}</p>}
               {sweetGroupsPage.visible.map(([name,grp])=>(
                 <CafeGroupRow key={name} group={grp} cafeSortBy={sweetsSortBy} weights={sweetWeights} user={user} onEdit={e=>{setEditC(e);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={async id=>{
                       const row=cafes.find(x=>x.id===id);

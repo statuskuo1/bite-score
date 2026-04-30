@@ -1,4 +1,4 @@
-export function SectionLabel({ children }) {
+export function SectionLabel({ children, style }) {
   return (
     <span
       style={{
@@ -9,6 +9,7 @@ export function SectionLabel({ children }) {
         fontWeight: 600,
         display: "block",
         marginBottom: 10,
+        ...style,
       }}
     >
       {children}

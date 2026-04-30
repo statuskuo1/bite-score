@@ -91,7 +91,6 @@ export function DineWithPicker({ userId, tasteBudIds = new Set(), selected = [],
       <div style={{ position: "relative" }}>
         <style>{`
           .bite-dine-input { font-size: 13px !important; color: #F1EFE8 !important; }
-          .bite-dine-input::placeholder { color: #666663 !important; font-size: 13px !important; }
         `}</style>
         <input
           className="bite-dine-input"
