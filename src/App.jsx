@@ -97,7 +97,7 @@ function omitPlayWelcomeAside(body) {
 }
 
 export default function App() {
-  const { user, authReady, username } = useAuth();
+  const { user, authReady, username, profile } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [st, dispatch] = useReducer(reducer, { entries: [] });
@@ -144,6 +144,10 @@ export default function App() {
   useEffect(() => {
     if (user) setShowAuthModal(false);
   }, [user]);
+
+  useEffect(() => {
+    if (profile?.home_currency) setHomeCurrency(profile.home_currency);
+  }, [profile?.home_currency]);
 
   const refreshUnseenFollowers = useCallback(async () => {
     if (!user?.id) { setUnseenFollowers(0); return; }
@@ -1188,7 +1192,7 @@ export default function App() {
             onAddType={(type)=>setAddType(type)}
           />
           {addType==="restaurant"
-            ?<RestForm initial={{...INIT_REST,city:lastCity.current}} weights={weights} existingEntries={st.entries} existingCities={existingCities} places={restaurantPlaces}
+            ?<RestForm initial={{...INIT_REST,city:profile?.home_city||lastCity.current}} weights={weights} existingEntries={st.entries} existingCities={existingCities} places={restaurantPlaces}
                 onPlaceCreated={(p)=>upsertPlace(setRestaurantPlaces, p.id, p)}
                 user={user}
                 tasteBudIds={tasteBudIds}
@@ -1239,7 +1243,7 @@ export default function App() {
                 onCancel={()=>navigate("/log")}
                 addType={addType} setAddType={setAddType}
               />
-            :<CafeForm initial={{...INIT_CAFE,city:lastCity.current}} weights={drinkWeights}
+            :<CafeForm initial={{...INIT_CAFE,city:profile?.home_city||lastCity.current}} weights={drinkWeights}
                 onPlaceCreated={(p)=>upsertPlace(setCafePlaces, p.id, p)}
                 user={user}
                 tasteBudIds={tasteBudIds}

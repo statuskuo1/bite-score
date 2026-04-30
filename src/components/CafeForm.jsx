@@ -136,7 +136,7 @@ export function CafeForm({initial,onSave,onSaveAndContinue,onCancel,weights,addT
   const [f, setF] = useState({...INIT_CAFE, ...initial});
   const [sub, setSub] = useState(false);
   const [dineWith, setDineWith] = useState([]);
-  const [currencyCode, setCurrencyCode] = useState(() => getCurrencyForCity(initial.city || ""));
+  const [currencyCode, setCurrencyCode] = useState(() => initial.currency_code || getCurrencyForCity(initial.city || ""));
   const currSymbol = CURRENCY_SYMBOLS[currencyCode] || currencyCode;
   const inp = (k, v) => setF(p => ({...p, [k]: v}));
   const score = calcCafeOutOf10(+f.taste,+f.cost,+f.portions,+f.wait,f.useR,+f.repeatability,weights,currencyCode);
