@@ -12,7 +12,7 @@ import { FieldLabel } from "./FieldLabel.jsx";
 import { FormScoreHeader } from "./FormScoreHeader.jsx";
 import { CityInput } from "./CityInput.jsx";
 import { DineWithPicker } from "./DineWithPicker.jsx";
-import { getCurrencyForCity, CURRENCY_CODES, CURRENCY_SYMBOLS } from "../utils/currency.js";
+import { getCurrencyForCity, CURRENCY_SYMBOLS } from "../utils/currency.js";
 
 export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,existingEntries,existingCities,places,onPlaceCreated,user,tasteBudIds}) {
   const {t} = useLang();
@@ -118,14 +118,7 @@ export function RestForm({initial,onSave,onCancel,weights,addType,setAddType,exi
       <div style={{display:"flex",gap:10,marginBottom:16}}>
         <div style={S.f1}>
           <FieldLabel>{t.totalCost} <span style={{color:"#888780",fontWeight:400}}>({currencyCode})</span></FieldLabel>
-          <div style={{display:"flex",gap:4}}>
-            <input type="number" value={f.cost} onChange={e=>inp("cost",e.target.value)} placeholder={currSymbol} style={{...S.wb,flex:1}}/>
-            {!isEdit && (
-              <select value={currencyCode} onChange={e=>setCurrencyCode(e.target.value)} style={{width:72,fontSize:12,padding:"6px 4px"}}>
-                {CURRENCY_CODES.map(c=><option key={c} value={c}>{c}</option>)}
-              </select>
-            )}
-          </div>
+          <input type="number" value={f.cost} onChange={e=>inp("cost",e.target.value)} placeholder={currSymbol} style={S.wb}/>
           {sub&&!f.cost&&<div style={S.err}>Required</div>}
         </div>
         <div style={S.f1}><FieldLabel>{t.portions}</FieldLabel><input type="number" min="0.5" step="0.5" value={f.portions} onChange={e=>inp("portions",e.target.value)} style={S.wb}/></div>
