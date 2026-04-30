@@ -259,12 +259,27 @@ export default function App() {
   function handleDineTagTap(notif) {
     setShowNotifPanel(false);
     const meta = notif.meta || {};
-    applyDineTagPrefill({
-      restaurantName: meta.restaurant_name,
-      city: meta.city,
-      cuisine: meta.cuisine,
-      taggerId: notif.from_user_id,
-      entryId: meta.entry_id || null,
+    // Always look up the dine_with_tags row directly — old notifications may
+    // be missing city/cuisine/entry_id in meta. Tagged user can see their own
+    // rows (RLS: tagged_id = auth.uid()).
+    let q = supabase
+      .from("dine_with_tags")
+      .select("city, cuisine, entry_id")
+      .eq("tagged_id", user.id)
+      .eq("tagger_id", notif.from_user_id);
+    const lookupQ = meta.entry_id
+      ? q.eq("entry_id", meta.entry_id)
+      : q.ilike("restaurant_name", meta.restaurant_name || "")
+          .lte("created_at", notif.created_at)
+          .order("created_at", { ascending: false });
+    lookupQ.limit(1).maybeSingle().then(({ data: tag }) => {
+      applyDineTagPrefill({
+        restaurantName: meta.restaurant_name,
+        city: tag?.city || meta.city,
+        cuisine: tag?.cuisine || meta.cuisine,
+        taggerId: notif.from_user_id,
+        entryId: tag?.entry_id || meta.entry_id || null,
+      });
     });
   }
 
