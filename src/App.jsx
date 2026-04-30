@@ -233,7 +233,7 @@ export default function App() {
     }
   }
 
-  async function applyDineTagPrefill({ restaurantName, city, cuisine, taggerId, entryId }) {
+  async function applyDineTagPrefill({ restaurantName, city, cuisine, taggerId, entryId, taggerProfile }) {
     const [placeRes, coDiners] = await Promise.all([
       supabase.from("restaurant_places").select("is_fusion, cuisine, cuisine2")
         .ilike("name", restaurantName || "").limit(1).maybeSingle(),
@@ -250,7 +250,10 @@ export default function App() {
       isFusion: !!place?.is_fusion,
       letter: (resolvedCuisine[0] || "").toUpperCase(),
     });
-    setAddInitialDineWith(coDiners);
+    // Tagger + co-diners, deduplicated, current user excluded (fetchCoDiners already handles that).
+    const all = [...(taggerProfile ? [taggerProfile] : []), ...coDiners];
+    const seen = new Set();
+    setAddInitialDineWith(all.filter(p => p?.id && !seen.has(p.id) && seen.add(p.id)));
     setAddFormKey(k => k + 1);
     setAddType("restaurant");
     navigate("/add");
@@ -279,6 +282,7 @@ export default function App() {
         cuisine: tag?.cuisine || meta.cuisine,
         taggerId: notif.from_user_id,
         entryId: tag?.entry_id || meta.entry_id || null,
+        taggerProfile: notif.fromProfile,
       });
     });
   }
@@ -1264,6 +1268,7 @@ export default function App() {
                   cuisine: tag.cuisine,
                   taggerId: tag.tagger_id,
                   entryId: tag.entry_id,
+                  taggerProfile: tag.taggerProfile,
                 });
               } else {
                 setAddType(type);
