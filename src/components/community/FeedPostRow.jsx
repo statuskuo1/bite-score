@@ -275,6 +275,14 @@ export function FeedPostRow({
   const heartMine = !!reactionState?.mine;
   const reactors = reactionState?.reactors || [];
 
+  /** Read-only flags. The single-post sheet (FeedPostSheet) renders the
+   *  recipient's own card after a heart-reaction notif tap; in that mode
+   *  there's no profile to drill into and no self-hearting allowed, so
+   *  the callbacks are passed as null and we render those affordances
+   *  as plain non-interactive elements. */
+  const headerInteractive = typeof onOpenProfile === "function";
+  const heartInteractive = typeof onToggleHeart === "function";
+
   return (
     <div style={{
       background: CARD_BG,
@@ -286,43 +294,73 @@ export function FeedPostRow({
       boxSizing: "border-box",
       overflow: "hidden",
     }}>
-      <button
-        type="button"
-        onClick={() => onOpenProfile?.(author)}
-        style={{
+      {headerInteractive ? (
+        <button
+          type="button"
+          onClick={() => onOpenProfile(author)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            width: "100%",
+            padding: 0,
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            textAlign: "left",
+            marginBottom: 12,
+          }}
+        >
+          <Avatar profile={author} size={36} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+              fontSize: 14,
+              fontWeight: 600,
+              color: "#F1EFE8",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}>
+              {author.display_name || author.username || "—"}
+            </div>
+            <div style={{
+              fontSize: 11,
+              color: "#888780",
+              marginTop: 2,
+            }}>
+              {relativeDate(post.visitedAt)}
+            </div>
+          </div>
+        </button>
+      ) : (
+        <div style={{
           display: "flex",
           alignItems: "center",
           gap: 10,
-          width: "100%",
-          padding: 0,
-          background: "none",
-          border: "none",
-          cursor: "pointer",
-          textAlign: "left",
           marginBottom: 12,
-        }}
-      >
-        <Avatar profile={author} size={36} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{
-            fontSize: 14,
-            fontWeight: 600,
-            color: "#F1EFE8",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}>
-            {author.display_name || author.username || "—"}
-          </div>
-          <div style={{
-            fontSize: 11,
-            color: "#888780",
-            marginTop: 2,
-          }}>
-            {relativeDate(post.visitedAt)}
+        }}>
+          <Avatar profile={author} size={36} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+              fontSize: 14,
+              fontWeight: 600,
+              color: "#F1EFE8",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}>
+              {author.display_name || author.username || "—"}
+            </div>
+            <div style={{
+              fontSize: 11,
+              color: "#888780",
+              marginTop: 2,
+            }}>
+              {relativeDate(post.visitedAt)}
+            </div>
           </div>
         </div>
-      </button>
+      )}
 
       <div style={{
         display: "flex",
@@ -444,29 +482,45 @@ export function FeedPostRow({
         alignItems: "center",
         gap: 12,
       }}>
-        <button
-          type="button"
-          onClick={() => onToggleHeart?.(post)}
-          disabled={reactionBusy}
-          style={{
+        {heartInteractive ? (
+          <button
+            type="button"
+            onClick={() => onToggleHeart(post)}
+            disabled={reactionBusy}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "4px 6px",
+              background: "none",
+              border: "none",
+              cursor: reactionBusy ? "wait" : "pointer",
+              color: heartCount ? "#F1EFE8" : "#888780",
+              fontSize: 13,
+              fontWeight: 500,
+              opacity: reactionBusy ? 0.6 : 1,
+              flexShrink: 0,
+            }}
+            aria-label={heartMine ? "Unheart" : "Heart"}
+          >
+            <HeartIcon filled={heartMine} size={18} />
+            {heartCount > 0 && <span>{heartCount}</span>}
+          </button>
+        ) : (
+          <span style={{
             display: "inline-flex",
             alignItems: "center",
             gap: 6,
             padding: "4px 6px",
-            background: "none",
-            border: "none",
-            cursor: reactionBusy ? "wait" : "pointer",
             color: heartCount ? "#F1EFE8" : "#888780",
             fontSize: 13,
             fontWeight: 500,
-            opacity: reactionBusy ? 0.6 : 1,
             flexShrink: 0,
-          }}
-          aria-label={heartMine ? "Unheart" : "Heart"}
-        >
-          <HeartIcon filled={heartMine} size={18} />
-          {heartCount > 0 && <span>{heartCount}</span>}
-        </button>
+          }}>
+            <HeartIcon filled={heartMine || heartCount > 0} size={18} />
+            {heartCount > 0 && <span>{heartCount}</span>}
+          </span>
+        )}
         {heartCount > 0 && (
           <div style={{
             display: "flex",

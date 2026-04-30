@@ -115,6 +115,40 @@ export async function fetchTasteBudsFeed(client, viewerId, opts = {}) {
 }
 
 /**
+ * Fetch a single visit (restaurant or cafe) by id and produce the same
+ * post shape `FeedPostRow` consumes. Used by `FeedPostSheet` when a
+ * heart-reaction notification is tapped — meta carries `(post_id,
+ * post_type)`, and we want to render that one card without going through
+ * the bud-aggregate feed query.
+ *
+ * Fails soft: returns `null` for any error (missing row, RLS hide,
+ * network blip). The sheet renders a "couldn't load" state on null.
+ */
+export async function fetchVisitByIdAndType(client, postId, postType) {
+  if (!postId || !postType) return null;
+  const isCafe = postType === "cafe";
+  const table = isCafe ? "cafe_visits" : "restaurant_visits";
+  const select = isCafe ? CAFE_VISIT_SELECT : RESTAURANT_VISIT_SELECT;
+
+  const { data, error } = await client
+    .from(table)
+    .select(select)
+    .eq("id", postId)
+    .maybeSingle();
+  if (error) {
+    console.warn("[BITE] fetchVisitByIdAndType:", error.message);
+    return null;
+  }
+  if (!data) return null;
+
+  const [withAuthor] = await attachAuthorProfiles(client, [data]);
+  return {
+    ...(isCafe ? mapCafeVisitRow(withAuthor) : mapRestaurantVisitRow(withAuthor)),
+    kind: isCafe ? "cafe" : "rest",
+  };
+}
+
+/**
  * Resolve "dined with" co-diner profiles for a batch of feed posts.
  *
  * Calls the SECURITY DEFINER `fetch_co_diners_for_entries` RPC (added in

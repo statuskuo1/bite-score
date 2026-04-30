@@ -14,7 +14,7 @@ function relativeTime(ts) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile, onDineTagTap, onTagMutualBack, alreadyFollowed, onMarkFollowed, followingIds }) {
+function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile, onDineTagTap, onHeartTap, onTagMutualBack, alreadyFollowed, onMarkFollowed, followingIds }) {
   const [followed, setFollowed] = useState(false);
   const [isTasteBuds, setIsTasteBuds] = useState(notif.type === "taste_buds");
   const [busy, setBusy] = useState(false);
@@ -63,7 +63,7 @@ function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile, onDineTagTap,
         : isDineTagAccepted
           ? `@${p?.username || "someone"} logged ${restaurantName} 🍽`
           : isHeartReaction
-            ? `@${p?.username || "someone"} hearted your bite at ${restaurantName} ❤️`
+            ? `@${p?.username || "someone"} hearted your BITE at ${restaurantName} ❤️`
             : isTasteBuds
               ? `You and @${p?.username || "someone"} are now Taste Buds! 🎉`
               : `@${p?.username || "someone"} followed you`;
@@ -72,7 +72,9 @@ function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile, onDineTagTap,
     ? () => onDineTagTap?.(notif)
     : isDineTagMutual
       ? () => { if (!taggedBack) setShowConfirm((v) => !v); }
-      : () => p && onOpenProfile(p);
+      : isHeartReaction
+        ? () => onHeartTap?.(notif)
+        : () => p && onOpenProfile(p);
 
   return (
     <div style={{
@@ -95,7 +97,7 @@ function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile, onDineTagTap,
             <button
               type="button"
               onClick={handleRowTap}
-              style={{ background: "none", border: "none", padding: 0, cursor: isDineTagMutual || isDineTag ? "pointer" : "default", color: "inherit", fontSize: "inherit", textAlign: "left" }}
+              style={{ background: "none", border: "none", padding: 0, cursor: isDineTagMutual || isDineTag || isHeartReaction ? "pointer" : "default", color: "inherit", fontSize: "inherit", textAlign: "left" }}
             >
               {message}
             </button>
@@ -154,7 +156,7 @@ function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile, onDineTagTap,
 
 export function NotificationPanel({
   notifications, loading, onClose, onFollowBack, onRefetch,
-  onOpenProfile, onDineTagTap, onTagMutualBack, sheetOpen, anchorPos, followingIds,
+  onOpenProfile, onDineTagTap, onHeartTap, onTagMutualBack, sheetOpen, anchorPos, followingIds,
 }) {
   const { t } = useLang();
   const panelRef = useRef(null);
@@ -221,6 +223,7 @@ export function NotificationPanel({
             onRefetch={onRefetch}
             onOpenProfile={onOpenProfile}
             onDineTagTap={onDineTagTap}
+            onHeartTap={onHeartTap}
             onTagMutualBack={onTagMutualBack}
             alreadyFollowed={followedIds.has(n.id)}
             onMarkFollowed={markFollowed}

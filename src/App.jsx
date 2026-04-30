@@ -54,6 +54,7 @@ import { countUnreadNotifications, fetchUnreadNotifications, markNotificationsRe
 import { usePaginatedList } from "./components/usePaginatedList.js";
 import { ShowMoreButton } from "./components/ShowMoreButton.jsx";
 import { NotificationPanel } from "./components/NotificationPanel.jsx";
+import { FeedPostSheet } from "./components/community/FeedPostSheet.jsx";
 import { insertDineTag, fetchUnloggedDineTags, countUnloggedDineTags, dismissDineTag, fetchCoDiners, fetchDinedWithByEntry } from "./utils/dineWithApi.js";
 import { DineTagsBanner } from "./components/DineTagsBanner.jsx";
 import { getCurrencyForCity, toUSD, fromUSD, CURRENCY_SYMBOLS } from "./utils/currency.js";
@@ -144,6 +145,9 @@ export default function App() {
   const [notifSheetProfile, setNotifSheetProfile] = useState(null);
   const [notifSheetRelation, setNotifSheetRelation] = useState("none");
   const [notifSheetBusy, setNotifSheetBusy] = useState(false);
+  /** Tap-target for heart-reaction notifications. When set, FeedPostSheet
+   *  mounts and renders the hearted post as a single read-only card. */
+  const [heartSheetTarget, setHeartSheetTarget] = useState(null);
   const [dineTags, setDineTags] = useState([]);
   const [dineTagCount, setDineTagCount] = useState(0);
   const [dineTagsReady, setDineTagsReady] = useState(false);
@@ -295,6 +299,13 @@ export default function App() {
     setAddFormKey(k => k + 1);
     setAddType(entryType === "cafe" ? "cafe" : "restaurant");
     navigate("/add");
+  }
+
+  function handleHeartTap(notif) {
+    setShowNotifPanel(false);
+    const meta = notif?.meta || {};
+    if (!meta.post_id || !meta.post_type) return;
+    setHeartSheetTarget({ postId: meta.post_id, postType: meta.post_type });
   }
 
   function handleDineTagTap(notif) {
@@ -995,8 +1006,9 @@ export default function App() {
                   onRefetch={refetchNotifications}
                   onOpenProfile={handleOpenNotifProfile}
                   onDineTagTap={handleDineTagTap}
+                  onHeartTap={handleHeartTap}
                   onTagMutualBack={handleDineTagMutualBack}
-                  sheetOpen={!!notifSheetProfile}
+                  sheetOpen={!!notifSheetProfile || !!heartSheetTarget}
                   anchorPos={notifAnchorPos}
                   followingIds={notifFollowingIds}
                 />
@@ -1708,6 +1720,17 @@ export default function App() {
           navigate("/community/compare");
         }}
         t={t}
+      />
+    )}
+    {heartSheetTarget && (
+      <FeedPostSheet
+        postId={heartSheetTarget.postId}
+        postType={heartSheetTarget.postType}
+        viewerId={user?.id}
+        restaurantWeights={weights}
+        drinkWeights={drinkWeights}
+        sweetWeights={sweetWeights}
+        onClose={() => setHeartSheetTarget(null)}
       />
     )}
     </LangContext.Provider>
