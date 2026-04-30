@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ConfirmSheet } from "../ConfirmSheet.jsx";
 import { useLang } from "../../contexts/LangContext.jsx";
 import { supabase } from "../../config/supabaseClient.js";
@@ -354,13 +354,28 @@ function GroupDetail({ user, groupId, onBack, onDeleted }) {
   );
 }
 
-export function GroupsTab({ user }) {
+/**
+ * People > Groups sub-section.
+ *
+ * Lifted unchanged from the former standalone GroupsTab so it can live inside
+ * the People tab alongside Taste Buds / Following / Discover. Group detail UX
+ * is unchanged — `GroupDetail` still takes over the section surface when a
+ * group is opened, then `onBack` returns to the list.
+ */
+export function PeopleGroupsSection({ user }) {
   const { t } = useLang();
   const [groups, setGroups] = useState([]);
   const [openId, setOpenId] = useState(null);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [query, setQuery] = useState("");
+  /** groupId → lowercased "name1 username1 name2 username2 …" string used by
+   *  the search filter. Hydrated lazily after the groups list resolves. */
+  const [memberStrings, setMemberStrings] = useState({});
+  /** Tracks which group IDs we've already kicked off member-fetches for, so
+   *  re-renders don't double-fire `getGroupWithMembers`. */
+  const fetchedMembersRef = useRef(new Set());
 
   const reload = useCallback(async () => {
     if (!user?.id) return;
@@ -370,9 +385,59 @@ export function GroupsTab({ user }) {
 
   useEffect(() => { reload(); }, [reload]);
 
+  // Lazily hydrate per-group member-name strings so the search filter can
+  // match by member display_name / username. Only fetches groups we haven't
+  // seen yet — keeps cost at one round-trip per group, total. Failures are
+  // swallowed; missing data just means that group only matches on its name.
+  useEffect(() => {
+    if (!groups.length) return;
+    const todo = groups
+      .map((g) => g.id)
+      .filter((gid) => gid && !fetchedMembersRef.current.has(gid));
+    if (!todo.length) return;
+    todo.forEach((gid) => fetchedMembersRef.current.add(gid));
+    let cancelled = false;
+    (async () => {
+      const pairs = await Promise.all(
+        todo.map(async (gid) => {
+          try {
+            const d = await getGroupWithMembers(supabase, gid);
+            const joined = (d?.members || [])
+              .map((m) => [(m.profile?.display_name || ""), (m.profile?.username || "")].join(" "))
+              .join(" ")
+              .toLowerCase();
+            return [gid, joined];
+          } catch {
+            return [gid, ""];
+          }
+        }),
+      );
+      if (cancelled) return;
+      setMemberStrings((prev) => {
+        const next = { ...prev };
+        for (const [gid, s] of pairs) next[gid] = s;
+        return next;
+      });
+    })();
+    return () => { cancelled = true; };
+  }, [groups]);
+
+  /** Filter groups by name OR any member's display_name/username. */
+  const filteredGroups = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return groups;
+    return groups.filter((g) => {
+      const name = (g.name || "").toLowerCase();
+      if (name.includes(q)) return true;
+      const members = memberStrings[g.id] || "";
+      return members.includes(q);
+    });
+  }, [groups, query, memberStrings]);
+
   /** Pagination tail. Hook lives above the `openId` early return so the
-   *  call order stays stable between the list and detail views. */
-  const groupsPage = usePaginatedList(groups, String(groups.length));
+   *  call order stays stable between the list and detail views. Reset key
+   *  also includes `query` so filtering scrolls back to the top. */
+  const groupsPage = usePaginatedList(filteredGroups, `${filteredGroups.length}|${query}`);
 
   async function submitCreate() {
     const name = newName.trim();
@@ -404,17 +469,32 @@ export function GroupsTab({ user }) {
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <span style={{ fontSize: 11, color: "#888780", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-          {t.groupsSub}
-        </span>
+      <div style={{ position: "relative", marginBottom: 18 }}>
+        <input
+          type="text"
+          autoComplete="off"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={t.searchGroupOrUser || "Search group name or user"}
+          style={{ width: "100%", boxSizing: "border-box", fontSize: 13 }}
+        />
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12 }}>
+        {!groups.length && !creating ? (
+          <p style={{ fontSize: 12, color: "#888780", margin: 0, flex: 1, minWidth: 0 }}>
+            {t.noGroupsYet}
+          </p>
+        ) : (
+          <span style={{ flex: 1 }} />
+        )}
         <button
           type="button"
           onClick={() => setCreating((v) => !v)}
           style={{
             fontSize: 12, color: "#F0997B", background: "#3C1F13",
             border: "1px solid rgba(240,153,123,0.4)", padding: "5px 12px",
-            borderRadius: 14, cursor: "pointer",
+            borderRadius: 14, cursor: "pointer", flexShrink: 0,
           }}
         >+ {t.createGroup}</button>
       </div>
@@ -451,8 +531,10 @@ export function GroupsTab({ user }) {
         </div>
       )}
 
-      {!groups.length && !creating && (
-        <p style={{ fontSize: 12, color: "#888780", margin: 0 }}>{t.noGroupsYet}</p>
+      {groups.length > 0 && filteredGroups.length === 0 && (
+        <p style={{ fontSize: 12, color: "#888780", margin: 0 }}>
+          {t.noSearchResults || "No matches."}
+        </p>
       )}
 
       {groupsPage.visible.map((g) => (

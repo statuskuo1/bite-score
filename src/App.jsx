@@ -448,15 +448,34 @@ export default function App() {
     }
   }
 
-  // Redirect / → /log (signed-in) or /community/global (guest).
+  // Redirect / → /log (signed-in) or /community/feed (guest).
   useEffect(() => {
     if (!authReady) return;
-    if (pathname === "/") navigate(user ? "/log" : "/community/global", { replace: true });
+    if (pathname === "/") navigate(user ? "/log" : "/community/feed", { replace: true });
   }, [authReady, pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // /community with no sub-path → /community/global.
+  // /community with no sub-path → /community/feed.
+  // Legacy redirects keep old links and notification deep-paths working after
+  // the Community IA reshuffle (Friends → People; Groups absorbed into People;
+  // Global moved under Explore; Compare stays addressable, off the strip).
   useEffect(() => {
-    if (pathname === "/community") navigate("/community/global", { replace: true });
+    if (pathname === "/community") {
+      navigate("/community/feed", { replace: true });
+      return;
+    }
+    if (pathname === "/community/friends" || pathname.startsWith("/community/friends/")) {
+      const tail = pathname.slice("/community/friends".length);
+      navigate("/community/people" + tail, { replace: true });
+      return;
+    }
+    if (pathname === "/community/groups") {
+      navigate("/community/people/groups", { replace: true });
+      return;
+    }
+    if (pathname === "/community/global") {
+      navigate("/community/explore/global", { replace: true });
+      return;
+    }
   }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -1029,7 +1048,7 @@ export default function App() {
       {authReady && (
       <>
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:640,background:"#1A1A18",borderTop:"0.5px solid rgba(255,255,255,0.1)",display:"flex",justifyContent:"space-around",alignItems:"center",padding:"8px 0 max(8px,env(safe-area-inset-bottom))",zIndex:100}}>
-        {[["log","/log","📋",t.myLog],["palette","/taste","😋",t.myTaste],["add","/add","➕",t.add],["community","/community/global","🌐",t.communityTab],["faq","/faq","❓",t.faq]].map(([v,to,icon,label])=>{
+        {[["log","/log","📋",t.myLog],["palette","/taste","😋",t.myTaste],["add","/add","➕",t.add],["community","/community/feed","🌐",t.communityTab],["faq","/faq","❓",t.faq]].map(([v,to,icon,label])=>{
           const badge = v==="community" && unseenFollowers > 0 ? unseenFollowers : 0;
           const active = v==="log"?pathname.startsWith("/log"):v==="community"?pathname.startsWith("/community"):v==="palette"?pathname.startsWith("/taste"):pathname===to;
           return (
@@ -1680,7 +1699,7 @@ export default function App() {
           setNotifSheetProfile(null);
           setShowNotifPanel(false);
           setExtUserLogTarget(profile);
-          navigate("/community/global");
+          navigate("/community/people");
         }}
         onCompareWith={(profile) => {
           setNotifSheetProfile(null);

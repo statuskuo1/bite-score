@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useLang } from "../../contexts/LangContext.jsx";
 import { supabase } from "../../config/supabaseClient.js";
 import {
@@ -12,14 +13,14 @@ import { fetchRestaurantVisitsForUser } from "../../utils/visitPlacesApi.js";
 import {
   followsCache, myRestVisitsCache, getUserVisitsCache, FOLLOWS_TTL_MS,
 } from "../../utils/sessionCache.js";
-import { pairCompatibility, aggregateFriendsTopPicks } from "../../utils/compatibility.js";
+import { pairCompatibility } from "../../utils/compatibility.js";
 import { tasteColor } from "../../utils/scoring.js";
-import { FLAGS } from "../../constants/cuisineConstants.js";
 import { Pill } from "./Pill.jsx";
 import { UserIdentity } from "./UserIdentity.jsx";
 import { usePaginatedList } from "../usePaginatedList.js";
 import { ShowMoreButton } from "../ShowMoreButton.jsx";
 import { StatusBadge, UnfollowConfirmDialog, MiniProfileSheet } from "./MiniProfileSheet.jsx";
+import { PeopleGroupsSection } from "./PeopleGroupsSection.jsx";
 
 const ROW_STYLE = {
   display: "flex",
@@ -32,26 +33,14 @@ const ROW_STYLE = {
   borderRadius: 10,
 };
 
-const SECTION_LABEL_STYLE = {
-  fontSize: 11,
-  color: "#F0997B",
-  textTransform: "uppercase",
-  letterSpacing: "0.06em",
-  fontWeight: 600,
-  marginBottom: 6,
-};
+const SECTIONS = [
+  { key: "taste-buds", labelKey: "peopleSectionTasteBuds", icon: "🤝" },
+  { key: "following", labelKey: "peopleSectionFollowing", icon: "👤" },
+  { key: "discover", labelKey: "peopleSectionDiscover", icon: "🔍" },
+  { key: "groups", labelKey: "peopleSectionGroups", icon: "🎉" },
+];
 
-const FLAG_BOX_STYLE = {
-  width: 36,
-  height: 36,
-  borderRadius: 8,
-  background: "#252523",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: 18,
-  flexShrink: 0,
-};
+const DEFAULT_SECTION = "taste-buds";
 
 /** Alphabetical sort by display_name (fallback to username). Used by every
  *  people-list in this tab so ordering is predictable as the corpus grows. */
@@ -59,6 +48,22 @@ function byDisplayName(a, b) {
   const an = a.otherProfile?.display_name || a.otherProfile?.username || "";
   const bn = b.otherProfile?.display_name || b.otherProfile?.username || "";
   return an.localeCompare(bn);
+}
+
+/** Mode (most frequent) value of `field` across `rows`, ignoring blanks. */
+function modeOf(rows, field) {
+  const counts = new Map();
+  for (const r of rows || []) {
+    const v = (r?.[field] || "").trim();
+    if (!v) continue;
+    counts.set(v, (counts.get(v) || 0) + 1);
+  }
+  let best = "";
+  let bestCount = 0;
+  for (const [k, c] of counts) {
+    if (c > bestCount) { best = k; bestCount = c; }
+  }
+  return best;
 }
 
 /** Map followUser result codes onto user-visible reasons. */
@@ -95,26 +100,6 @@ function MatchPill({ score, suffix }) {
       {score}%{suffix ? ` ${suffix}` : ""}
     </span>
   );
-}
-
-function flagFor(cuisine, name) {
-  return FLAGS[cuisine] || (cuisine?.[0] || name?.[0] || "?").toUpperCase();
-}
-
-/** Mode (most frequent) value of `field` across `rows`, ignoring blanks. */
-function modeOf(rows, field) {
-  const counts = new Map();
-  for (const r of rows || []) {
-    const v = (r?.[field] || "").trim();
-    if (!v) continue;
-    counts.set(v, (counts.get(v) || 0) + 1);
-  }
-  let best = "";
-  let bestCount = 0;
-  for (const [k, c] of counts) {
-    if (c > bestCount) { best = k; bestCount = c; }
-  }
-  return best;
 }
 
 /**
@@ -178,10 +163,12 @@ function SearchRowAction({ profile, relation, busy, onFollow, onUnfollowConfirm,
   }
 }
 
-/** Unified row for everyone you follow — Taste Buds (mutual) first, then non-mutual.
- *  Taste Buds rows show green badge + Following pill + MatchPill.
- *  Non-mutual rows show only the Following pill. */
-function FollowRow({ entry, stats, onOpen, onUnfollowConfirm, t }) {
+/** Unified row for someone you follow (mutual or one-way). Mutual rows show
+ *  green Taste Buds badge + Following pill + match%. Non-mutual rows show
+ *  only the Following pill. `hideTasteBudsBadge` drops the redundant badge
+ *  when rendering inside the Taste Buds sub-tab (the tab itself is the
+ *  status indicator). */
+function FollowRow({ entry, stats, onOpen, onUnfollowConfirm, t, hideTasteBudsBadge = false }) {
   const profile = entry.otherProfile;
   const { isMutual } = entry;
   return (
@@ -194,7 +181,7 @@ function FollowRow({ entry, stats, onOpen, onUnfollowConfirm, t }) {
         <UserIdentity profile={profile} size={28} />
       </button>
       <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
-        {isMutual && (
+        {isMutual && !hideTasteBudsBadge && (
           <StatusBadge
             label={t.tasteBuds || "Taste Buds"}
             bg="#1A2E0A" color="#97C459" border="rgba(151,196,89,0.4)"
@@ -215,34 +202,6 @@ function FollowRow({ entry, stats, onOpen, onUnfollowConfirm, t }) {
         {isMutual && (
           <MatchPill score={stats?.compatScore ?? null} suffix={t.matchSuffix} />
         )}
-      </div>
-    </div>
-  );
-}
-
-/** One row in the aggregated "Taste Buds' top picks" section. */
-function TopPickRow({ pick }) {
-  const { t } = useLang();
-  const col = tasteColor(pick.avg);
-  return (
-    <div style={ROW_STYLE}>
-      <div style={FLAG_BOX_STYLE}>{flagFor(pick.cuisine, pick.name)}</div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{
-          fontSize: 14, fontWeight: 500, color: "#F1EFE8",
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-        }}>{pick.name}</div>
-        <div style={{ fontSize: 11, color: "#888780", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {[pick.cuisine || null, `avg ${pick.avg.toFixed(2)}`].filter(Boolean).join(" · ")}
-        </div>
-      </div>
-      <div style={{ textAlign: "right", flexShrink: 0 }}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: col, lineHeight: 1.1 }}>
-          {pick.avg.toFixed(2)}
-        </div>
-        <div style={{ fontSize: 11, color: "#888780", marginTop: 2 }}>
-          {pick.friendCount} {t.tasteBudsCountSuffix || "taste buds"}
-        </div>
       </div>
     </div>
   );
@@ -271,9 +230,31 @@ function FollowerRow({ entry, onFollow, onOpen, busy, t }) {
   );
 }
 
-
-export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowChange, onViewLog }) {
+/**
+ * People tab container.
+ *
+ * Hosts four URL-routed sub-sections at `/community/people/:section`:
+ *   - taste-buds : mutual-follow list with match %
+ *   - following  : one-way follows (people you follow who don't follow back)
+ *   - discover   : username search + new-followers banner
+ *   - groups     : lifted from the former standalone GroupsTab
+ *
+ * All follow/follower fetching, debounced search, modals, and unfollow
+ * confirms are owned at this level so state is shared across sections (the
+ * follows cache + busy map don't need to re-mount when you switch tabs).
+ *
+ * `compareTarget` hand-off: tapping a user opens MiniProfileSheet whose
+ * Compare action calls `onCompareWith(profile)` upward — CommunityTab then
+ * navigates to /community/compare with the target pre-selected, same as
+ * before. Compare is no longer a top-strip sub-tab but the route stays
+ * addressable.
+ */
+export function PeopleTab({ user, onCompareWith, onMarkFollowersSeen, onFollowChange, onViewLog }) {
   const { t } = useLang();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const section = pathname.split("/")[3] || DEFAULT_SECTION;
+
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [searchBusy, setSearchBusy] = useState(false);
@@ -297,6 +278,16 @@ export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowC
    *  Tracked here so the user can manually collapse a non-empty list. */
   const [newFollowersExpanded, setNewFollowersExpanded] = useState(true);
   const debounceRef = useRef(null);
+
+  // Normalize unknown sub-paths back to the default.
+  useEffect(() => {
+    const parts = pathname.split("/");
+    if (parts[2] !== "people") return;
+    if (parts.length < 4 || parts[3] === "") return;
+    if (!SECTIONS.find((s) => s.key === parts[3])) {
+      navigate("/community/people/" + DEFAULT_SECTION, { replace: true });
+    }
+  }, [pathname, navigate]);
 
   const reload = useCallback(async () => {
     if (!user?.id) return;
@@ -326,8 +317,8 @@ export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowC
     reload();
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /** Opening this sub-tab clears the unseen-followers badge in the bottom nav.
-   *  Runs on every mount of FriendsTab (CommunityTab unmounts inactive subs). */
+  /** Opening this tab clears the unseen-followers badge in the bottom nav.
+   *  Runs on every mount of PeopleTab (CommunityTab unmounts inactive subs). */
   useEffect(() => {
     onMarkFollowersSeen?.();
   }, [onMarkFollowersSeen]);
@@ -431,15 +422,6 @@ export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowC
     return out;
   }, [tasteBuds, budVisits, myVisits]);
 
-  /** Aggregated Taste Buds' top picks. */
-  const topPicks = useMemo(() => {
-    const fvb = tasteBuds
-      .map((f) => ({ userId: f.otherUserId, visits: budVisits[f.otherUserId] }))
-      .filter((x) => Array.isArray(x.visits));
-    if (!fvb.length) return [];
-    return aggregateFriendsTopPicks(fvb).slice(0, 10);
-  }, [tasteBuds, budVisits]);
-
   /** New followers — non-mutual follow rows from the last 7 days. After the
    *  window expires the row drops off this list (the person is still a
    *  follower, just not "new" anymore). Mirrors `countUnseenFollowers`. */
@@ -454,13 +436,40 @@ export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowC
       .sort(byDisplayName);
   }, [followers]);
 
-  /** Merged following list: Taste Buds (mutual) alphabetically first, then
-   *  non-mutual Following alphabetically. No section headers. */
-  const mergedFollowingList = useMemo(() => {
-    const buds = [...tasteBuds].sort(byDisplayName);
-    const nonMutual = following.filter((f) => !f.isMutual).sort(byDisplayName);
-    return [...buds, ...nonMutual];
-  }, [tasteBuds, following]);
+  /** Taste Buds (mutual) sorted alphabetically. */
+  const tasteBudsSorted = useMemo(
+    () => [...tasteBuds].sort(byDisplayName),
+    [tasteBuds],
+  );
+
+  /** One-way following (you follow them, they don't follow back) sorted alphabetically. */
+  const followingOnly = useMemo(
+    () => following.filter((f) => !f.isMutual).sort(byDisplayName),
+    [following],
+  );
+
+  /** Substring match against display_name + username (lowercased). Returns
+   *  true when query is empty so an unfiltered view still renders everything. */
+  function matchesQuery(profile, q) {
+    if (!q) return true;
+    const name = (profile?.display_name || "").toLowerCase();
+    const handle = (profile?.username || "").toLowerCase();
+    return name.includes(q) || handle.includes(q);
+  }
+
+  /** Client-side filtered Taste Buds for the search input on the Taste Buds tab. */
+  const tasteBudsFiltered = useMemo(() => {
+    const q = query.trim();
+    if (!q) return tasteBudsSorted;
+    return tasteBudsSorted.filter((f) => matchesQuery(f.otherProfile, q));
+  }, [tasteBudsSorted, query]);
+
+  /** Client-side filtered Following for the search input on the Following tab. */
+  const followingFiltered = useMemo(() => {
+    const q = query.trim();
+    if (!q) return followingOnly;
+    return followingOnly.filter((f) => matchesQuery(f.otherProfile, q));
+  }, [followingOnly, query]);
 
   /** Auto-collapse when the count flips to 0 / auto-expand when it returns.
    *  Manual toggles still win for the rest of the session. */
@@ -473,7 +482,8 @@ export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowC
     }
   }, [pendingFollowers.length]);
 
-  const mergedPage = usePaginatedList(mergedFollowingList, String(mergedFollowingList.length));
+  const tasteBudsPage = usePaginatedList(tasteBudsFiltered, `${tasteBudsFiltered.length}|${query}`);
+  const followingPage = usePaginatedList(followingFiltered, `${followingFiltered.length}|${query}`);
   const pendingFollowersPage = usePaginatedList(pendingFollowers, String(pendingFollowers.length));
 
   function setBusy(id, on) {
@@ -528,155 +538,239 @@ export function FriendsTab({ user, onCompareWith, onMarkFollowersSeen, onFollowC
     closeProfileSheet();
   }
 
+  // Search input placeholder varies per sub-section. Groups handles its
+  // own search, so the shared input above the body is hidden when groups
+  // is active.
+  const searchPlaceholder = section === "taste-buds"
+    ? (t.searchTasteBuds || "Search Taste Buds")
+    : section === "following"
+      ? (t.searchFollowing || "Search Following")
+      : (t.searchByUsername || "Search by @username");
+
   return (
     <div>
-      {/* Search */}
-      <div style={{ position: "relative", marginBottom: 14 }}>
-        <input
-          type="text"
-          autoComplete="off"
-          value={query}
-          onChange={(e) => setQuery(e.target.value.toLowerCase())}
-          placeholder={t.searchByUsername}
-          style={{ width: "100%", boxSizing: "border-box", fontSize: 13 }}
-        />
+      {/* Sub-section strip */}
+      <div style={{
+        display: "flex", background: "#252523", borderRadius: 10, padding: 3,
+        gap: 2, marginBottom: 12,
+      }}>
+        {SECTIONS.map((s) => {
+          const on = section === s.key;
+          return (
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => navigate("/community/people/" + s.key)}
+              style={{
+                flex: 1, padding: "6px 0", textAlign: "center", borderRadius: 8,
+                border: "none",
+                background: on ? "#3C1F13" : "transparent",
+                color: on ? "#F0997B" : "#888780",
+                fontSize: 11, fontWeight: on ? 700 : 500,
+                cursor: "pointer", transition: "all 0.15s",
+              }}
+            >
+              {s.icon} {t[s.labelKey] || s.key}
+            </button>
+          );
+        })}
       </div>
 
-      {query.trim() && (
-        <div style={{ marginBottom: 16 }}>
-          {searchBusy && (
-            <p style={{ fontSize: 12, color: "#888780", margin: "0 0 6px" }}>…</p>
-          )}
-          {!searchBusy && !results.length && (
-            <p style={{ fontSize: 12, color: "#888780", margin: 0 }}>{t.noSearchResults}</p>
-          )}
-          {results.map((p) => {
-            const rel = relationByUserId.get(p.id) || "none";
-            const busy = !!busyById[p.id];
-            const errForRow = followError?.targetId === p.id ? followError.message : null;
-            return (
-              <div key={p.id}>
-                <button
-                  type="button"
-                  onClick={() => openProfileSheet(p, rel)}
-                  style={{ ...ROW_STYLE, width: "100%", cursor: "pointer", textAlign: "left" }}
-                >
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <UserIdentity profile={p} size={28} />
-                  </div>
-                  <div style={{ flexShrink: 0 }}>
-                    <SearchRowAction
-                      profile={p}
-                      relation={rel}
-                      busy={busy}
-                      onFollow={handleFollow}
-                      onUnfollowConfirm={(profile) => setSearchUnfollowTarget(profile)}
-                      t={t}
-                    />
-                  </div>
-                </button>
-                {errForRow && (
-                  <p style={{ fontSize: 11, color: "#A32D2D", margin: "-2px 0 8px 4px" }}>
-                    {errForRow}
-                  </p>
-                )}
-              </div>
-            );
-          })}
+      {/* Shared search input — Taste Buds, Following, Discover only.
+          Groups has its own search bar inside PeopleGroupsSection. */}
+      {section !== "groups" && (
+        <div style={{ position: "relative", marginBottom: 18 }}>
+          <input
+            type="text"
+            autoComplete="off"
+            value={query}
+            onChange={(e) => setQuery(e.target.value.toLowerCase())}
+            placeholder={searchPlaceholder}
+            style={{ width: "100%", boxSizing: "border-box", fontSize: 13 }}
+          />
         </div>
       )}
 
-      {/* New followers (collapsible bar; auto-expires after 7 days) */}
-      {pendingFollowers.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          <button
-            type="button"
-            onClick={() => setNewFollowersExpanded((v) => !v)}
-            aria-expanded={newFollowersExpanded}
-            style={{
-              display: "flex", alignItems: "center", gap: 10,
-              width: "100%", padding: "10px 12px",
-              background: "#1E1E1C",
-              border: "0.5px solid rgba(255,255,255,0.1)",
-              borderRadius: 12, cursor: "pointer", color: "#F1EFE8",
-              textAlign: "left",
-            }}
-          >
-            <span style={{
-              minWidth: 22, height: 22, padding: "0 6px",
-              borderRadius: 11, background: "#E85A5A",
-              color: "#FFF", fontSize: 11, fontWeight: 700,
-              display: "inline-flex", alignItems: "center", justifyContent: "center",
-              lineHeight: 1, boxSizing: "border-box",
-            }}>
-              {pendingFollowers.length > 99 ? "99+" : pendingFollowers.length}
-            </span>
-            <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#F1EFE8" }}>
-              {t.newFollowers || "New followers"}
-            </span>
-            <span style={{
-              fontSize: 14, color: "#888780",
-              transform: newFollowersExpanded ? "rotate(90deg)" : "none",
-              transition: "transform 0.15s",
-              display: "inline-block", lineHeight: 1,
-            }}>
-              ›
-            </span>
-          </button>
-          {newFollowersExpanded && (
-            <div style={{ marginTop: 8 }}>
-              {pendingFollowersPage.visible.map((r) => (
-                <FollowerRow
-                  key={r.id}
-                  entry={r}
-                  onFollow={handleFollow}
-                  onOpen={openProfileSheet}
-                  busy={!!busyById[r.otherUserId]}
-                  t={t}
-                />
-              ))}
-              <ShowMoreButton
-                remaining={pendingFollowersPage.remaining}
-                pageSize={pendingFollowersPage.pageSize}
-                onClick={pendingFollowersPage.showMore}
-              />
+      {/* Taste Buds (mutual) */}
+      {section === "taste-buds" && (
+        <div>
+          {tasteBudsSorted.length === 0 && (
+            <p style={{ fontSize: 12, color: "#888780", margin: "0 0 16px" }}>
+              {t.noTasteBudsYet || "No Taste Buds yet — when someone you follow follows you back, they'll show up here."}
+            </p>
+          )}
+          {tasteBudsSorted.length > 0 && tasteBudsFiltered.length === 0 && (
+            <p style={{ fontSize: 12, color: "#888780", margin: "0 0 16px" }}>
+              {t.noSearchResults || "No matches."}
+            </p>
+          )}
+          {tasteBudsPage.visible.map((f) => (
+            <FollowRow
+              key={f.id}
+              entry={f}
+              stats={budStats[f.otherUserId]}
+              onOpen={openProfileSheet}
+              onUnfollowConfirm={(profile, isMutual) => setInlineUnfollowTarget({ profile, isMutual })}
+              t={t}
+              hideTasteBudsBadge
+            />
+          ))}
+          <ShowMoreButton
+            remaining={tasteBudsPage.remaining}
+            pageSize={tasteBudsPage.pageSize}
+            onClick={tasteBudsPage.showMore}
+          />
+        </div>
+      )}
+
+      {/* Following (one-way) */}
+      {section === "following" && (
+        <div>
+          {followingOnly.length === 0 && (
+            <p style={{ fontSize: 12, color: "#888780", margin: "0 0 16px" }}>
+              {t.noOneWayFollowing || "Not following anyone one-way. People you follow who follow back appear under Taste Buds."}
+            </p>
+          )}
+          {followingOnly.length > 0 && followingFiltered.length === 0 && (
+            <p style={{ fontSize: 12, color: "#888780", margin: "0 0 16px" }}>
+              {t.noSearchResults || "No matches."}
+            </p>
+          )}
+          {followingPage.visible.map((f) => (
+            <FollowRow
+              key={f.id}
+              entry={f}
+              onOpen={openProfileSheet}
+              onUnfollowConfirm={(profile, isMutual) => setInlineUnfollowTarget({ profile, isMutual })}
+              t={t}
+            />
+          ))}
+          <ShowMoreButton
+            remaining={followingPage.remaining}
+            pageSize={followingPage.pageSize}
+            onClick={followingPage.showMore}
+          />
+        </div>
+      )}
+
+      {/* Discover (remote username search + new followers) */}
+      {section === "discover" && (
+        <div>
+          {query.trim() && (
+            <div style={{ marginBottom: 16 }}>
+              {searchBusy && (
+                <p style={{ fontSize: 12, color: "#888780", margin: "0 0 6px" }}>…</p>
+              )}
+              {!searchBusy && !results.length && (
+                <p style={{ fontSize: 12, color: "#888780", margin: 0 }}>{t.noSearchResults}</p>
+              )}
+              {results.map((p) => {
+                const rel = relationByUserId.get(p.id) || "none";
+                const busy = !!busyById[p.id];
+                const errForRow = followError?.targetId === p.id ? followError.message : null;
+                return (
+                  <div key={p.id}>
+                    <button
+                      type="button"
+                      onClick={() => openProfileSheet(p, rel)}
+                      style={{ ...ROW_STYLE, width: "100%", cursor: "pointer", textAlign: "left" }}
+                    >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <UserIdentity profile={p} size={28} />
+                      </div>
+                      <div style={{ flexShrink: 0 }}>
+                        <SearchRowAction
+                          profile={p}
+                          relation={rel}
+                          busy={busy}
+                          onFollow={handleFollow}
+                          onUnfollowConfirm={(profile) => setSearchUnfollowTarget(profile)}
+                          t={t}
+                        />
+                      </div>
+                    </button>
+                    {errForRow && (
+                      <p style={{ fontSize: 11, color: "#A32D2D", margin: "-2px 0 8px 4px" }}>
+                        {errForRow}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
+
+          {/* New followers (collapsible bar; auto-expires after 7 days) */}
+          {pendingFollowers.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <button
+                type="button"
+                onClick={() => setNewFollowersExpanded((v) => !v)}
+                aria-expanded={newFollowersExpanded}
+                style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  width: "100%", padding: "10px 12px",
+                  background: "#1E1E1C",
+                  border: "0.5px solid rgba(255,255,255,0.1)",
+                  borderRadius: 12, cursor: "pointer", color: "#F1EFE8",
+                  textAlign: "left",
+                }}
+              >
+                <span style={{
+                  minWidth: 22, height: 22, padding: "0 6px",
+                  borderRadius: 11, background: "#E85A5A",
+                  color: "#FFF", fontSize: 11, fontWeight: 700,
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  lineHeight: 1, boxSizing: "border-box",
+                }}>
+                  {pendingFollowers.length > 99 ? "99+" : pendingFollowers.length}
+                </span>
+                <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#F1EFE8" }}>
+                  {t.newFollowers || "New followers"}
+                </span>
+                <span style={{
+                  fontSize: 14, color: "#888780",
+                  transform: newFollowersExpanded ? "rotate(90deg)" : "none",
+                  transition: "transform 0.15s",
+                  display: "inline-block", lineHeight: 1,
+                }}>
+                  ›
+                </span>
+              </button>
+              {newFollowersExpanded && (
+                <div style={{ marginTop: 8 }}>
+                  {pendingFollowersPage.visible.map((r) => (
+                    <FollowerRow
+                      key={r.id}
+                      entry={r}
+                      onFollow={handleFollow}
+                      onOpen={openProfileSheet}
+                      busy={!!busyById[r.otherUserId]}
+                      t={t}
+                    />
+                  ))}
+                  <ShowMoreButton
+                    remaining={pendingFollowersPage.remaining}
+                    pageSize={pendingFollowersPage.pageSize}
+                    onClick={pendingFollowersPage.showMore}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {!query.trim() && pendingFollowers.length === 0 && (
+            <p style={{ fontSize: 12, color: "#888780", margin: 0 }}>
+              {t.discoverEmpty || "Search by @username to find people. New followers will show up here too."}
+            </p>
+          )}
         </div>
       )}
 
-      {/* Following (Taste Buds first, then non-mutual — no section headers) */}
-      {mergedFollowingList.length === 0 && (
-        <p style={{ fontSize: 12, color: "#888780", margin: "0 0 16px" }}>
-          {t.noFollowingYet || "Not following anyone yet. Search for someone above!"}
-        </p>
-      )}
-      {mergedPage.visible.map((f) => (
-        <FollowRow
-          key={f.id}
-          entry={f}
-          stats={f.isMutual ? budStats[f.otherUserId] : undefined}
-          onOpen={openProfileSheet}
-          onUnfollowConfirm={(profile, isMutual) => setInlineUnfollowTarget({ profile, isMutual })}
-          t={t}
-        />
-      ))}
-      <ShowMoreButton
-        remaining={mergedPage.remaining}
-        pageSize={mergedPage.pageSize}
-        onClick={mergedPage.showMore}
-      />
+      {/* Groups */}
+      {section === "groups" && <PeopleGroupsSection user={user} />}
 
-      {/* Taste Buds' top picks */}
-      {topPicks.length > 0 && (
-        <div style={{ marginTop: 18 }}>
-          <div style={SECTION_LABEL_STYLE}>{t.tasteBudsTopPicks || "Taste Buds' top picks"}</div>
-          {topPicks.map((p) => (
-            <TopPickRow key={p.placeId} pick={p} />
-          ))}
-        </div>
-      )}
-
+      {/* Modals & dialogs (shared across sections) */}
       {openProfile && (
         <MiniProfileSheet
           profile={openProfile}

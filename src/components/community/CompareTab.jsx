@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useLang } from "../../contexts/LangContext.jsx";
 import { supabase } from "../../config/supabaseClient.js";
 import { listTasteBuds, unfollowUser } from "../../utils/followsApi.js";
@@ -145,6 +146,7 @@ const DISCOVER_TONE = { bg: "rgba(91,155,213,0.14)", color: "#5B9BD5", border: "
 const RECOMMEND_TONE = { bg: "rgba(151,196,89,0.14)", color: "#97C459", border: "rgba(151,196,89,0.4)" };
 
 export function CompareTab({ user, initialTarget, onClearTarget, onFollowChange }) {
+  const navigate = useNavigate();
   const { t } = useLang();
   const [buds, setBuds] = useState([]);
   const [target, setTarget] = useState(initialTarget || null);
@@ -269,12 +271,21 @@ export function CompareTab({ user, initialTarget, onClearTarget, onFollowChange 
     onClearTarget?.();
   }
 
+  /** Back-navigate to People > Taste Buds. The dominant Compare entry path
+   *  is a tap on a Taste Bud → MiniProfileSheet → Compare, so back belongs
+   *  on the buds list, not the in-page picker. The picker is still reachable
+   *  by hitting /community/compare directly with no target. */
+  function goBackToBuds() {
+    clearTarget();
+    navigate("/community/people/taste-buds");
+  }
+
   /** Unfollow from Compare view — breaks the mutual, downgrades out of Taste Buds. */
   async function handleUnfollow() {
     if (!user?.id || !target?.id) return;
     await unfollowUser(supabase, user.id, target.id);
     onFollowChange?.();
-    clearTarget();
+    goBackToBuds();
   }
 
   // ── Picker: no target selected yet ──
@@ -333,12 +344,12 @@ export function CompareTab({ user, initialTarget, onClearTarget, onFollowChange 
     <div>
       <button
         type="button"
-        onClick={clearTarget}
+        onClick={goBackToBuds}
         style={{
           fontSize: 12, color: "#888780", background: "none", border: "none",
           cursor: "pointer", padding: 0, marginBottom: 12,
         }}
-      >{t.pickTasteBudToCompare || "← Pick a Taste Bud"}</button>
+      >{t.backToBuds || "← Back to Buds"}</button>
 
       <div style={{
         display: "flex", alignItems: "center", gap: 12,

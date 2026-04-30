@@ -28,6 +28,8 @@ const CATS = [
 ];
 
 /**
+ * Explore > Global sub-section (was the standalone GlobalTab).
+ *
  * Aggregated place leaderboard, one row per place. Score is BITE computed
  * "mean-then-BITE": each raw input (taste/cost/portions/wait/repeat) is
  * averaged across all visits, then BITE is applied once with the viewer's
@@ -42,7 +44,7 @@ const CATS = [
  * The selected View also drives the right-side metric on each leaderboard
  * row (via `display` prop on `PlaceLeaderboardRow`).
  */
-export function GlobalTab({ user, restaurantWeights, drinkWeights, sweetWeights }) {
+export function ExploreGlobalSection({ user, restaurantWeights, drinkWeights, sweetWeights }) {
   const { t } = useLang();
   const [cat, setCat] = useState("restaurants");
   const [restaurants, setRestaurants] = useState([]);
