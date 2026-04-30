@@ -130,6 +130,7 @@ export default function App() {
   const [notifSheetBusy, setNotifSheetBusy] = useState(false);
   const [dineTags, setDineTags] = useState([]);
   const [dineTagCount, setDineTagCount] = useState(0);
+  const [dineTagsReady, setDineTagsReady] = useState(false);
   const [addPrefill, setAddPrefill] = useState(null);
   const [addInitialDineWith, setAddInitialDineWith] = useState([]);
   const [addFormKey, setAddFormKey] = useState(0);
@@ -349,8 +350,24 @@ export default function App() {
     await Promise.all([refreshUnseenFollowers(), refreshNotifCount()]);
   }, [refreshUnseenFollowers, refreshNotifCount]);
 
+  useEffect(() => {
+    setDineTags([]);
+    setDineTagCount(0);
+    setDineTagsReady(false);
+    if (!user?.id) return;
+    try {
+      const raw = sessionStorage.getItem(`bite_dineTagsCache_${user.id}`);
+      if (raw) {
+        const { tags, count } = JSON.parse(raw);
+        setDineTags(tags || []);
+        setDineTagCount(count || 0);
+        setDineTagsReady(true);
+      }
+    } catch {}
+  }, [user?.id]);
+
   const refreshDineTags = useCallback(async () => {
-    if (!user?.id) { setDineTags([]); setDineTagCount(0); return; }
+    if (!user?.id) { setDineTags([]); setDineTagCount(0); setDineTagsReady(true); return; }
     const [tags, count, followingIds] = await Promise.all([
       fetchUnloggedDineTags(supabase, user.id),
       countUnloggedDineTags(supabase, user.id),
@@ -358,9 +375,8 @@ export default function App() {
     ]);
     setDineTags(tags);
     setDineTagCount(count);
-    // tasteBudIds = ids that follow user AND user follows them.
-    // fetchFollowingIds returns who the user follows; we intersect with followers separately.
-    // For simplicity, load follower ids too and intersect.
+    setDineTagsReady(true);
+    try { sessionStorage.setItem(`bite_dineTagsCache_${user.id}`, JSON.stringify({ tags, count })); } catch {}
     setTasteBudIds(followingIds);
   }, [user?.id]);
 
@@ -1299,11 +1315,20 @@ export default function App() {
       )}
       {pathname==="/add"&&user&&(
         <div>
-          <DineTagsBanner
+          {dineTagsReady&&<DineTagsBanner
             tags={dineTags}
             onDismiss={(tagId)=>{
               setDineTags(prev=>prev.filter(t=>t.id!==tagId));
               setDineTagCount(prev=>Math.max(0,prev-1));
+              try {
+                const raw = sessionStorage.getItem(`bite_dineTagsCache_${user.id}`);
+                if (raw) {
+                  const cached = JSON.parse(raw);
+                  cached.tags = (cached.tags||[]).filter(t=>t.id!==tagId);
+                  cached.count = Math.max(0,(cached.count||1)-1);
+                  sessionStorage.setItem(`bite_dineTagsCache_${user.id}`, JSON.stringify(cached));
+                }
+              } catch {}
             }}
             onAddType={(type, tag) => {
               if (tag) {
@@ -1320,7 +1345,7 @@ export default function App() {
                 setAddType(type);
               }
             }}
-          />
+          />}
           {addSaveErr&&<div style={{background:"#3C1F13",border:"1px solid #F0997B",borderRadius:8,padding:"10px 14px",marginBottom:12,fontSize:13,color:"#F0997B"}}>{addSaveErr}</div>}
           {addDraftData&&!addPrefill&&(
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#1E2A1E",border:"0.5px solid rgba(151,196,89,0.35)",borderRadius:8,padding:"8px 12px",marginBottom:12,fontSize:12,color:"#97C459"}}>
