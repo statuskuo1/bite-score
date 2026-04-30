@@ -88,12 +88,6 @@ function normalizeKind(kind) {
   return kind === "cafe" ? "cafe" : "restaurant";
 }
 
-/** Map Google's restricted-includedType param. Text Search accepts a single
- *  primary type per call — we choose the dominant one for each kind. */
-function includedTypeFor(kind) {
-  return kind === "cafe" ? "cafe" : "restaurant";
-}
-
 function cuisineFromTypes(primaryType, types) {
   if (primaryType && CUISINE_MAP[primaryType]) return CUISINE_MAP[primaryType];
   if (Array.isArray(types)) {
@@ -166,8 +160,9 @@ export async function searchGooglePlaces(client, { kind, query, cityHint, sessio
     const textQuery = cityToken ? `${q} ${cityToken}` : q;
     const body = {
       textQuery,
-      includedType: includedTypeFor(kind),
-      /** Bias toward food places (filters out random POIs sharing the name). */
+      /** No includedType — froyo/dessert/ice cream shops aren't typed "cafe" or
+       *  "restaurant" in Google's taxonomy, so filtering by type drops them.
+       *  The form context (CafeForm vs RestForm) is already enough scoping. */
       strictTypeFiltering: false,
       maxResultCount: 6,
     };

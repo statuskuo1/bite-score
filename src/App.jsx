@@ -343,6 +343,7 @@ export default function App() {
       }),
     ].filter(Boolean));
     setDineTags((prev) => prev.filter((t) => t.tagger_id !== fromUserId || (t.restaurant_name || "").toLowerCase() !== restaurantName.toLowerCase()));
+    fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
   }
 
   async function handleNotifSheetFollow(targetId) {
@@ -1305,6 +1306,15 @@ export default function App() {
           }
         }
         dispatch({ type: "UPD", e: { ...e, placeId: resolvedPlaceId, ownerId: e.ownerId ?? user?.id ?? null } });
+        const prevRestIds = new Set((editDineWith || []).map((p) => p.id));
+        const newlyTaggedRest = (e.dineWith || []).filter((p) => !prevRestIds.has(p.id));
+        if (newlyTaggedRest.length && e.id) {
+          await Promise.all(newlyTaggedRest.map((p) => insertDineTag(supabase, {
+            taggerId: user.id, taggedId: p.id, entryId: e.id,
+            entryType: "restaurant", restaurantName: e.name, city: e.city || "", cuisine: e.cuisine || "",
+          })));
+          fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
+        }
         setEditR(null); setEditDineWith([]);
       }} onCancel={()=>{setEditR(null);setEditDineWith([]);window.scrollTo({top:0,behavior:"smooth"});}}/>}
       {pathname.startsWith("/log")&&editC&&<CafeForm initial={editC} initialDineWith={editDineWith} weights={editC?.category==="Sweets"?sweetWeights:drinkWeights}
@@ -1333,7 +1343,17 @@ export default function App() {
             console.error("cafe update threw:", err);
           }
         }
-        setCafes(p=>p.map(x=>x.id===e.id?{...e,id:x.id,placeId:resolvedPlaceId??x.placeId,ownerId:e.ownerId??user?.id??x.ownerId}:x)); setEditC(null); setEditDineWith([]);
+        setCafes(p=>p.map(x=>x.id===e.id?{...e,id:x.id,placeId:resolvedPlaceId??x.placeId,ownerId:e.ownerId??user?.id??x.ownerId}:x));
+        const prevCafeIds = new Set((editDineWith || []).map((p) => p.id));
+        const newlyTaggedCafe = (e.dineWith || []).filter((p) => !prevCafeIds.has(p.id));
+        if (newlyTaggedCafe.length && e.id) {
+          await Promise.all(newlyTaggedCafe.map((p) => insertDineTag(supabase, {
+            taggerId: user.id, taggedId: p.id, entryId: e.id,
+            entryType: "cafe", restaurantName: e.name, city: e.city || "", cuisine: e.category || "",
+          })));
+          fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
+        }
+        setEditC(null); setEditDineWith([]);
       }} onCancel={()=>{setEditC(null);setEditDineWith([]);window.scrollTo({top:0,behavior:"smooth"});}} existingCafes={cafes} existingCities={existingCities} places={cafePlaces}/>}
 
       {/* ── Add Rating ── */}

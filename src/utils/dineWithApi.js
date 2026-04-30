@@ -137,31 +137,73 @@ export async function countUnloggedDineTags(client, userId) {
 }
 
 /**
- * Build a Map<entryId, Profile[]> of everyone the user tagged on each of
- * their own visits. Used to display "Dined with" on expanded entry cards.
+ * Build a Map<entryId, Profile[]> of co-diners for each of the user's visits.
+ * Includes both direct tags (people I tagged) and indirect co-diners (people
+ * the tagger also tagged on the same entry, fetched via the fetch_co_diners RPC).
  */
 export async function fetchDinedWithByEntry(client, userId) {
   if (!userId) return new Map();
-  const { data, error } = await client
-    .from("dine_with_tags")
-    .select("entry_id, tagged_id")
-    .eq("tagger_id", userId)
-    .not("entry_id", "is", null);
-  if (error || !data?.length) return new Map();
-  const allIds = [...new Set(data.map((r) => r.tagged_id))];
-  const { data: profiles } = await client
-    .from("profiles")
-    .select("id, username, display_name, avatar_url")
-    .in("id", allIds);
-  const profMap = Object.fromEntries((profiles || []).map((p) => [p.id, p]));
-  const map = new Map();
-  for (const { entry_id, tagged_id } of data) {
-    const profile = profMap[tagged_id];
-    if (!profile) continue;
-    if (!map.has(entry_id)) map.set(entry_id, []);
-    if (!map.get(entry_id).some((p) => p.id === profile.id)) {
-      map.get(entry_id).push(profile);
+
+  const [{ data: directRows, error: dErr }, { data: incomingRows, error: iErr }] = await Promise.all([
+    client.from("dine_with_tags").select("entry_id, tagged_id, restaurant_name")
+      .eq("tagger_id", userId).not("entry_id", "is", null),
+    client.from("dine_with_tags").select("tagger_id, entry_id, restaurant_name")
+      .eq("tagged_id", userId).not("entry_id", "is", null),
+  ]);
+  if (dErr) console.warn("[BITE] fetchDinedWithByEntry direct:", dErr.message);
+  if (iErr) console.warn("[BITE] fetchDinedWithByEntry incoming:", iErr.message);
+  if (!directRows?.length && !incomingRows?.length) return new Map();
+
+  // Composite key (tagged_id::restaurant_name) → my_entry_id
+  // Links each of my outgoing tags to the correct entry for that session.
+  const myEntryByKey = {};
+  const rawMap = new Map(); // my_entry_id → Set<user_id>
+  for (const { entry_id, tagged_id, restaurant_name } of directRows || []) {
+    const key = `${tagged_id}::${(restaurant_name || "").trim().toLowerCase()}`;
+    myEntryByKey[key] = entry_id;
+    if (!rawMap.has(entry_id)) rawMap.set(entry_id, new Set());
+    rawMap.get(entry_id).add(tagged_id);
+  }
+
+  // For each incoming tag where I have a linked entry, fetch the other co-diners in parallel.
+  const coDinerBatches = await Promise.all(
+    (incomingRows || [])
+      .map((inc) => {
+        const key = `${inc.tagger_id}::${(inc.restaurant_name || "").trim().toLowerCase()}`;
+        const myEntryId = myEntryByKey[key];
+        if (!myEntryId) return null; // Haven't tagged back yet — no linked entry to attach to
+        return fetchCoDiners(client, {
+          taggerId: inc.tagger_id,
+          entryId: inc.entry_id,
+          excludeUserId: userId,
+        }).then((diners) => ({ myEntryId, diners }));
+      })
+      .filter(Boolean)
+  );
+
+  const coProfiles = {};
+  for (const { myEntryId, diners } of coDinerBatches) {
+    if (!rawMap.has(myEntryId)) rawMap.set(myEntryId, new Set());
+    for (const p of diners) {
+      rawMap.get(myEntryId).add(p.id);
+      coProfiles[p.id] = p;
     }
+  }
+
+  // Fetch profiles for direct tags (co-diner profiles already returned by the RPC).
+  const directIds = [...new Set((directRows || []).map((r) => r.tagged_id))];
+  let directProfMap = {};
+  if (directIds.length) {
+    const { data: profiles } = await client
+      .from("profiles").select("id, username, display_name, avatar_url").in("id", directIds);
+    for (const p of profiles || []) directProfMap[p.id] = p;
+  }
+  const profMap = { ...coProfiles, ...directProfMap };
+
+  const map = new Map();
+  for (const [entryId, idSet] of rawMap) {
+    const ps = [...idSet].map((id) => profMap[id]).filter(Boolean);
+    if (ps.length) map.set(entryId, ps);
   }
   return map;
 }
