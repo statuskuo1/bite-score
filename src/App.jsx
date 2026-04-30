@@ -1329,7 +1329,7 @@ export default function App() {
             </div>
           )}
           {addType==="restaurant"
-            ?<RestForm key={addFormKey} initial={{...INIT_REST,city:lastCity.current||profile?.home_city||"",...(addPrefill||(addDraftData?.addType==="restaurant"?addDraftData.f:null)||{})}} initialDineWith={addInitialDineWith.length?addInitialDineWith:(addDraftData?.addType==="restaurant"&&!addPrefill?addDraftData.dineWith||[]:[])}} weights={weights} existingEntries={st.entries} existingCities={existingCities} places={restaurantPlaces}
+            ?<RestForm key={addFormKey} initial={{...INIT_REST,city:lastCity.current||profile?.home_city||"",...(addPrefill||(addDraftData?.addType==="restaurant"?addDraftData.f:null)||{})}} initialDineWith={addInitialDineWith.length?addInitialDineWith:(addDraftData?.addType==="restaurant"&&!addPrefill?addDraftData.dineWith||[]:[])} weights={weights} existingEntries={st.entries} existingCities={existingCities} places={restaurantPlaces}
                 onPlaceCreated={(p)=>upsertPlace(setRestaurantPlaces, p.id, p)}
                 onFormChange={(s)=>{formStateRef.current=s;}}
                 user={user}
@@ -1394,7 +1394,7 @@ export default function App() {
                 onCancel={()=>{setAddPrefill(null);setAddInitialDineWith([]);setAddTagTaggerId(null);navigate("/log");}}
                 addType={addType} setAddType={setAddType}
               />
-            :<CafeForm key={addFormKey} initial={{...INIT_CAFE,city:lastCity.current||profile?.home_city||"",...(addPrefill||(addDraftData?.addType==="cafe"?addDraftData.f:null)||{})}} initialDineWith={addInitialDineWith.length?addInitialDineWith:(addDraftData?.addType==="cafe"&&!addPrefill?addDraftData.dineWith||[]:[])}} weights={drinkWeights}
+            :<CafeForm key={addFormKey} initial={{...INIT_CAFE,city:lastCity.current||profile?.home_city||"",...(addPrefill||(addDraftData?.addType==="cafe"?addDraftData.f:null)||{})}} initialDineWith={addInitialDineWith.length?addInitialDineWith:(addDraftData?.addType==="cafe"&&!addPrefill?addDraftData.dineWith||[]:[])} weights={drinkWeights}
                 onPlaceCreated={(p)=>upsertPlace(setCafePlaces, p.id, p)}
                 onFormChange={(s)=>{formStateRef.current=s;}}
                 user={user}
