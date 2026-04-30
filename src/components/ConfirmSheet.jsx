@@ -4,11 +4,11 @@ export function ConfirmSheet({ title, body, confirmLabel = "Delete", onConfirm, 
   return createPortal(
     <div
       onClick={onCancel}
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 400, display: "flex", alignItems: "flex-end" }}
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.78)", zIndex: 400, display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem" }}
     >
       <div
         onClick={e => e.stopPropagation()}
-        style={{ width: "100%", background: "#1E1E1C", borderRadius: "16px 16px 0 0", padding: "20px 20px 36px", boxSizing: "border-box" }}
+        style={{ width: "100%", maxWidth: 320, background: "#1E1E1C", borderRadius: 16, padding: "24px 20px 20px", boxSizing: "border-box", boxShadow: "0 8px 32px rgba(0,0,0,0.6)" }}
       >
         <div style={{ fontSize: 16, fontWeight: 600, color: "#F1EFE8", marginBottom: 6 }}>
           {title ?? "Delete entry?"}
