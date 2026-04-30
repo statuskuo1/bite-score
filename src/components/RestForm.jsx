@@ -117,8 +117,11 @@ export function RestForm({initial,initialDineWith=[],onSave,onCancel,weights,add
       </div>
       <div style={{display:"flex",gap:10,marginBottom:16}}>
         <div style={S.f1}>
-          <FieldLabel>{t.totalCost} <span style={{color:"#888780",fontWeight:400}}>({currencyCode})</span></FieldLabel>
-          <input type="number" value={f.cost} onChange={e=>inp("cost",e.target.value)} placeholder={currSymbol} style={S.wb}/>
+          <FieldLabel>{t.totalCost}</FieldLabel>
+          <div style={{position:"relative"}}>
+            <span style={{position:"absolute",left:9,top:"50%",transform:"translateY(-50%)",fontSize:13,color:"#888780",pointerEvents:"none",lineHeight:1}}>{currSymbol||"$"}</span>
+            <input type="number" value={f.cost} onChange={e=>inp("cost",e.target.value)} style={{...S.wb,paddingLeft:8+(currSymbol||"$").length*8+6}}/>
+          </div>
           {sub&&!f.cost&&<div style={S.err}>Required</div>}
         </div>
         <div style={S.f1}><FieldLabel>{t.portions}</FieldLabel><input type="number" min="0.5" step="0.5" value={f.portions} onChange={e=>inp("portions",e.target.value)} style={S.wb}/></div>
