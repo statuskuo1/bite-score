@@ -17,7 +17,7 @@ export async function fetchUnreadNotifications(client, userId, limit = 20) {
   if (!userId) return [];
   const { data: rows, error } = await client
     .from("notifications")
-    .select("id, user_id, from_user_id, type, read, created_at")
+    .select("id, user_id, from_user_id, type, read, created_at, meta")
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(limit);

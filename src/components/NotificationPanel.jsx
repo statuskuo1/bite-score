@@ -14,7 +14,7 @@ function relativeTime(ts) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile, alreadyFollowed, onMarkFollowed, followingIds }) {
+function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile, onDineTagTap, alreadyFollowed, onMarkFollowed, followingIds }) {
   const [followed, setFollowed] = useState(false);
   const [isTasteBuds, setIsTasteBuds] = useState(notif.type === "taste_buds");
   const [busy, setBusy] = useState(false);
@@ -36,11 +36,16 @@ function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile, alreadyFollow
   }
 
   const isDineTag = notif.type === "dine_tag";
+  const restaurantName = notif.meta?.restaurant_name || "a place";
   const message = isDineTag
-    ? `@${p?.username || "someone"} tagged you at ${notif.meta?.restaurant_name || "a place"}`
+    ? `All bark no BITE 🐶 @${p?.username || "someone"} tagged you at ${restaurantName}. Log your BITE?`
     : isTasteBuds
       ? `You and @${p?.username || "someone"} are now Taste Buds! 🎉`
       : `@${p?.username || "someone"} followed you`;
+
+  const handleRowTap = isDineTag
+    ? () => onDineTagTap?.(notif)
+    : () => p && onOpenProfile(p);
 
   return (
     <div style={{
@@ -52,8 +57,8 @@ function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile, alreadyFollow
     }}>
       <button
         type="button"
-        onClick={() => p && onOpenProfile(p)}
-        style={{ flexShrink: 0, background: "none", border: "none", cursor: p ? "pointer" : "default", padding: 0, lineHeight: 0 }}
+        onClick={handleRowTap}
+        style={{ flexShrink: 0, background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 0 }}
       >
         <Avatar profile={p} size={36} />
       </button>
@@ -62,8 +67,8 @@ function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile, alreadyFollow
         <div style={{ fontSize: 13, color: "#F1EFE8", lineHeight: 1.4 }}>
           <button
             type="button"
-            onClick={() => p && onOpenProfile(p)}
-            style={{ background: "none", border: "none", padding: 0, cursor: p ? "pointer" : "default", color: "inherit", fontSize: "inherit", textAlign: "left" }}
+            onClick={handleRowTap}
+            style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "inherit", fontSize: "inherit", textAlign: "left" }}
           >
             {message}
           </button>
@@ -91,7 +96,7 @@ function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile, alreadyFollow
 
 export function NotificationPanel({
   notifications, loading, onClose, onFollowBack, onRefetch,
-  onOpenProfile, sheetOpen, anchorPos, followingIds,
+  onOpenProfile, onDineTagTap, sheetOpen, anchorPos, followingIds,
 }) {
   const { t } = useLang();
   const panelRef = useRef(null);
@@ -157,6 +162,7 @@ export function NotificationPanel({
             onFollowBack={onFollowBack}
             onRefetch={onRefetch}
             onOpenProfile={onOpenProfile}
+            onDineTagTap={onDineTagTap}
             alreadyFollowed={followedIds.has(n.id)}
             onMarkFollowed={markFollowed}
             followingIds={followingIds}

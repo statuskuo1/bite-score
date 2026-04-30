@@ -47,7 +47,7 @@ export async function insertDineTag(client, { taggerId, taggedId, entryId, entry
       user_id: taggedId,
       from_user_id: taggerId,
       type: "dine_tag",
-      meta: { restaurant_name: restaurantName, entry_type: entryType },
+      meta: { restaurant_name: restaurantName, entry_type: entryType, city, cuisine },
     });
     if (nErr) console.warn("[BITE] insertDineTag notification:", nErr.message);
 

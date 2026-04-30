@@ -130,6 +130,7 @@ export default function App() {
   const [notifSheetBusy, setNotifSheetBusy] = useState(false);
   const [dineTags, setDineTags] = useState([]);
   const [dineTagCount, setDineTagCount] = useState(0);
+  const [addPrefill, setAddPrefill] = useState(null);
   const [tasteBudIds, setTasteBudIds] = useState(() => new Set());
   const [homeCurrency, setHomeCurrency] = useState("USD");
   const [extUserLogTarget, setExtUserLogTarget] = useState(null);
@@ -148,6 +149,13 @@ export default function App() {
   useEffect(() => {
     if (profile?.home_currency) setHomeCurrency(profile.home_currency);
   }, [profile?.home_currency]);
+
+  useEffect(() => {
+    if (!user?.id) { lastCity.current = ""; return; }
+    try {
+      lastCity.current = localStorage.getItem(`bite_lastUsedCity_${user.id}`) || "";
+    } catch { lastCity.current = ""; }
+  }, [user?.id]);
 
   const refreshUnseenFollowers = useCallback(async () => {
     if (!user?.id) { setUnseenFollowers(0); return; }
@@ -221,6 +229,19 @@ export default function App() {
     } finally {
       setNotifSheetBusy(false);
     }
+  }
+
+  function handleDineTagTap(notif) {
+    setShowNotifPanel(false);
+    const meta = notif.meta || {};
+    setAddPrefill({
+      name: meta.restaurant_name || "",
+      city: meta.city || "",
+      cuisine: meta.cuisine || "",
+      letter: (meta.cuisine?.[0] || "").toUpperCase(),
+    });
+    setAddType("restaurant");
+    navigate("/add");
   }
 
   async function handleNotifSheetFollow(targetId) {
@@ -329,7 +350,13 @@ export default function App() {
   const [sortAsc, setSortAsc] = useState(false);
   const [tiers, setTiers] = useState(new Set());
   const [cityFilter, setCityFilter] = useState(new Set());
-  const lastCity = useRef("NYC");
+  const lastCity = useRef("");
+  function persistLastCity(city) {
+    if (!city) return;
+    lastCity.current = city;
+    if (!user?.id) return;
+    try { localStorage.setItem(`bite_lastUsedCity_${user.id}`, city); } catch {}
+  }
   const [search, setSearch] = useState("");
   const [weights, setWeights] = useState({taste:50,bpb:40,wait:10});
   const restaurantWeightsSum = weights.taste + weights.bpb + weights.wait;
@@ -397,16 +424,6 @@ export default function App() {
         }
 
         if (user) {
-          // Load home currency from profile.
-          try {
-            const { data: prof } = await supabase
-              .from("profiles")
-              .select("home_currency")
-              .eq("id", user.id)
-              .maybeSingle();
-            if (prof?.home_currency) setHomeCurrency(prof.home_currency);
-          } catch (e) { console.error("home_currency load:", e); }
-
           try {
             const rw = localStorage.getItem(`bite_restaurantWeights_${user.id}`);
             if (rw) setWeights(JSON.parse(rw));
@@ -805,6 +822,7 @@ export default function App() {
                   onFollowBack={handleNotifFollowBack}
                   onRefetch={refetchNotifications}
                   onOpenProfile={handleOpenNotifProfile}
+                  onDineTagTap={handleDineTagTap}
                   sheetOpen={!!notifSheetProfile}
                   anchorPos={notifAnchorPos}
                   followingIds={notifFollowingIds}
@@ -1142,7 +1160,7 @@ export default function App() {
         user={user} tasteBudIds={tasteBudIds}
         onPlaceCreated={(p)=>upsertPlace(setCafePlaces, p.id, p)}
         onSave={async e=>{
-        if (e.city) lastCity.current = e.city;
+        if (e.city) persistLastCity(e.city);
         let resolvedPlaceId = e.placeId;
         if(canMutateVisit(e,user)) {
           try {
@@ -1196,12 +1214,13 @@ export default function App() {
           />
           {addSaveErr&&<div style={{background:"#3C1F13",border:"1px solid #F0997B",borderRadius:8,padding:"10px 14px",marginBottom:12,fontSize:13,color:"#F0997B"}}>{addSaveErr}</div>}
           {addType==="restaurant"
-            ?<RestForm initial={{...INIT_REST,city:profile?.home_city||lastCity.current}} weights={weights} existingEntries={st.entries} existingCities={existingCities} places={restaurantPlaces}
+            ?<RestForm initial={{...INIT_REST,city:lastCity.current||profile?.home_city||"",...(addPrefill||{})}} weights={weights} existingEntries={st.entries} existingCities={existingCities} places={restaurantPlaces}
                 onPlaceCreated={(p)=>upsertPlace(setRestaurantPlaces, p.id, p)}
                 user={user}
                 tasteBudIds={tasteBudIds}
                 onSave={async e=>{
-                  if (e.city) lastCity.current = e.city;
+                  setAddPrefill(null);
+                  if (e.city) persistLastCity(e.city);
                   if (!user) return;
                   setAddSaveErr(null);
                   try {
@@ -1250,15 +1269,15 @@ export default function App() {
                     setAddSaveErr(err?.message || "Save failed — check console");
                   }
                 }}
-                onCancel={()=>navigate("/log")}
+                onCancel={()=>{setAddPrefill(null);navigate("/log");}}
                 addType={addType} setAddType={setAddType}
               />
-            :<CafeForm initial={{...INIT_CAFE,city:profile?.home_city||lastCity.current}} weights={drinkWeights}
+            :<CafeForm initial={{...INIT_CAFE,city:lastCity.current||profile?.home_city||""}} weights={drinkWeights}
                 onPlaceCreated={(p)=>upsertPlace(setCafePlaces, p.id, p)}
                 user={user}
                 tasteBudIds={tasteBudIds}
                 onSave={async e=>{
-                  if (e.city) lastCity.current = e.city;
+                  if (e.city) persistLastCity(e.city);
                   const inserted = await insertCafeEntry(e);
                   if (e.dineWith?.length && inserted?.id) {
                     try {
@@ -1278,7 +1297,7 @@ export default function App() {
                   navigate(e.category==="Sweets"?"/log/sweets":"/log/drinks");
                 }}
                 onSaveAndContinue={async e=>{
-                  if (e.city) lastCity.current = e.city;
+                  if (e.city) persistLastCity(e.city);
                   const inserted = await insertCafeEntry(e);
                   if (e.dineWith?.length && inserted?.id) {
                     try {
