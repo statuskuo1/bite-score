@@ -55,21 +55,28 @@ function Pill({ label, active, onClick }) {
   );
 }
 
+function scorePlace(place, myWts, theirWts) {
+  const r = rr(place.avgRepeat);
+  const a = calcBiteOutOf10(place.avgTaste, place.avgCost, place.avgPortions, place.avgWait, place.useRMajority, r, myWts, "USD");
+  const b = calcBiteOutOf10(place.avgTaste, place.avgCost, place.avgPortions, place.avgWait, place.useRMajority, r, theirWts, "USD");
+  if (a == null || b == null) return null;
+  return { scoreA: a, scoreB: b, minScore: Math.min(a, b) };
+}
+
 export function PlacePickerModal({
   user, myVisits, theirVisits, myWeights, theirWeights,
   myDisplayName, friendName, onClose,
 }) {
   const [step, setStep] = useState("input");
   const [cuisine, setCuisine] = useState("");
+  const [city, setCity] = useState("");
   const [budget, setBudget] = useState(null);
   const [visitTab, setVisitTab] = useState("neither");
   const [shufflePage, setShufflePage] = useState(0);
-  const [entered, setEntered] = useState(false);
   const [cacheReady, setCacheReady] = useState(() => globalCache.restaurants.length > 0);
   const [cacheLoading, setCacheLoading] = useState(false);
 
   useEffect(() => {
-    requestAnimationFrame(() => setEntered(true));
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = prev; };
@@ -97,74 +104,70 @@ export function PlacePickerModal({
     return () => { cancelled = true; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const myPlaceIds = useMemo(
-    () => new Set(myVisits.map(v => v.placeId)),
-    [myVisits],
+  const myPlaceIds = useMemo(() => new Set(myVisits.map(v => v.placeId)), [myVisits]);
+  const theirPlaceIds = useMemo(() => new Set(theirVisits.map(v => v.placeId)), [theirVisits]);
+  const myAvgTaste = useMemo(() => arrAvg(myVisits.map(v => +v.taste)), [myVisits]);
+  const theirAvgTaste = useMemo(() => arrAvg(theirVisits.map(v => +v.taste)), [theirVisits]);
+
+  const cityOptions = useMemo(
+    () => [...new Set((globalCache.restaurants || []).map(p => p.city).filter(Boolean))].sort(),
+    [cacheReady], // eslint-disable-line react-hooks/exhaustive-deps
   );
-  const theirPlaceIds = useMemo(
-    () => new Set(theirVisits.map(v => v.placeId)),
-    [theirVisits],
-  );
-  const myAvgTaste = useMemo(
-    () => arrAvg(myVisits.map(v => +v.taste)),
-    [myVisits],
-  );
-  const theirAvgTaste = useMemo(
-    () => arrAvg(theirVisits.map(v => +v.taste)),
-    [theirVisits],
-  );
+
+  const myWts = myWeights ?? DEFAULT_WEIGHTS;
+  const theirWts = theirWeights ?? DEFAULT_WEIGHTS;
 
   const ranked = useMemo(() => {
     const myThreshold = Math.max(7, myAvgTaste);
     const theirThreshold = Math.max(7, theirAvgTaste);
-    const myWts = myWeights ?? DEFAULT_WEIGHTS;
-    const theirWts = theirWeights ?? DEFAULT_WEIGHTS;
 
-    const candidates = (globalCache.restaurants || []).filter(place => {
-      if (place.validCount < 1 || place.avgTaste == null) return false;
-      if (place.avgTaste < myThreshold || place.avgTaste < theirThreshold) return false;
-
-      const inMine = myPlaceIds.has(place.placeId);
-      const inTheirs = theirPlaceIds.has(place.placeId);
-      if (visitTab === "neither" && (inMine || inTheirs)) return false;
-      if (visitTab === "onlyMine" && (!inMine || inTheirs)) return false;
-      if (visitTab === "onlyTheirs" && (inMine || !inTheirs)) return false;
-
-      if (cuisine) {
-        if (!place.cuisine) return false;
-        if (place.cuisine !== cuisine && place.cuisine2 !== cuisine) return false;
-      }
-
-      if (budget !== null) {
-        if (place.avgCost == null) return false;
-        if (budget === "under30" && place.avgCost >= 30) return false;
-        if (budget === "30to60" && (place.avgCost < 30 || place.avgCost > 60)) return false;
-        if (budget === "60to100" && (place.avgCost < 60 || place.avgCost > 100)) return false;
-      }
-
-      return true;
-    });
-
-    const scored = candidates.map(place => {
-      const r = rr(place.avgRepeat);
-      const scoreA = calcBiteOutOf10(
-        place.avgTaste, place.avgCost, place.avgPortions,
-        place.avgWait, place.useRMajority, r, myWts, "USD",
-      );
-      const scoreB = calcBiteOutOf10(
-        place.avgTaste, place.avgCost, place.avgPortions,
-        place.avgWait, place.useRMajority, r, theirWts, "USD",
-      );
-      if (scoreA == null || scoreB == null) return null;
-      return { place, scoreA, scoreB, minScore: Math.min(scoreA, scoreB) };
-    }).filter(Boolean);
-
-    return scored.sort((a, b) => b.minScore - a.minScore).slice(0, 9);
+    return (globalCache.restaurants || [])
+      .filter(place => {
+        if (place.validCount < 1 || place.avgTaste == null) return false;
+        if (place.avgTaste < myThreshold || place.avgTaste < theirThreshold) return false;
+        const inMine = myPlaceIds.has(place.placeId);
+        const inTheirs = theirPlaceIds.has(place.placeId);
+        if (visitTab === "neither" && (inMine || inTheirs)) return false;
+        if (visitTab === "onlyMine" && (!inMine || inTheirs)) return false;
+        if (visitTab === "onlyTheirs" && (inMine || !inTheirs)) return false;
+        if (city && place.city !== city) return false;
+        if (cuisine) {
+          if (!place.cuisine) return false;
+          if (place.cuisine !== cuisine && place.cuisine2 !== cuisine) return false;
+        }
+        if (budget !== null) {
+          if (place.avgCost == null) return false;
+          if (budget === "under30" && place.avgCost >= 30) return false;
+          if (budget === "30to60" && (place.avgCost < 30 || place.avgCost > 60)) return false;
+          if (budget === "60to100" && (place.avgCost < 60 || place.avgCost > 100)) return false;
+        }
+        return true;
+      })
+      .map(place => {
+        const s = scorePlace(place, myWts, theirWts);
+        return s ? { place, ...s } : null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.minScore - a.minScore)
+      .slice(0, 9);
   }, [ // eslint-disable-line react-hooks/exhaustive-deps
-    cuisine, budget, visitTab, cacheReady,
+    cuisine, city, budget, visitTab, cacheReady,
     myAvgTaste, theirAvgTaste, myPlaceIds, theirPlaceIds,
     myWeights, theirWeights,
   ]);
+
+  // Fallback: top globally scored places, no filters
+  const fallback = useMemo(() => {
+    return (globalCache.restaurants || [])
+      .filter(place => place.validCount >= 1 && place.avgTaste != null)
+      .map(place => {
+        const s = scorePlace(place, myWts, theirWts);
+        return s ? { place, ...s } : null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.minScore - a.minScore)
+      .slice(0, 3);
+  }, [cacheReady, myWeights, theirWeights]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { setShufflePage(0); }, [ranked]);
 
@@ -196,6 +199,7 @@ export function PlacePickerModal({
   const isLastPage = shufflePage >= maxPages - 1;
   const myFn = firstName(myDisplayName);
   const thFn = firstName(friendName);
+  const noFilteredResults = step === "results" && !cacheLoading && ranked.length === 0;
 
   const tabOptions = [
     { key: "onlyMine", label: `Only ${myFn}` },
@@ -203,45 +207,102 @@ export function PlacePickerModal({
     { key: "onlyTheirs", label: `Only ${thFn}` },
   ];
 
+  function ResultCard({ item }) {
+    const { place, scoreA, scoreB } = item;
+    const reason = buildReason(item);
+    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+      place.name + (place.city ? ", " + place.city : "")
+    )}`;
+    return (
+      <div style={{
+        background: "#252523",
+        border: "0.5px solid rgba(255,255,255,0.1)",
+        borderRadius: 12, padding: "12px 14px", marginBottom: 10,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: 8, background: "#2C2C2A",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 16, flexShrink: 0,
+          }}>
+            {flagFor(place.cuisine)}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+              fontSize: 14, fontWeight: 600, color: "#F1EFE8",
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>{place.name}</div>
+            <div style={{ fontSize: 11, color: "#888780" }}>
+              {[place.cuisine, place.city].filter(Boolean).join(" · ")}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+          <span style={{
+            fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 999,
+            background: "rgba(240,153,123,0.14)", color: "#F0997B",
+            border: "1px solid rgba(240,153,123,0.3)",
+          }}>
+            {myFn}: {scoreA.toFixed(1)}
+          </span>
+          <span style={{
+            fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 999,
+            background: "rgba(91,155,213,0.14)", color: "#5B9BD5",
+            border: "1px solid rgba(91,155,213,0.3)",
+          }}>
+            {thFn}: {scoreB.toFixed(1)}
+          </span>
+        </div>
+
+        {reason && (
+          <div style={{ fontSize: 11, color: "#888780", marginBottom: 6, fontStyle: "italic" }}>
+            {reason}
+          </div>
+        )}
+
+        <a
+          href={mapsUrl}
+          target="_blank"
+          rel="noreferrer"
+          style={{ fontSize: 11, color: "#5B9BD5", textDecoration: "none" }}
+        >
+          Open in Maps ↗
+        </a>
+      </div>
+    );
+  }
+
   return (
-    <>
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0,
+        background: "rgba(0,0,0,0.78)",
+        zIndex: 399,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: "1.5rem",
+      }}
+    >
       <div
-        onClick={onClose}
+        onClick={e => e.stopPropagation()}
         style={{
-          position: "fixed", inset: 0,
-          background: "rgba(0,0,0,0.78)",
-          zIndex: 399,
-        }}
-      />
-      <div
-        style={{
-          position: "fixed", bottom: 0,
-          left: "50%",
-          transform: entered
-            ? "translateX(-50%) translateY(0)"
-            : "translateX(-50%) translateY(100%)",
-          transition: "transform 0.25s ease-out",
-          width: "100%", maxWidth: 480,
-          background: "#1A1A18",
-          borderRadius: "20px 20px 0 0",
+          width: "100%", maxWidth: 440,
+          background: "#1E1E1C",
+          borderRadius: 16,
+          border: "0.5px solid rgba(255,255,255,0.15)",
+          padding: "20px 20px 24px",
+          boxSizing: "border-box",
+          boxShadow: "0 8px 40px rgba(0,0,0,0.7)",
           maxHeight: "85vh",
           overflowY: "auto",
-          padding: "12px 16px 40px",
-          zIndex: 400,
-          boxSizing: "border-box",
         }}
       >
         <div style={{
-          width: 40, height: 4, borderRadius: 2,
-          background: "rgba(255,255,255,0.2)",
-          margin: "0 auto 20px",
-        }} />
-
-        <div style={{
           display: "flex", alignItems: "center",
-          justifyContent: "space-between", marginBottom: 20,
+          justifyContent: "space-between", marginBottom: 18,
         }}>
-          <div style={{ fontSize: 17, fontWeight: 600, color: "#F1EFE8" }}>
+          <div style={{ fontSize: 16, fontWeight: 600, color: "#F1EFE8" }}>
             Pick a place for us
           </div>
           <button
@@ -257,15 +318,24 @@ export function PlacePickerModal({
         {step === "input" ? (
           <div>
             <div style={{ fontSize: 12, color: "#888780", marginBottom: 6 }}>Cuisine</div>
-            <div style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 16 }}>
-              <Pill label="Anything" active={!cuisine} onClick={() => setCuisine("")} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <CuisineInput
-                  value={cuisine}
-                  onChange={v => setCuisine(v)}
-                  placeholder="Specific cuisine…"
-                />
-              </div>
+            <div style={{ marginBottom: 16 }}>
+              <CuisineInput
+                value={cuisine}
+                onChange={v => setCuisine(v)}
+                placeholder="Cuisine"
+                leadingOption="Anything"
+              />
+            </div>
+
+            <div style={{ fontSize: 12, color: "#888780", marginBottom: 6 }}>City</div>
+            <div style={{ marginBottom: 16 }}>
+              <CuisineInput
+                value={city}
+                onChange={v => setCity(v)}
+                placeholder="City"
+                options={cityOptions}
+                leadingOption="Anywhere"
+              />
             </div>
 
             <div style={{ fontSize: 12, color: "#888780", marginBottom: 8 }}>
@@ -329,107 +399,47 @@ export function PlacePickerModal({
               </p>
             )}
 
-            {!cacheLoading && ranked.length === 0 && (
-              <p style={{
-                fontSize: 13, color: "#888780",
-                textAlign: "center", padding: "24px 0",
-              }}>
-                No places match both your tastes right now. Try "Anything" or a wider budget.
-              </p>
+            {/* Filtered results */}
+            {!cacheLoading && !noFilteredResults && (
+              <>
+                {visibleBatch.map(item => (
+                  <ResultCard key={item.place.placeId} item={item} />
+                ))}
+                {ranked.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShufflePage(p => (p + 1) % maxPages)}
+                    style={{
+                      width: "100%", padding: 11, background: "transparent",
+                      border: "0.5px solid rgba(255,255,255,0.15)",
+                      borderRadius: 10, color: "#888780",
+                      fontSize: 14, cursor: "pointer", marginTop: 4,
+                    }}
+                  >
+                    {isLastPage ? "Start over" : "Shuffle ↺"}
+                  </button>
+                )}
+              </>
             )}
 
-            {visibleBatch.map(item => {
-              const { place, scoreA, scoreB } = item;
-              const reason = buildReason(item);
-              const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                place.name + (place.city ? ", " + place.city : "")
-              )}`;
-              return (
-                <div
-                  key={place.placeId}
-                  style={{
-                    background: "#1E1E1C",
-                    border: "0.5px solid rgba(255,255,255,0.1)",
-                    borderRadius: 12,
-                    padding: "12px 14px",
-                    marginBottom: 10,
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                    <div style={{
-                      width: 32, height: 32, borderRadius: 8,
-                      background: "#252523", display: "flex",
-                      alignItems: "center", justifyContent: "center",
-                      fontSize: 16, flexShrink: 0,
-                    }}>
-                      {flagFor(place.cuisine)}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{
-                        fontSize: 14, fontWeight: 600, color: "#F1EFE8",
-                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                      }}>{place.name}</div>
-                      <div style={{ fontSize: 11, color: "#888780" }}>
-                        {[place.cuisine, place.city].filter(Boolean).join(" · ")}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
-                    <span style={{
-                      fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 999,
-                      background: "rgba(240,153,123,0.14)", color: "#F0997B",
-                      border: "1px solid rgba(240,153,123,0.3)",
-                    }}>
-                      {myFn}: {scoreA.toFixed(1)}
-                    </span>
-                    <span style={{
-                      fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 999,
-                      background: "rgba(91,155,213,0.14)", color: "#5B9BD5",
-                      border: "1px solid rgba(91,155,213,0.3)",
-                    }}>
-                      {thFn}: {scoreB.toFixed(1)}
-                    </span>
-                  </div>
-
-                  {reason && (
-                    <div style={{
-                      fontSize: 11, color: "#888780", marginBottom: 6, fontStyle: "italic",
-                    }}>
-                      {reason}
-                    </div>
-                  )}
-
-                  <a
-                    href={mapsUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{ fontSize: 11, color: "#5B9BD5", textDecoration: "none" }}
-                  >
-                    Open in Maps ↗
-                  </a>
+            {/* No tailored results — fall back to global top */}
+            {noFilteredResults && (
+              <>
+                <div style={{
+                  fontSize: 12, color: "#888780", marginBottom: 14,
+                  padding: "10px 12px",
+                  background: "#252523", borderRadius: 8,
+                }}>
+                  Not enough data for a strong suggestion between you two. Here are the top globally logged places:
                 </div>
-              );
-            })}
-
-            {ranked.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setShufflePage(p => (p + 1) % maxPages)}
-                style={{
-                  width: "100%", padding: 11,
-                  background: "transparent",
-                  border: "0.5px solid rgba(255,255,255,0.15)",
-                  borderRadius: 10, color: "#888780",
-                  fontSize: 14, cursor: "pointer", marginTop: 4,
-                }}
-              >
-                {isLastPage ? "Start over" : "Shuffle ↺"}
-              </button>
+                {fallback.map(item => (
+                  <ResultCard key={item.place.placeId} item={item} />
+                ))}
+              </>
             )}
           </div>
         )}
       </div>
-    </>
+    </div>
   );
 }
