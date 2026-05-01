@@ -551,6 +551,7 @@ export function PeopleTab({ user, myWeights, onCompareWith, onMarkFollowersSeen,
       }}>
         {SECTIONS.map((s) => {
           const on = section === s.key;
+          const showDot = s.key === "discover" && pendingFollowers.length > 0;
           return (
             <button
               key={s.key}
@@ -565,7 +566,15 @@ export function PeopleTab({ user, myWeights, onCompareWith, onMarkFollowersSeen,
                 cursor: "pointer", transition: "all 0.15s",
               }}
             >
-              {s.icon} {t[s.labelKey] || s.key}
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                {s.icon} {t[s.labelKey] || s.key}
+                {showDot && (
+                  <span style={{
+                    width: 6, height: 6, borderRadius: "50%",
+                    background: "#E85A5A", flexShrink: 0,
+                  }} />
+                )}
+              </span>
             </button>
           );
         })}

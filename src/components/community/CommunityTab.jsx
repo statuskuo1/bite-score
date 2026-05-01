@@ -157,11 +157,15 @@ function FeedMockup() {
  * Community sub-tab router.
  *
  * Three sub-tabs in the top strip — Feed (default), People, Explore.
- * Compare is intentionally NOT in the strip; it lives at /community/compare
- * and is reached by tapping any user → MiniProfileSheet → Compare button,
- * which calls `jumpToCompare` (sets compareTarget + navigates).
+ * Compare is intentionally NOT in the strip; it lives at
+ * `/community/compare/:username` (URL is the source of truth for who you're
+ * comparing against) and is reached by tapping any user → MiniProfileSheet
+ * → Compare button, which calls `jumpToCompare`. A bare `/community/compare`
+ * with no username bounces signed-in users to `/community/people/taste-buds`.
  *
- * `compareTarget` lets one tab hand off a friend to Compare. `userLogTarget`
+ * `primedCompareTarget` is an instant-render hint for CompareTab so the click
+ * path doesn't flash a loading state while the resolved profile is fetched
+ * (which would otherwise happen on refresh / deep link). `userLogTarget`
  * (set externally by notifications, or internally by MiniProfileSheet's
  * View Log button) makes UserLogView take over the entire Community surface
  * until Back; the active sub-tab strip is preserved underneath.
@@ -174,11 +178,19 @@ export function CommunityTab({ user, myEntries, restaurantWeights, drinkWeights,
   const { t } = useLang();
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const topSeg = pathname.split("/")[2] || DEFAULT_TAB;
+  const segs = pathname.split("/");
+  const topSeg = segs[2] || DEFAULT_TAB;
+  // Compare's target identity now lives in the URL: /community/compare/:username.
+  // The third segment is the username we're comparing against; null means the
+  // signed-in user hit /community/compare bare and should bounce to Taste Buds.
+  const compareUsername = topSeg === "compare" ? (segs[3] || null) : null;
   // Compare renders at /community/compare but isn't in the strip; resolve
   // strip highlight to the default tab so nothing lights up while comparing.
   const active = SUBS.find((s) => s.key === topSeg) ? topSeg : (topSeg === "compare" ? null : DEFAULT_TAB);
-  const [compareTarget, setCompareTarget] = useState(null);
+  /** Instant-render hint for CompareTab. Set by intra-app handoffs (MiniProfileSheet,
+   *  notifications) so the 1:1 view paints without waiting on a profile fetch.
+   *  The URL is the source of truth; this is purely an optimization for the click path. */
+  const [primedCompareTarget, setPrimedCompareTarget] = useState(null);
   /** When set, the read-only `UserLogView` takes over the Community surface
    *  until the user taps Back. The sub-tab strip and `active` selection are
    *  preserved underneath so we land back on the same tab on dismissal. */
@@ -193,14 +205,25 @@ export function CommunityTab({ user, myEntries, restaurantWeights, drinkWeights,
 
   useEffect(() => {
     if (externalCompareTarget) {
-      setCompareTarget(externalCompareTarget);
+      setPrimedCompareTarget(externalCompareTarget);
       onExternalCompareConsumed?.();
     }
   }, [externalCompareTarget]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Bounce signed-in users away from a bare /community/compare with no username.
+  // Declared after the externalCompareTarget consumer so the prop-sync runs first;
+  // a notification handoff that lands on /community/compare/<name> will not trip this.
+  useEffect(() => {
+    if (topSeg !== "compare") return;
+    if (!user) return;
+    if (compareUsername) return;
+    navigate("/community/people/taste-buds", { replace: true });
+  }, [topSeg, compareUsername, user]); // eslint-disable-line react-hooks/exhaustive-deps
+
   function jumpToCompare(friendProfile) {
-    setCompareTarget(friendProfile);
-    navigate("/community/compare");
+    if (!friendProfile?.username) return;
+    setPrimedCompareTarget(friendProfile);
+    navigate(`/community/compare/${friendProfile.username}`);
   }
 
   const hint = active ? (t[SUBS.find((s) => s.key === active)?.hintKey] || "") : "";
@@ -216,8 +239,8 @@ export function CommunityTab({ user, myEntries, restaurantWeights, drinkWeights,
     );
   }
 
-  // /community/compare renders CompareTab full-width without the sub-tab
-  // strip — it's a focused 1:1 view, reached only via MiniProfileSheet.
+  // /community/compare/:username renders CompareTab full-width without the
+  // sub-tab strip — it's a focused 1:1 view, reached via MiniProfileSheet.
   if (topSeg === "compare") {
     if (!user) {
       return (
@@ -226,12 +249,13 @@ export function CommunityTab({ user, myEntries, restaurantWeights, drinkWeights,
         </GuestPreview>
       );
     }
+    if (!compareUsername) return null; // redirect effect above handles the bounce
     return (
       <CompareTab
         user={user}
         myWeights={restaurantWeights}
-        initialTarget={compareTarget}
-        onClearTarget={() => setCompareTarget(null)}
+        username={compareUsername}
+        primedTarget={primedCompareTarget}
         onFollowChange={onFollowChange}
         myDisplayName={myDisplayName}
       />
@@ -253,7 +277,13 @@ export function CommunityTab({ user, myEntries, restaurantWeights, drinkWeights,
             <button
               key={s.key}
               type="button"
-              onClick={() => navigate("/community/" + s.key)}
+              onClick={() => {
+                if (s.key === "people" && unseenFollowers > 0) {
+                  navigate("/community/people/discover");
+                } else {
+                  navigate("/community/" + s.key);
+                }
+              }}
               style={{
                 flex: 1, padding: "6px 0", textAlign: "center", borderRadius: 8,
                 border: "none",

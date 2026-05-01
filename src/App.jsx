@@ -375,6 +375,23 @@ export default function App() {
     navigate("/community/people");
   }
 
+  function handleFollowNotifTap() {
+    setShowNotifPanel(false);
+    navigate("/community/people/discover");
+  }
+
+  function handleTasteBudsNotifTap() {
+    setShowNotifPanel(false);
+    navigate("/community/people/taste-buds");
+  }
+
+  function handleDineTagAcceptedTap(notif) {
+    setShowNotifPanel(false);
+    const meta = notif.meta || {};
+    if (!meta.entry_id || !meta.entry_type) return;
+    setHeartSheetTarget({ postId: meta.entry_id, postType: meta.entry_type });
+  }
+
   async function handleDineTagMutualBack(notif) {
     if (!user?.id) return;
     const fromUserId = notif.from_user_id;
@@ -1089,6 +1106,9 @@ export default function App() {
                   onOpenProfile={handleOpenNotifProfile}
                   onDineTagTap={handleDineTagTap}
                   onDineTagBackTap={handleDineTagBackTap}
+                  onFollowTap={handleFollowNotifTap}
+                  onTasteBudsTap={handleTasteBudsNotifTap}
+                  onDineTagAcceptedTap={handleDineTagAcceptedTap}
                   onHeartTap={handleHeartTap}
                   onTagMutualBack={handleDineTagMutualBack}
                   sheetOpen={!!notifSheetProfile || !!heartSheetTarget}
@@ -1857,10 +1877,11 @@ export default function App() {
           navigate("/community/people");
         }}
         onCompareWith={(profile) => {
+          if (!profile?.username) return;
           setNotifSheetProfile(null);
           setShowNotifPanel(false);
           setExtCompareTarget(profile);
-          navigate("/community/compare");
+          navigate(`/community/compare/${profile.username}`);
         }}
         t={t}
       />
