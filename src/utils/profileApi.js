@@ -37,6 +37,25 @@ export async function fetchProfileById(client, userId) {
 }
 
 /**
+ * Resolve a profile by username. `ilike` matches the lowercase-unique index
+ * from `20260504_profiles_username_lowercase.sql` while tolerating any
+ * historical mixed-case rows.
+ */
+export async function fetchProfileByUsername(client, username) {
+  if (!username) return null;
+  const { data, error } = await client
+    .from("profiles")
+    .select("*")
+    .ilike("username", username)
+    .maybeSingle();
+  if (error) {
+    console.warn("[BITE] fetchProfileByUsername:", error.message);
+    return null;
+  }
+  return data;
+}
+
+/**
  * After sign-in: ensure a profile row exists and backfill display fields from OAuth when empty.
  */
 export async function ensureProfile(client, user) {

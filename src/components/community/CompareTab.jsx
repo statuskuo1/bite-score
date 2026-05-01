@@ -5,6 +5,7 @@ import { useLang } from "../../contexts/LangContext.jsx";
 import { supabase } from "../../config/supabaseClient.js";
 import { listTasteBuds, unfollowUser } from "../../utils/followsApi.js";
 import { fetchRestaurantVisitsForUser } from "../../utils/visitPlacesApi.js";
+import { fetchProfileByUsername } from "../../utils/profileApi.js";
 import { myRestVisitsCache, getUserVisitsCache } from "../../utils/sessionCache.js";
 import { pairCompatibility, restaurantOverlap } from "../../utils/compatibility.js";
 import { tasteColor } from "../../utils/scoring.js";
@@ -12,7 +13,6 @@ import { FLAGS } from "../../constants/cuisineConstants.js";
 import { Pill } from "./Pill.jsx";
 import { Toggle } from "../Toggle.jsx";
 import { Avatar } from "./Avatar.jsx";
-import { UserIdentity } from "./UserIdentity.jsx";
 import { usePaginatedList } from "../usePaginatedList.js";
 import { ShowMoreButton } from "../ShowMoreButton.jsx";
 import { SectionLabel } from "../SectionLabel.jsx";
@@ -181,17 +181,30 @@ function buildCompatExplanation(compat, myWeights, theirWeights) {
   return sentences.slice(0, 2).join(" ") || null;
 }
 
-export function CompareTab({ user, myWeights, initialTarget, onClearTarget, onFollowChange, myDisplayName = "" }) {
+/** Lowercase a username for safe case-insensitive comparison. */
+function lc(u) {
+  return u ? String(u).toLowerCase() : "";
+}
+
+export function CompareTab({ user, myWeights, username, primedTarget, onFollowChange, myDisplayName = "" }) {
   const navigate = useNavigate();
   const { t } = useLang();
   const [buds, setBuds] = useState([]);
-  const [target, setTarget] = useState(initialTarget || null);
+  /** Source of truth for the comparison is the `username` prop (from the URL).
+   *  `target` mirrors the resolved profile; the lazy initializer accepts the
+   *  primed handoff when its username matches so we paint the 1:1 view without
+   *  waiting on a fetch. */
+  const [target, setTarget] = useState(() =>
+    primedTarget && lc(primedTarget.username) === lc(username) ? primedTarget : null,
+  );
+  const [resolving, setResolving] = useState(false);
   const [myVisits, setMyVisits] = useState(() =>
     myRestVisitsCache.userId === user?.id ? myRestVisitsCache.data : [],
   );
   const [theirVisits, setTheirVisits] = useState(() => {
     const uv = getUserVisitsCache(user?.id);
-    return initialTarget?.id && uv.has(initialTarget.id) ? uv.get(initialTarget.id) : [];
+    const seedId = primedTarget && lc(primedTarget.username) === lc(username) ? primedTarget.id : null;
+    return seedId && uv.has(seedId) ? uv.get(seedId) : [];
   });
   const [loading, setLoading] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
@@ -244,11 +257,36 @@ export function CompareTab({ user, myWeights, initialTarget, onClearTarget, onFo
     return () => { cancelled = true; };
   }, [target?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /** Resolve `username` → `target` profile.
+   *  Order: existing target (no-op) → primed handoff → buds cache → DB fetch.
+   *  Misses (unknown username, self-compare) bounce back to People > Taste Buds.
+   *  `primedTarget` is included so a late-arriving handoff (notification path
+   *  populates it via a `useEffect` one render after CompareTab mounts) can
+   *  short-circuit the fetch. The `target` early-return prevents it from
+   *  stomping an already-resolved value. */
   useEffect(() => {
-    if (initialTarget && initialTarget.id !== target?.id) {
-      setTarget(initialTarget);
+    if (!username || !user?.id) return;
+    if (target && lc(target.username) === lc(username)) return;
+    if (primedTarget && lc(primedTarget.username) === lc(username)) {
+      setTarget(primedTarget);
+      return;
     }
-  }, [initialTarget?.id]);  // eslint-disable-line react-hooks/exhaustive-deps
+    const fromBuds = buds.find((b) => lc(b.otherProfile?.username) === lc(username))?.otherProfile;
+    if (fromBuds) { setTarget(fromBuds); return; }
+    let cancelled = false;
+    setResolving(true);
+    (async () => {
+      const p = await fetchProfileByUsername(supabase, username);
+      if (cancelled) return;
+      setResolving(false);
+      if (!p || p.id === user.id) {
+        navigate("/community/people/taste-buds", { replace: true });
+        return;
+      }
+      setTarget(p);
+    })();
+    return () => { cancelled = true; };
+  }, [username, user?.id, buds, primedTarget]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     setDinedTogetherOnly(false);
@@ -298,26 +336,16 @@ export function CompareTab({ user, myWeights, initialTarget, onClearTarget, onFo
     return (overlap?.both || []).filter((r) => dinedTogetherPlaceIds.has(r.placeId));
   }, [overlap?.both, dinedTogetherOnly, dinedTogetherPlaceIds]);
 
-  /** Pagination tails. Hooks live above the early-return picker view so
-   *  the order stays stable between the picker and the compare view. The
-   *  buds picker resets when the bud set size changes; the per-target
-   *  lists reset when the target changes. */
-  const budsPage = usePaginatedList(buds, String(buds.length));
+  /** Pagination tails. Per-target lists reset when the target changes. */
   const bothPage = usePaginatedList(filteredBoth, `${target?.id || ""}_${dinedTogetherOnly}`);
   const onlyTheirsPage = usePaginatedList(overlap?.onlyTheirs || [], target?.id || "", 3);
   const onlyMinePage = usePaginatedList(overlap?.onlyMine || [], target?.id || "", 3);
 
-  function clearTarget() {
-    setTarget(null);
-    onClearTarget?.();
-  }
-
   /** Back-navigate to People > Taste Buds. The dominant Compare entry path
    *  is a tap on a Taste Bud → MiniProfileSheet → Compare, so back belongs
-   *  on the buds list, not the in-page picker. The picker is still reachable
-   *  by hitting /community/compare directly with no target. */
+   *  on the buds list. Bare /community/compare without a username is bounced
+   *  here automatically by CommunityTab. */
   function goBackToBuds() {
-    clearTarget();
     navigate("/community/people/taste-buds");
   }
 
@@ -329,48 +357,14 @@ export function CompareTab({ user, myWeights, initialTarget, onClearTarget, onFo
     goBackToBuds();
   }
 
-  // ── Picker: no target selected yet ──
+  // Resolving the URL username → profile (or pre-fetch in flight). A stale
+  // render with no target is also possible briefly between username changes;
+  // either way show the same minimal placeholder so the surface doesn't pop empty.
   if (!target) {
     return (
-      <div>
-        <button
-          type="button"
-          onClick={() => navigate("/community/people/taste-buds")}
-          style={{
-            fontSize: 12, color: "#888780", background: "none", border: "none",
-            cursor: "pointer", padding: 0, marginBottom: 12,
-          }}
-        >{t.backToBuds || "← Back to Buds"}</button>
-        <p style={{ fontSize: 12, color: "#888780", margin: "0 0 12px" }}>
-          {t.pickTasteBudToCompare || "Pick a Taste Bud to compare scores."}
-        </p>
-        {!buds.length && (
-          <p style={{ fontSize: 12, color: "#888780", margin: 0 }}>
-            {t.noTasteBudsYet || "No taste buds yet."}
-          </p>
-        )}
-        {budsPage.visible.map((f) => (
-          <button
-            key={f.id}
-            type="button"
-            onClick={() => setTarget(f.otherProfile)}
-            style={{
-              display: "flex", alignItems: "center", gap: 10,
-              padding: "10px 12px", marginBottom: 8, width: "100%",
-              background: "#1E1E1C", border: "0.5px solid rgba(255,255,255,0.1)",
-              borderRadius: 12, cursor: "pointer", textAlign: "left",
-            }}
-          >
-            <UserIdentity profile={f.otherProfile} size={32} />
-            <span style={{ fontSize: 18, color: "#888780" }}>›</span>
-          </button>
-        ))}
-        <ShowMoreButton
-          remaining={budsPage.remaining}
-          pageSize={budsPage.pageSize}
-          onClick={budsPage.showMore}
-        />
-      </div>
+      <p style={{ fontSize: 12, color: "#888780" }}>
+        {resolving ? "…" : ""}
+      </p>
     );
   }
 
