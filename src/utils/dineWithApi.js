@@ -39,7 +39,7 @@ export async function insertDineTag(client, { taggerId, taggedId, entryId, entry
           city,
           cuisine,
         },
-        { onConflict: "entry_id,tagger_id,tagged_id", ignoreDuplicates: true },
+        { ignoreDuplicates: true },
       )
       .select("id")
       .maybeSingle();

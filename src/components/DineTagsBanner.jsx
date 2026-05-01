@@ -87,7 +87,7 @@ export function DineTagsBanner({ tags, onDismiss, onAddType, entries, cafes, use
         city: tag.city || "",
         cuisine: tag.cuisine || "",
         dismissed: true,
-      }, { onConflict: "entry_id,tagger_id,tagged_id", ignoreDuplicates: true }),
+      }, { ignoreDuplicates: true }),
       supabase.from("notifications").insert({
         user_id: tag.tagger_id,
         from_user_id: userId,
