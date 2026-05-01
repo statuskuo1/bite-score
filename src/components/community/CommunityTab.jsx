@@ -170,7 +170,7 @@ function FeedMockup() {
  * Explore > Global so its mean-then-BITE leaderboard reflects the viewer's
  * own My Taste sliders.
  */
-export function CommunityTab({ user, myEntries, restaurantWeights, drinkWeights, sweetWeights, unseenFollowers = 0, onMarkFollowersSeen, onFollowChange, externalUserLogTarget, onExternalUserLogConsumed, externalCompareTarget, onExternalCompareConsumed, onSignIn }) {
+export function CommunityTab({ user, myEntries, restaurantWeights, drinkWeights, sweetWeights, unseenFollowers = 0, onMarkFollowersSeen, onFollowChange, externalUserLogTarget, onExternalUserLogConsumed, externalCompareTarget, onExternalCompareConsumed, onSignIn, myDisplayName = "" }) {
   const { t } = useLang();
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -233,6 +233,7 @@ export function CommunityTab({ user, myEntries, restaurantWeights, drinkWeights,
         initialTarget={compareTarget}
         onClearTarget={() => setCompareTarget(null)}
         onFollowChange={onFollowChange}
+        myDisplayName={myDisplayName}
       />
     );
   }

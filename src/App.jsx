@@ -1369,6 +1369,7 @@ export default function App() {
           externalCompareTarget={extCompareTarget}
           onExternalCompareConsumed={() => setExtCompareTarget(null)}
           onSignIn={() => setShowAuthModal(true)}
+          myDisplayName={profile?.display_name || ""}
         />
       )}
 

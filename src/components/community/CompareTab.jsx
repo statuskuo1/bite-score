@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { PlacePickerModal } from "./PlacePickerModal.jsx";
 import { useLang } from "../../contexts/LangContext.jsx";
 import { supabase } from "../../config/supabaseClient.js";
 import { listTasteBuds, unfollowUser } from "../../utils/followsApi.js";
@@ -180,7 +181,7 @@ function buildCompatExplanation(compat, myWeights, theirWeights) {
   return sentences.slice(0, 2).join(" ") || null;
 }
 
-export function CompareTab({ user, myWeights, initialTarget, onClearTarget, onFollowChange }) {
+export function CompareTab({ user, myWeights, initialTarget, onClearTarget, onFollowChange, myDisplayName = "" }) {
   const navigate = useNavigate();
   const { t } = useLang();
   const [buds, setBuds] = useState([]);
@@ -193,6 +194,7 @@ export function CompareTab({ user, myWeights, initialTarget, onClearTarget, onFo
     return initialTarget?.id && uv.has(initialTarget.id) ? uv.get(initialTarget.id) : [];
   });
   const [loading, setLoading] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
   const [dinedTogetherOnly, setDinedTogetherOnly] = useState(false);
   const [dinedTogetherPlaceIds, setDinedTogetherPlaceIds] = useState(new Set());
 
@@ -411,6 +413,35 @@ export function CompareTab({ user, myWeights, initialTarget, onClearTarget, onFo
         summaryLine={summaryLine}
         t={t}
       />
+
+      <button
+        type="button"
+        onClick={() => setShowPicker(true)}
+        style={{
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+          width: "100%", padding: "11px",
+          background: "transparent",
+          border: "0.5px solid rgba(240,153,123,0.35)",
+          borderRadius: 10, color: "#F0997B",
+          fontSize: 14, fontWeight: 500, cursor: "pointer",
+          marginBottom: 16,
+        }}
+      >
+        🍽 Pick a place for us
+      </button>
+
+      {showPicker && (
+        <PlacePickerModal
+          user={user}
+          myVisits={myVisits}
+          theirVisits={theirVisits}
+          myWeights={myWeights}
+          theirWeights={theirWeights}
+          myDisplayName={myDisplayName}
+          friendName={friendName}
+          onClose={() => setShowPicker(false)}
+        />
+      )}
 
       {loading && (
         <p style={{ fontSize: 12, color: "#888780" }}>…</p>
