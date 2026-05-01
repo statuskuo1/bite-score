@@ -6,8 +6,9 @@ export function CuisineInput({value, onChange, placeholder, options, leadingOpti
   const [show, setShow] = useState(false);
   const ref = useRef(null);
   const items = options || ALL_CUISINES;
-  // When empty: show `defaultOptions` suggestions (if provided). When typing: filter `items`.
-  const filtered = value.trim().length > 0
+  // Treat value === leadingOption the same as empty (show suggestions, don't filter by that text)
+  const isLeadingSelected = !!(leadingOption && value === leadingOption);
+  const filtered = (!isLeadingSelected && value.trim().length > 0)
     ? items.filter(x => x.toLowerCase().startsWith(value.trim().toLowerCase()))
     : (defaultOptions || []);
   const hasDropdown = show && (!!leadingOption || filtered.length > 0);
@@ -23,11 +24,11 @@ export function CuisineInput({value, onChange, placeholder, options, leadingOpti
         <div style={{position:"absolute",top:"100%",left:0,right:0,background:"#1E1E1C",border:"0.5px solid rgba(255,255,255,0.15)",borderRadius:8,zIndex:100,maxHeight:180,overflowY:"auto",marginTop:4}}>
           {leadingOption && (
             <div
-              onMouseDown={() => { onChange(""); setShow(false); }}
+              onMouseDown={() => { onChange(leadingOption); setShow(false); }}
               style={{
                 padding:"8px 12px", fontSize:13, cursor:"pointer",
-                color: value === "" ? "#F0997B" : "#888780",
-                fontWeight: value === "" ? 600 : 400,
+                color: isLeadingSelected ? "#F0997B" : "#888780",
+                fontWeight: isLeadingSelected ? 600 : 400,
                 borderBottom: filtered.length > 0 ? "0.5px solid rgba(255,255,255,0.08)" : "none",
               }}
               onMouseEnter={e=>e.currentTarget.style.background="#2C2C2A"}

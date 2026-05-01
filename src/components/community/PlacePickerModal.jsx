@@ -80,8 +80,8 @@ export function PlacePickerModal({
   myDisplayName, friendName, onClose,
 }) {
   const [step, setStep] = useState("input");
-  const [cuisine, setCuisine] = useState("");
-  const [city, setCity] = useState("");
+  const [cuisine, setCuisine] = useState("Anything");
+  const [city, setCity] = useState("Anywhere");
   const [budget, setBudget] = useState(null);
   const [visitTab, setVisitTab] = useState("neither");
   const [shufflePage, setShufflePage] = useState(0);
@@ -152,8 +152,8 @@ export function PlacePickerModal({
         if (visitTab === "neither" && (inMine || inTheirs)) return false;
         if (visitTab === "onlyMine" && (!inMine || inTheirs)) return false;
         if (visitTab === "onlyTheirs" && (inMine || !inTheirs)) return false;
-        if (city && place.city !== city) return false;
-        if (cuisine) {
+        if (city && city !== "Anywhere" && place.city !== city) return false;
+        if (cuisine && cuisine !== "Anything") {
           if (!place.cuisine) return false;
           if (place.cuisine !== cuisine && place.cuisine2 !== cuisine) return false;
         }
