@@ -43,6 +43,11 @@ function PeopleMockup() {
   const sectionLabel = { fontSize:11, color:"#F0997B", textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:600, marginBottom:6 };
   return (
     <div>
+      <div style={{ display:"flex", background:"#252523", borderRadius:10, padding:3, gap:2, marginBottom:12 }}>
+        {[["taste-buds","🤝 Taste Buds"],["following","👤 Following"],["discover","🔍 Discover"],["groups","🎉 Groups"]].map(([v,l])=>(
+          <button key={v} style={{ flex:1, padding:"6px 0", textAlign:"center", borderRadius:8, border:"none", background:v==="taste-buds"?"#3C1F13":"transparent", color:v==="taste-buds"?"#F0997B":"#888780", fontSize:11, fontWeight:v==="taste-buds"?700:500, cursor:"pointer" }}>{l}</button>
+        ))}
+      </div>
       <div style={sectionLabel}>Taste Buds · 3</div>
       {FRIENDS.map(f => (
         <div key={f.handle} style={rowStyle}>
@@ -120,7 +125,7 @@ function FeedMockup() {
  * Explore > Global so its mean-then-BITE leaderboard reflects the viewer's
  * own My Taste sliders.
  */
-export function CommunityTab({ user, restaurantWeights, drinkWeights, sweetWeights, unseenFollowers = 0, onMarkFollowersSeen, onFollowChange, externalUserLogTarget, onExternalUserLogConsumed, externalCompareTarget, onExternalCompareConsumed, onSignIn }) {
+export function CommunityTab({ user, myEntries, restaurantWeights, drinkWeights, sweetWeights, unseenFollowers = 0, onMarkFollowersSeen, onFollowChange, externalUserLogTarget, onExternalUserLogConsumed, externalCompareTarget, onExternalCompareConsumed, onSignIn }) {
   const { t } = useLang();
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -271,6 +276,7 @@ export function CommunityTab({ user, restaurantWeights, drinkWeights, sweetWeigh
       {active === "explore" && user && (
         <ExploreTab
           user={user}
+          myEntries={myEntries}
           restaurantWeights={restaurantWeights}
           drinkWeights={drinkWeights}
           sweetWeights={sweetWeights}

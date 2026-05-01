@@ -21,7 +21,7 @@ const DEFAULT_SECTION = "top-picks";
  *
  * Reserved for future "Trending" sub-section once we have signal density.
  */
-export function ExploreTab({ user, restaurantWeights, drinkWeights, sweetWeights }) {
+export function ExploreTab({ user, myEntries, restaurantWeights, drinkWeights, sweetWeights }) {
   const { t } = useLang();
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -65,7 +65,7 @@ export function ExploreTab({ user, restaurantWeights, drinkWeights, sweetWeights
         })}
       </div>
 
-      {section === "top-picks" && <ExploreTopPicksSection user={user} />}
+      {section === "top-picks" && <ExploreTopPicksSection user={user} myEntries={myEntries} restaurantWeights={restaurantWeights} />}
       {section === "global" && (
         <ExploreGlobalSection
           user={user}

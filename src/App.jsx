@@ -1299,6 +1299,7 @@ export default function App() {
       {pathname.startsWith("/community")&&dbLoaded&&(
         <CommunityTab
           user={user}
+          myEntries={st.entries}
           restaurantWeights={weights}
           drinkWeights={drinkWeights}
           sweetWeights={sweetWeights}
