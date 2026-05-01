@@ -193,6 +193,15 @@ export default function App() {
     setTasteBudsDone(profile.has_seen_taste_buds_prompt ?? true);
   }, [profile?.has_completed_onboarding, profile?.has_seen_taste_buds_prompt]);
 
+  // Persist "seen" the moment the signed-in OnboardingModal first renders so a
+  // mid-flow refresh or tab-close doesn't loop back to card 0. React state stays
+  // false this session so the modal keeps showing; on next page load DB returns
+  // true and the modal is skipped.
+  useEffect(() => {
+    if (!user?.id || onboardingDone !== false || !authReady) return;
+    supabase.from("profiles").update({ has_completed_onboarding: true }).eq("id", user.id);
+  }, [user?.id, onboardingDone, authReady]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (!user?.id) { lastCity.current = ""; return; }
     try {
