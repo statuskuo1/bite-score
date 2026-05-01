@@ -305,7 +305,7 @@ export function CafeForm({initial,initialDineWith=[],onSave,onSaveAndContinue,on
   function saveAndAddAnother() {
     if (!validate()) return;
     if (onSaveAndContinue) onSaveAndContinue(buildEntry());
-    setF({...INIT_CAFE, name: f.name, city: f.city || "", placeId: f.placeId || null});
+    setF({...INIT_CAFE, city: f.city || ""});
     setSub(false);
   }
 

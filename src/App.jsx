@@ -747,14 +747,14 @@ export default function App() {
   const restaurantCityCounts = useMemo(() => {
     const m = new Map();
     st.entries.forEach((e) => {
-      const c = e.city || "NYC";
+      const c = resolveCity(e.city || "") || "NYC";
       m.set(c, (m.get(c) || 0) + 1);
     });
     return [...m.entries()].sort((a, b) => b[1] - a[1]);
   }, [st.entries]);
   const filtered = sortedR.filter(e=>{
     if(tiers.size>0&&!tiers.has(scoreLabel(calcBiteOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights,e.currency_code||"USD"),t)))return false;
-    if(cityFilter.size>0&&!cityFilter.has(e.city||"NYC"))return false;
+    if(cityFilter.size>0&&!cityFilter.has(resolveCity(e.city||"")||"NYC"))return false;
     if(search.trim()){const q=search.trim().toLowerCase();return e.name.toLowerCase().includes(q)||e.cuisine.toLowerCase().includes(q)||(e.city||'NYC').toLowerCase().includes(q)||(e.notes&&e.notes.toLowerCase().includes(q));}
     return true;
   });
@@ -764,7 +764,7 @@ export default function App() {
     const m = new Map();
     cafes.forEach((e) => {
       if (!DRINK_CATS.includes(e.category)) return;
-      const c = e.city || "NYC";
+      const c = resolveCity(e.city || "") || "NYC";
       m.set(c, (m.get(c) || 0) + 1);
     });
     return [...m.entries()].sort((a, b) => b[1] - a[1]);
@@ -781,7 +781,7 @@ export default function App() {
   }).filter(e=>{
     if(cafeFilterMilk&&e.milkLevel!==cafeFilterMilk)return false;
     if(cafeFilterBean){const origins=Array.isArray(e.beanRegion)?e.beanRegion:(e.beanRegion?[e.beanRegion]:[]);if(!origins.some(o=>regionOf(o)===cafeFilterBean))return false;}
-    if(cafeCityFilter.size>0&&!cafeCityFilter.has(e.city||"NYC"))return false;
+    if(cafeCityFilter.size>0&&!cafeCityFilter.has(resolveCity(e.city||"")||"NYC"))return false;
     if(cafeSearch.trim()){const q=cafeSearch.trim().toLowerCase();return e.name.toLowerCase().includes(q)||e.order.toLowerCase().includes(q)||(e.city||"NYC").toLowerCase().includes(q);}
     return true;
   });
@@ -790,7 +790,7 @@ export default function App() {
     const m = new Map();
     cafes.forEach((e) => {
       if (e.category !== "Sweets") return;
-      const c = e.city || "NYC";
+      const c = resolveCity(e.city || "") || "NYC";
       m.set(c, (m.get(c) || 0) + 1);
     });
     return [...m.entries()].sort((a, b) => b[1] - a[1]);
@@ -801,8 +801,8 @@ export default function App() {
    *  aren't in the canonical alias map. */
   const existingCities = useMemo(() => {
     const set = new Set();
-    for (const e of st.entries) { const c = (e?.city || "").trim(); if (c) set.add(c); }
-    for (const e of cafes)      { const c = (e?.city || "").trim(); if (c) set.add(c); }
+    for (const e of st.entries) { const c = resolveCity((e?.city || "").trim()); if (c) set.add(c); }
+    for (const e of cafes)      { const c = resolveCity((e?.city || "").trim()); if (c) set.add(c); }
     return [...set].sort();
   }, [st.entries, cafes]);
   const sortedSweets = [...cafes].filter(e=>e.category==="Sweets").sort((a,b)=>{
@@ -815,7 +815,7 @@ export default function App() {
     return sweetsSortAsc?-d:d;
   }).filter(e=>{
     if(sweetsTiers.size>0&&!sweetsTiers.has(scoreLabel(calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,sweetWeights,e.currency_code||"USD"),t)))return false;
-    if(sweetsCityFilter.size>0&&!sweetsCityFilter.has(e.city||"NYC"))return false;
+    if(sweetsCityFilter.size>0&&!sweetsCityFilter.has(resolveCity(e.city||"")||"NYC"))return false;
     if(sweetsSearch.trim()){const q=sweetsSearch.trim().toLowerCase();return e.name.toLowerCase().includes(q)||e.order.toLowerCase().includes(q)||(e.city||"NYC").toLowerCase().includes(q);}
     return true;
   });
