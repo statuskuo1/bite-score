@@ -7,7 +7,6 @@ import {
   followUser,
   unfollowUser,
   listFollows,
-  NEW_FOLLOWERS_WINDOW_MS,
 } from "../../utils/followsApi.js";
 import { fetchRestaurantVisitsForUser } from "../../utils/visitPlacesApi.js";
 import {
@@ -35,9 +34,9 @@ const ROW_STYLE = {
 
 const SECTIONS = [
   { key: "taste-buds", labelKey: "peopleSectionTasteBuds", icon: "🤝" },
-  { key: "following", labelKey: "peopleSectionFollowing", icon: "👤" },
-  { key: "discover", labelKey: "peopleSectionDiscover", icon: "🔍" },
-  { key: "groups", labelKey: "peopleSectionGroups", icon: "🎉" },
+  { key: "following",  labelKey: "peopleSectionFollowing",  icon: "👤" },
+  { key: "discover",   labelKey: "peopleSectionDiscover",   icon: "🔍" },
+  { key: "groups",     labelKey: "peopleSectionGroups",     icon: "🎉" },
 ];
 
 const DEFAULT_SECTION = "taste-buds";
@@ -422,19 +421,11 @@ export function PeopleTab({ user, onCompareWith, onMarkFollowersSeen, onFollowCh
     return out;
   }, [tasteBuds, budVisits, myVisits]);
 
-  /** New followers — non-mutual follow rows from the last 7 days. After the
-   *  window expires the row drops off this list (the person is still a
-   *  follower, just not "new" anymore). Mirrors `countUnseenFollowers`. */
-  const pendingFollowers = useMemo(() => {
-    const cutoff = Date.now() - NEW_FOLLOWERS_WINDOW_MS;
-    return followers
-      .filter((f) => {
-        if (f.isMutual) return false;
-        const ts = f.createdAt ? new Date(f.createdAt).getTime() : 0;
-        return Number.isFinite(ts) && ts >= cutoff;
-      })
-      .sort(byDisplayName);
-  }, [followers]);
+  /** All non-mutual followers — everyone who follows you that you haven't followed back. */
+  const pendingFollowers = useMemo(
+    () => followers.filter((f) => !f.isMutual).sort(byDisplayName),
+    [followers],
+  );
 
   /** Taste Buds (mutual) sorted alphabetically. */
   const tasteBudsSorted = useMemo(
@@ -448,7 +439,7 @@ export function PeopleTab({ user, onCompareWith, onMarkFollowersSeen, onFollowCh
     [following],
   );
 
-  /** Substring match against display_name + username (lowercased). Returns
+/** Substring match against display_name + username (lowercased). Returns
    *  true when query is empty so an unfiltered view still renders everything. */
   function matchesQuery(profile, q) {
     if (!q) return true;
@@ -653,7 +644,7 @@ export function PeopleTab({ user, onCompareWith, onMarkFollowersSeen, onFollowCh
         </div>
       )}
 
-      {/* Discover (remote username search + new followers) */}
+      {/* Discover (remote username search + follow back) */}
       {section === "discover" && (
         <div>
           {query.trim() && (
@@ -726,7 +717,7 @@ export function PeopleTab({ user, onCompareWith, onMarkFollowersSeen, onFollowCh
                   {pendingFollowers.length > 99 ? "99+" : pendingFollowers.length}
                 </span>
                 <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#F1EFE8" }}>
-                  {t.newFollowers || "New followers"}
+                  {t.followBack || "Follow back"}
                 </span>
                 <span style={{
                   fontSize: 14, color: "#888780",

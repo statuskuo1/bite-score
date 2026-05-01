@@ -45,7 +45,7 @@ export async function fetchTasteBudsFeed(client, viewerId, opts = {}) {
   if (!viewerId) return { posts: [], nextCursor: null };
 
   const buds = await listTasteBuds(client, viewerId);
-  const budIds = buds.map((b) => b.otherUserId).filter(Boolean);
+  const budIds = [viewerId, ...buds.map((b) => b.otherUserId).filter(Boolean)];
   if (!budIds.length) return { posts: [], nextCursor: null };
 
   let restQ = client

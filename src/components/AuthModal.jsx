@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useLang } from "../contexts/LangContext.jsx";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { supabase } from "../config/supabaseClient.js";
@@ -88,6 +89,7 @@ function GoogleIcon() {
 export function AuthModal({ open, onClose }) {
   const { t } = useLang();
   const { user, session, username, profile, refreshProfile } = useAuth();
+  const navigate = useNavigate();
 
   // Auth form state
   const [isCreateMode, setIsCreateMode] = useState(false);
@@ -606,11 +608,20 @@ export function AuthModal({ open, onClose }) {
             {!editMode ? (
               <>
                 <div style={{ textAlign: "center", fontSize: 13, color: "#C4C2BA", marginBottom: 14 }}>
-                  <span>{socialCounts.followers} followers</span>
+                  <button type="button" onClick={() => { onClose(); navigate("/community/people/discover"); }}
+                    style={{ background: "none", border: "none", color: "#C4C2BA", fontSize: 13, cursor: "pointer", padding: 0 }}>
+                    {socialCounts.followers} followers
+                  </button>
                   <span style={{ margin: "0 5px", opacity: 0.4 }}>·</span>
-                  <span>{socialCounts.following} following</span>
+                  <button type="button" onClick={() => { onClose(); navigate("/community/people/following"); }}
+                    style={{ background: "none", border: "none", color: "#C4C2BA", fontSize: 13, cursor: "pointer", padding: 0 }}>
+                    {socialCounts.following} following
+                  </button>
                   <span style={{ margin: "0 5px", opacity: 0.4 }}>·</span>
-                  <span>{socialCounts.tasteBuds} taste buds</span>
+                  <button type="button" onClick={() => { onClose(); navigate("/community/people/taste-buds"); }}
+                    style={{ background: "none", border: "none", color: "#C4C2BA", fontSize: 13, cursor: "pointer", padding: 0 }}>
+                    {socialCounts.tasteBuds} taste buds
+                  </button>
                 </div>
                 <FoodStatsBlock stats={foodStats} style={{ marginBottom: 14 }} />
                 {saveOk && (

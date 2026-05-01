@@ -212,6 +212,7 @@ export function FeedTab({
 
   async function openProfileSheet(author) {
     if (!author?.id) return;
+    if (author.id === user?.id) return;
     setSheetProfile(author);
     setSheetRelation("taste_buds");
     if (!user?.id) return;
