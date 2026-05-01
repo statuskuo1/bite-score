@@ -14,7 +14,7 @@ function relativeTime(ts) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile, onDineTagTap, onDineTagBackTap, onFollowTap, onTasteBudsTap, onDineTagAcceptedTap, onHeartTap, onTagMutualBack, alreadyFollowed, onMarkFollowed, followingIds }) {
+function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile, onDineTagTap, onDineTagBackTap, onFollowTap, onDineTagAcceptedTap, onHeartTap, onTagMutualBack, alreadyFollowed, onMarkFollowed, followingIds }) {
   const [followed, setFollowed] = useState(false);
   const [isTasteBuds, setIsTasteBuds] = useState(notif.type === "taste_buds");
   const [busy, setBusy] = useState(false);
@@ -77,12 +77,12 @@ function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile, onDineTagTap,
         : isDineTagBack
           ? () => onDineTagBackTap?.(notif)
           : isDineTagAccepted
-            ? () => onDineTagAcceptedTap?.(notif)
-            : isTasteBuds
-              ? () => onTasteBudsTap?.(notif)
-              : notif.type === "follow"
-                ? () => onFollowTap?.(notif)
-                : () => p && onOpenProfile(p);
+            ? () => (notif.meta?.entry_id && notif.meta?.entry_type)
+                ? onDineTagAcceptedTap?.(notif)
+                : p && onOpenProfile(p)
+            : notif.type === "follow"
+              ? () => onFollowTap?.(notif)
+              : () => p && onOpenProfile(p);
 
   return (
     <div style={{
@@ -164,7 +164,7 @@ function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile, onDineTagTap,
 
 export function NotificationPanel({
   notifications, loading, onClose, onFollowBack, onRefetch,
-  onOpenProfile, onDineTagTap, onDineTagBackTap, onFollowTap, onTasteBudsTap, onDineTagAcceptedTap,
+  onOpenProfile, onDineTagTap, onDineTagBackTap, onFollowTap, onDineTagAcceptedTap,
   onHeartTap, onTagMutualBack, sheetOpen, anchorPos, followingIds,
 }) {
   const { t } = useLang();
@@ -234,7 +234,6 @@ export function NotificationPanel({
             onDineTagTap={onDineTagTap}
             onDineTagBackTap={onDineTagBackTap}
             onFollowTap={onFollowTap}
-            onTasteBudsTap={onTasteBudsTap}
             onDineTagAcceptedTap={onDineTagAcceptedTap}
             onHeartTap={onHeartTap}
             onTagMutualBack={onTagMutualBack}

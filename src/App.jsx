@@ -279,6 +279,7 @@ export default function App() {
 
   async function handleOpenNotifProfile(profile) {
     if (!profile?.id) return;
+    setShowNotifPanel(false);
     setNotifSheetBusy(true);
     setNotifSheetProfile(profile);
     setNotifSheetRelation("none");
@@ -378,11 +379,6 @@ export default function App() {
   function handleFollowNotifTap() {
     setShowNotifPanel(false);
     navigate("/community/people/discover");
-  }
-
-  function handleTasteBudsNotifTap() {
-    setShowNotifPanel(false);
-    navigate("/community/people/taste-buds");
   }
 
   function handleDineTagAcceptedTap(notif) {
@@ -1107,7 +1103,6 @@ export default function App() {
                   onDineTagTap={handleDineTagTap}
                   onDineTagBackTap={handleDineTagBackTap}
                   onFollowTap={handleFollowNotifTap}
-                  onTasteBudsTap={handleTasteBudsNotifTap}
                   onDineTagAcceptedTap={handleDineTagAcceptedTap}
                   onHeartTap={handleHeartTap}
                   onTagMutualBack={handleDineTagMutualBack}
