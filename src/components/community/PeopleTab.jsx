@@ -76,26 +76,26 @@ function describeFollowError(code, t) {
   }
 }
 
-/** Tier-colored pill that reads as "78% match". */
-function MatchPill({ score, suffix }) {
+/** Tier-colored pill that reads as "78% match". Tappable when onCompare is provided. */
+function MatchPill({ score, suffix, onCompare }) {
+  const baseStyle = {
+    padding: "5px 12px", borderRadius: 999, fontSize: 11,
+    whiteSpace: "nowrap", cursor: onCompare ? "pointer" : "default",
+  };
   if (score == null) {
     return (
-      <span style={{
-        padding: "5px 12px", borderRadius: 999, fontSize: 11,
-        background: "transparent", color: "#888780",
-        border: "1px solid rgba(255,255,255,0.1)", whiteSpace: "nowrap",
-      }}>—%</span>
+      <span
+        onClick={onCompare}
+        style={{ ...baseStyle, background: "transparent", color: "#888780", border: "1px solid rgba(255,255,255,0.1)" }}
+      >—%</span>
     );
   }
   const col = tasteColor(score / 10);
   return (
-    <span style={{
-      padding: "5px 12px", borderRadius: 999, fontSize: 12, fontWeight: 600,
-      background: `${col}22`,
-      color: col,
-      border: `1px solid ${col}66`,
-      whiteSpace: "nowrap",
-    }}>
+    <span
+      onClick={onCompare}
+      style={{ ...baseStyle, fontSize: 12, fontWeight: 600, background: `${col}22`, color: col, border: `1px solid ${col}66` }}
+    >
       {score}%{suffix ? ` ${suffix}` : ""}
     </span>
   );
@@ -167,7 +167,7 @@ function SearchRowAction({ profile, relation, busy, onFollow, onUnfollowConfirm,
  *  only the Following pill. `hideTasteBudsBadge` drops the redundant badge
  *  when rendering inside the Taste Buds sub-tab (the tab itself is the
  *  status indicator). */
-function FollowRow({ entry, stats, onOpen, onUnfollowConfirm, t, hideTasteBudsBadge = false }) {
+function FollowRow({ entry, stats, onOpen, onUnfollowConfirm, onCompare, t, hideTasteBudsBadge = false }) {
   const profile = entry.otherProfile;
   const { isMutual } = entry;
   return (
@@ -199,7 +199,7 @@ function FollowRow({ entry, stats, onOpen, onUnfollowConfirm, t, hideTasteBudsBa
           {t.following || "Following"}
         </button>
         {isMutual && (
-          <MatchPill score={stats?.compatScore ?? null} suffix={t.matchSuffix} />
+          <MatchPill score={stats?.compatScore ?? null} suffix={t.matchSuffix} onCompare={onCompare} />
         )}
       </div>
     </div>
@@ -606,6 +606,7 @@ export function PeopleTab({ user, myWeights, onCompareWith, onMarkFollowersSeen,
               stats={budStats[f.otherUserId]}
               onOpen={openProfileSheet}
               onUnfollowConfirm={(profile, isMutual) => setInlineUnfollowTarget({ profile, isMutual })}
+              onCompare={() => onCompareWith?.(f.otherProfile)}
               t={t}
               hideTasteBudsBadge
             />

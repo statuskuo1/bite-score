@@ -229,6 +229,7 @@ export function CommunityTab({ user, myEntries, restaurantWeights, drinkWeights,
     return (
       <CompareTab
         user={user}
+        myWeights={restaurantWeights}
         initialTarget={compareTarget}
         onClearTarget={() => setCompareTarget(null)}
         onFollowChange={onFollowChange}

@@ -145,7 +145,42 @@ function DiscoverRow({ row, subLine, badgeText, badgeTone }) {
 const DISCOVER_TONE = { bg: "rgba(91,155,213,0.14)", color: "#5B9BD5", border: "rgba(91,155,213,0.4)" };
 const RECOMMEND_TONE = { bg: "rgba(151,196,89,0.14)", color: "#97C459", border: "rgba(151,196,89,0.4)" };
 
-export function CompareTab({ user, initialTarget, onClearTarget, onFollowChange }) {
+const DEFAULT_WEIGHTS = { taste: 50, bpb: 40, wait: 10 };
+
+function topWeightLabel(w) {
+  if (!w) return "taste";
+  const m = Math.max(w.taste, w.bpb, w.wait);
+  if (w.taste === m) return "taste";
+  if (w.bpb === m) return "bang per buck";
+  return "wait time";
+}
+
+function buildCompatExplanation(compat, myWeights, theirWeights) {
+  if (!compat || compat.notEnoughData || compat.score == null) {
+    return "Log more meals to get a full compatibility score.";
+  }
+  const { weightSimilarity, regionOverlap, sharedVisits, ratingAgreementScore } = compat;
+  const sentences = [];
+
+  if (weightSimilarity > 0.75) {
+    const label = topWeightLabel(myWeights);
+    sentences.push(`You both prioritize ${label} — you'll likely agree on what makes a meal worth it.`);
+  } else if (weightSimilarity < 0.45) {
+    const labelA = topWeightLabel(myWeights ?? DEFAULT_WEIGHTS);
+    const labelB = topWeightLabel(theirWeights ?? DEFAULT_WEIGHTS);
+    sentences.push(`You weight ${labelA} heavily — they weight ${labelB}. You might disagree on whether a meal was worth it.`);
+  }
+
+  if (regionOverlap >= 2 / 3) {
+    sentences.push("Strong overlap in cuisine preferences.");
+  } else if (sharedVisits >= 3 && ratingAgreementScore != null && ratingAgreementScore > 0.8) {
+    sentences.push("You've rated the same places almost identically.");
+  }
+
+  return sentences.slice(0, 2).join(" ") || null;
+}
+
+export function CompareTab({ user, myWeights, initialTarget, onClearTarget, onFollowChange }) {
   const navigate = useNavigate();
   const { t } = useLang();
   const [buds, setBuds] = useState([]);
@@ -242,10 +277,14 @@ export function CompareTab({ user, initialTarget, onClearTarget, onFollowChange 
     return () => { cancelled = true; };
   }, [user?.id, target?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const theirWeights = target?.pref_weight_taste != null
+    ? { taste: target.pref_weight_taste, bpb: target.pref_weight_bpb, wait: target.pref_weight_wait }
+    : null;
+
   const compat = useMemo(() => {
     if (!target?.id) return null;
-    return pairCompatibility(myVisits, theirVisits);
-  }, [myVisits, theirVisits, target?.id]);
+    return pairCompatibility(myVisits, theirVisits, myWeights ?? null, theirWeights);
+  }, [myVisits, theirVisits, target?.id, myWeights, theirWeights]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const overlap = useMemo(() => {
     if (!target?.id) return null;
@@ -327,12 +366,7 @@ export function CompareTab({ user, initialTarget, onClearTarget, onFollowChange 
 
   // ── Compare view: target selected ──
   const insufficientMine = (myVisits || []).length === 0;
-  const sharedTop = compat ? topSharedCuisines(compat.agreements) : [];
-  const summaryLine = sharedTop.length
-    ? fmtTemplate(t.youBothLove || "You both love {cuisines}", {
-      cuisines: sharedTop.join(t.andSeparator || " and "),
-    })
-    : null;
+  const summaryLine = loading ? null : buildCompatExplanation(compat, myWeights, theirWeights);
 
   const friendName = target.display_name || target.username || "—";
   const isTasteBud = buds.some((f) => f.otherUserId === target?.id);

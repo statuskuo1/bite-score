@@ -138,11 +138,13 @@ export function pairCompatibility(myVisits, theirVisits, myWeights, theirWeights
   const sharedPlaceIds = Object.keys(myPlaces).filter((pid) => theirPlaces[pid]);
 
   let raw;
+  let ratingAgreementScore = null;
   if (sharedPlaceIds.length >= 1) {
     const avgDelta = sharedPlaceIds.reduce((s, pid) =>
       s + Math.abs(myPlaces[pid].taste - theirPlaces[pid].taste) / 10, 0,
     ) / sharedPlaceIds.length;
-    raw = 0.7 * preferenceScore + 0.3 * (1 - avgDelta);
+    ratingAgreementScore = 1 - avgDelta;
+    raw = 0.7 * preferenceScore + 0.3 * ratingAgreementScore;
   } else {
     raw = preferenceScore;
   }
@@ -151,6 +153,11 @@ export function pairCompatibility(myVisits, theirVisits, myWeights, theirWeights
     ...base,
     score: Math.max(0, Math.min(100, Math.round(raw * 100))),
     notEnoughData: false,
+    weightSimilarity,
+    spendSimilarity,
+    regionOverlap,
+    sharedVisits: sharedPlaceIds.length,
+    ratingAgreementScore,
   };
 }
 
