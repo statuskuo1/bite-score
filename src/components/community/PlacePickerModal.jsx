@@ -339,17 +339,6 @@ export function PlacePickerModal({
 
         {step === "input" ? (
           <div>
-            <div style={{ fontSize: 12, color: "#888780", marginBottom: 6 }}>Cuisine</div>
-            <div style={{ marginBottom: 16 }}>
-              <CuisineInput
-                value={cuisine}
-                onChange={v => setCuisine(v)}
-                placeholder="Cuisine"
-                leadingOption="Anything"
-                defaultOptions={userCuisines}
-              />
-            </div>
-
             <div style={{ fontSize: 12, color: "#888780", marginBottom: 6 }}>City</div>
             <div style={{ marginBottom: 16 }}>
               <CuisineInput
@@ -359,6 +348,17 @@ export function PlacePickerModal({
                 leadingOption="Anywhere"
                 defaultOptions={userCities}
                 options={allCities}
+              />
+            </div>
+
+            <div style={{ fontSize: 12, color: "#888780", marginBottom: 6 }}>Cuisine</div>
+            <div style={{ marginBottom: 16 }}>
+              <CuisineInput
+                value={cuisine}
+                onChange={v => setCuisine(v)}
+                placeholder="Cuisine"
+                leadingOption="Anything"
+                defaultOptions={userCuisines}
               />
             </div>
 
