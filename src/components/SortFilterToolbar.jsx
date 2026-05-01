@@ -43,6 +43,11 @@ export function SortFilterToolbar({
   const [openCity, setOpenCity] = useState(false);
   const [openSearch, setOpenSearch] = useState(false);
   const [openFilter, setOpenFilter] = useState(false);
+  const [bpbBannerDismissed, setBpbBannerDismissed] = useState(false);
+
+  useEffect(() => {
+    if (viewBy === "bpb") setBpbBannerDismissed(false);
+  }, [viewBy]);
 
   const viewRef = useRef(null);
   const cityRef = useRef(null);
@@ -86,8 +91,11 @@ export function SortFilterToolbar({
     onCitiesChange(next);
   }
 
+  const showBpbBanner = viewBy === "bpb" && !bpbBannerDismissed;
+
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, gap: 6, flexWrap: "wrap" }}>
+    <div style={{ marginBottom: 10 }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: showBpbBanner ? 8 : 0, gap: 6, flexWrap: "wrap" }}>
       <div style={{
         display: "flex", gap: 6, flexWrap: "wrap",
         minWidth: 0,
@@ -252,6 +260,29 @@ export function SortFilterToolbar({
           {sortAsc ? "↑" : "↓"}
         </button>
       </div>
+    </div>
+    {showBpbBanner && (
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        background: "#2A1E05", color: "#EF9F27",
+        borderRadius: 8, fontSize: 12,
+        padding: "8px 12px", gap: 8,
+      }}>
+        <span>Costs shown in native currency — cross-currency sorting may not reflect true value.</span>
+        <button
+          type="button"
+          onClick={() => setBpbBannerDismissed(true)}
+          style={{
+            background: "none", border: "none", cursor: "pointer",
+            color: "#EF9F27", fontSize: 14, lineHeight: 1,
+            padding: 0, flexShrink: 0,
+          }}
+          aria-label="Dismiss"
+        >
+          ✕
+        </button>
+      </div>
+    )}
     </div>
   );
 }
