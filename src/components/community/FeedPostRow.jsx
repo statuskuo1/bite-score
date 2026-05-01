@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { useLang } from "../../contexts/LangContext.jsx";
+import { PlaceStatsSheet } from "./PlaceStatsSheet.jsx";
 import {
   calcBiteOutOf10,
   calcCafeOutOf10,
@@ -261,6 +263,7 @@ export function FeedPostRow({
   onToggleHeart,
 }) {
   const { t } = useLang();
+  const [showStats, setShowStats] = useState(false);
   const author = authorProfile(post);
   const score = computeScore(post, restaurantWeights, drinkWeights, sweetWeights);
   const col = score == null ? "#888780" : scoreColor(score);
@@ -372,15 +375,20 @@ export function FeedPostRow({
           {flagFor(post)}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{
-            fontSize: 18,
-            fontWeight: 700,
-            color: "#F1EFE8",
-            lineHeight: 1.2,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}>
+          <div
+            onClick={() => post.placeId && setShowStats(true)}
+            style={{
+              fontSize: 18,
+              fontWeight: 700,
+              color: "#F1EFE8",
+              lineHeight: 1.2,
+              overflow: "hidden",
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              cursor: post.placeId ? "pointer" : "default",
+            }}
+          >
             {post.name || "—"}
           </div>
           <div style={{
@@ -543,6 +551,15 @@ export function FeedPostRow({
           </div>
         )}
       </div>
+      {showStats && post.placeId && (
+        <PlaceStatsSheet
+          post={post}
+          restaurantWeights={restaurantWeights}
+          drinkWeights={drinkWeights}
+          sweetWeights={sweetWeights}
+          onClose={() => setShowStats(false)}
+        />
+      )}
     </div>
   );
 }
