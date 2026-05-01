@@ -112,31 +112,14 @@ const FAQ_DATA = [
         node: "Top Picks aggregates the highest-rated restaurants across all your Taste Buds. If multiple Taste Buds rate the same place highly, it rises to the top. It's a crowdsourced best-of list from the people whose taste you trust.",
       },
       {
-        q: "What is 'They tried, you haven't'?",
-        text: "compare taste bud shows restaurants they've rated you haven't visited yet sorted by rating both ways personalized recommendation engine people you actually know",
-        node: "When you compare with a Taste Bud, the app shows restaurants they've rated that you haven't visited yet — sorted by their rating. Works both ways. It's a personalized recommendation engine powered by people you actually know.",
+        q: "How is compatibility calculated?",
+        text: "compatibility food preferences align not just eaten same places measures similar taste cost wait top cuisines overlap both visited same restaurants how closely rated factors more log accurate both need at least 5 entries score show",
+        node: "Compatibility looks at how closely your food preferences align — not just whether you've eaten at the same places. It measures how similar you care about taste/cost/wait, and whether your top cuisines overlap. If you've both visited the same restaurants, how closely you rated them factors in too. The more you both log, the more accurate it gets. Both people need at least 5 entries for a score to show.",
       },
       {
-        q: "How is compatibility calculated?",
-        text: "compatibility measures food preferences align another person eaten same places blends two signals taste profile similarity 70% weight preferences average spend tolerance cuisine region distribution rating agreement 30% shared restaurants taste scores no shared visits based entirely taste profiles updates log more weights prioritize taste cost bang per buck spend tolerance price range cuisine regions overlap minimum 5 entries meaningful score fewer than 5 shows dash",
-        node: (
-          <>
-            Compatibility measures how well your food preferences align with another person's — not just whether you've eaten at the same places.
-            <div style={{ marginTop: 8 }}>It blends two signals:</div>
-            <div style={{ marginTop: 6 }}>
-              <IndentedLine>Taste profile similarity (70%) — how closely your weight preferences, average spend tolerance, and cuisine region distribution match.</IndentedLine>
-              <IndentedLine>Rating agreement (30%) — for restaurants you've both logged, how closely your taste scores align.</IndentedLine>
-            </div>
-            <div style={{ marginTop: 8 }}>If you have no shared visits yet, compatibility is based entirely on your taste profiles. The score updates as you both log more.</div>
-            <div style={{ marginTop: 8 }}>Three dimensions of preference similarity:</div>
-            <div style={{ marginTop: 6 }}>
-              <IndentedLine>Weights — do you both prioritize taste over cost, or value bang per buck more?</IndentedLine>
-              <IndentedLine>Spend tolerance — are you both comfortable at the same price range?</IndentedLine>
-              <IndentedLine>Cuisine regions — do your top regions overlap?</IndentedLine>
-            </div>
-            <div style={{ marginTop: 8 }}>Minimum 5 entries required for a meaningful score. If either person has fewer than 5 entries, compatibility shows as — until there's enough data.</div>
-          </>
-        ),
+        q: "How does \"Pick a Place\" work?",
+        text: "pick a place suggested tastes cuisine preference factor weights lower two scores not average place one person loves other mediocre won't make list only places genuinely work both",
+        node: "Suggested based on your tastes, cuisine preference, and factor weights. Uses the lower of your two scores, not the average. So a place one person loves but the other would find mediocre won't make the list. Only places that genuinely work for both of you come through.",
       },
     ],
   },
@@ -144,17 +127,17 @@ const FAQ_DATA = [
     section: "The math behind BITE",
     items: [
       {
-        q: "How is the restaurant BITE Score calculated?",
-        text: "three factors score weighted personal preferences taste 0 10 rating food default weight 50% bang per buck total cost portions $20 benchmark neutral cheaper boosts pricier drags down 40% wait minutes converted penalty early minutes hurt most capped 120 min 10% repeatability adjusts final score normalized 0 10",
+        q: "How is the BITE Score calculated?",
+        text: "three factors weighted preferences adjustable my palette taste bang per buck cost portions benchmarked median meal spend country wait minutes penalized curve scores normalized 0 10",
         node: (
           <>
-            Three factors feed into your score, each weighted by your personal preferences (adjustable anytime):
+            Three factors, each weighted by your preferences (adjustable anytime in My Palette):
             <div style={{ marginTop: 8 }}>
-              <IndentedLine>Taste — your 0–10 rating of the food. Default weight: 50%.</IndentedLine>
-              <IndentedLine>Bang per Buck — total cost ÷ portions ÷ $20 benchmark. $20/portion is neutral — cheaper boosts your score, pricier drags it down slightly. Default weight: 40%.</IndentedLine>
-              <IndentedLine>Wait — entered in minutes, converted to a penalty. Early minutes hurt the most — going from 10 to 20 min matters way more than 60 to 70. Capped at 120 min. Default weight: 10%.</IndentedLine>
+              <IndentedLine>Taste</IndentedLine>
+              <IndentedLine>Bang per Buck — cost ÷ portions, benchmarked against the median meal spend for your country.</IndentedLine>
+              <IndentedLine>Wait — logged in minutes, but penalized on a curve.</IndentedLine>
             </div>
-            <div style={{ marginTop: 8 }}>If Repeatability is on, it adjusts the final score up or down (see below). Scores are normalized to 0–10.</div>
+            <div style={{ marginTop: 8 }}>Scores are normalized to 0–10.</div>
           </>
         ),
       },
@@ -173,16 +156,6 @@ const FAQ_DATA = [
             <div style={{ marginTop: 8 }}>A high base score with low Repeatability drops. A solid base with high Repeatability climbs. This is what separates "good meal" from "I'm going back."</div>
           </>
         ),
-      },
-      {
-        q: "How are Drinks scored?",
-        text: "fixed weights 70% taste 30% bang per buck neutral benchmark $5.25 per item instead $20 wait penalty soft capped 10% base score repeatability multiplier applies",
-        node: "Fixed weights: 70% Taste, 30% Bang per Buck. The neutral benchmark is $5.25/item instead of $20. Wait penalty is soft — capped at 10% of your base score. Same Repeatability multiplier applies.",
-      },
-      {
-        q: "How are Sweets scored?",
-        text: "same formula as drinks sweets scoring",
-        node: "Same formula as Drinks.",
       },
     ],
   },
