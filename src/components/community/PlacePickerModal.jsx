@@ -25,6 +25,18 @@ function flagFor(cuisine) {
   return FLAGS[cuisine] || (cuisine?.[0] || "?").toUpperCase();
 }
 
+function topFromVisits(visits1, visits2, key, limit = 8) {
+  const counts = {};
+  for (const v of [...(visits1 || []), ...(visits2 || [])]) {
+    const val = v[key];
+    if (val) counts[val] = (counts[val] || 0) + 1;
+  }
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([k]) => k);
+}
+
 const BUDGET_OPTIONS = [
   { label: "Under $30", key: "under30" },
   { label: "$30–60", key: "30to60" },
@@ -109,7 +121,17 @@ export function PlacePickerModal({
   const myAvgTaste = useMemo(() => arrAvg(myVisits.map(v => +v.taste)), [myVisits]);
   const theirAvgTaste = useMemo(() => arrAvg(theirVisits.map(v => +v.taste)), [theirVisits]);
 
-  const cityOptions = useMemo(
+  // Top cuisines / cities these two users have actually dined at, by combined frequency
+  const userCuisines = useMemo(
+    () => topFromVisits(myVisits, theirVisits, "cuisine"),
+    [myVisits, theirVisits],
+  );
+  const userCities = useMemo(
+    () => topFromVisits(myVisits, theirVisits, "city"),
+    [myVisits, theirVisits],
+  );
+  // Full city list from globalCache — used for text-filtering when user types
+  const allCities = useMemo(
     () => [...new Set((globalCache.restaurants || []).map(p => p.city).filter(Boolean))].sort(),
     [cacheReady], // eslint-disable-line react-hooks/exhaustive-deps
   );
@@ -324,6 +346,7 @@ export function PlacePickerModal({
                 onChange={v => setCuisine(v)}
                 placeholder="Cuisine"
                 leadingOption="Anything"
+                defaultOptions={userCuisines}
               />
             </div>
 
@@ -333,8 +356,9 @@ export function PlacePickerModal({
                 value={city}
                 onChange={v => setCity(v)}
                 placeholder="City"
-                options={cityOptions}
                 leadingOption="Anywhere"
+                defaultOptions={userCities}
+                options={allCities}
               />
             </div>
 

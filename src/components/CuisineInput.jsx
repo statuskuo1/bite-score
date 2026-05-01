@@ -2,13 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { ALL_CUISINES } from "../constants/cuisineConstants.js";
 import { S } from "../styles/sharedStyles.js";
 
-export function CuisineInput({value, onChange, placeholder, options, leadingOption}) {
+export function CuisineInput({value, onChange, placeholder, options, leadingOption, defaultOptions}) {
   const [show, setShow] = useState(false);
   const ref = useRef(null);
   const items = options || ALL_CUISINES;
+  // When empty: show `defaultOptions` suggestions (if provided). When typing: filter `items`.
   const filtered = value.trim().length > 0
     ? items.filter(x => x.toLowerCase().startsWith(value.trim().toLowerCase()))
-    : [];
+    : (defaultOptions || []);
   const hasDropdown = show && (!!leadingOption || filtered.length > 0);
   useEffect(() => {
     function h(e) { if (ref.current && !ref.current.contains(e.target)) setShow(false); }
