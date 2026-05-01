@@ -99,11 +99,56 @@ function ExploreMockup() {
 }
 
 function FeedMockup() {
+  const POSTS = [
+    { init:"A", color:"#5B9BD5", name:"Alex Chen",  ago:"2h ago",  flag:"🇮🇹", rest:"Lilia",      sub:"Italian · NYC",  bite:"9.14", biteCol:"#97C459", label:"Exceptional", taste:"9.2", cost:"$120", wait:"25", hearts:3, notes:"best pasta in NYC, no contest" },
+    { init:"J", color:"#97C459", name:"Jordan Kim", ago:"5h ago",  flag:"🇺🇸", rest:"Ugly Bagel", sub:"American · NYC", bite:"7.95", biteCol:"#5B9BD5", label:"Worth It",    taste:"8.5", cost:"$22",  wait:"10", hearts:1, notes:"server was fire!" },
+    { init:"M", color:"#EF9F27", name:"Maya Patel", ago:"Yesterday",flag:"🇯🇵", rest:"Raku",       sub:"Japanese · NYC", bite:"8.47", biteCol:"#5B9BD5", label:"Worth It",    taste:"8.7", cost:"$75",  wait:"20", hearts:5, notes:null },
+  ];
+  const pill = { padding:"3px 8px", borderRadius:20, background:"#252523", border:"0.5px solid rgba(255,255,255,0.08)", fontSize:11, color:"#C4C2BA" };
   return (
-    <div style={{ padding:"32px 16px", textAlign:"center", background:"#1E1E1C", border:"0.5px solid rgba(255,255,255,0.08)", borderRadius:12 }}>
-      <div style={{ fontSize:32, marginBottom:12 }}>📣</div>
-      <div style={{ fontSize:15, fontWeight:600, color:"#F1EFE8", marginBottom:6 }}>Sign in to see your Taste Buds' feed</div>
-      <p style={{ fontSize:12, color:"#888780", margin:0, lineHeight:1.5 }}>Latest bites from people you mutual-follow.</p>
+    <div>
+      {POSTS.map(p => (
+        <div key={p.name} style={{ background:"#1E1E1C", border:"0.5px solid rgba(255,255,255,0.08)", borderRadius:14, padding:14, marginBottom:12, boxSizing:"border-box" }}>
+          {/* Author */}
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12 }}>
+            <div style={{ width:36, height:36, borderRadius:"50%", background:p.color, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:700, color:"#141413", flexShrink:0 }}>{p.init}</div>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontSize:14, fontWeight:600, color:"#F1EFE8", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.name}</div>
+              <div style={{ fontSize:11, color:"#888780", marginTop:2 }}>{p.ago}</div>
+            </div>
+          </div>
+          {/* Place + score chip */}
+          <div style={{ display:"flex", alignItems:"flex-start", gap:12, marginBottom:12 }}>
+            <div style={{ fontSize:38, lineHeight:1, flexShrink:0 }}>{p.flag}</div>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontSize:18, fontWeight:700, color:"#F1EFE8", lineHeight:1.2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.rest}</div>
+              <div style={{ fontSize:12, color:"#888780", marginTop:4 }}>{p.sub}</div>
+            </div>
+            <div style={{ flexShrink:0, padding:"8px 12px", borderRadius:10, background:"#252523", textAlign:"center", minWidth:64 }}>
+              <div style={{ fontSize:18, fontWeight:700, color:p.biteCol, lineHeight:1 }}>{p.bite}</div>
+              <div style={{ fontSize:10, fontWeight:500, color:p.biteCol, marginTop:4, opacity:0.9 }}>{p.label}</div>
+            </div>
+          </div>
+          {/* Pills */}
+          <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom: p.notes ? 12 : 0 }}>
+            <span style={pill}>✦ {p.taste} taste</span>
+            <span style={pill}>{p.cost}</span>
+            <span style={pill}>⏱ {p.wait} min</span>
+            <span style={pill}>★★★ Would seek out</span>
+          </div>
+          {/* Notes */}
+          {p.notes && (
+            <div style={{ fontSize:13, fontStyle:"italic", color:"#C4C2BA", lineHeight:1.5, wordBreak:"break-word" }}>
+              "{p.notes}"
+            </div>
+          )}
+          {/* Reactions */}
+          <div style={{ marginTop:12, paddingTop:10, borderTop:"0.5px solid rgba(255,255,255,0.08)", display:"flex", alignItems:"center", gap:6 }}>
+            <span style={{ fontSize:16 }}>❤️</span>
+            <span style={{ fontSize:13, color:"#888780" }}>{p.hearts}</span>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

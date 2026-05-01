@@ -75,9 +75,9 @@ function ProgressDots({ card, onGoTo }) {
   );
 }
 
-export function OnboardingModal({ restaurantWeights, onWeightSave, onComplete, isGuest }) {
+export function OnboardingModal({ restaurantWeights, onWeightSave, onComplete, isGuest, startAtCard = 0 }) {
   const { t } = useLang();
-  const [card, setCard] = useState(0);
+  const [card, setCard] = useState(startAtCard);
   const [draftW, setDraftW] = useState({ ...restaurantWeights });
 
   function draftUpd(k, v) {

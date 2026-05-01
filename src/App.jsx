@@ -166,6 +166,7 @@ export default function App() {
   const [tasteBudsDone, setTasteBudsDone] = useState(true);
   const [showTasteBudsPrompt, setShowTasteBudsPrompt] = useState(false);
   const [showGuestOnboarding, setShowGuestOnboarding] = useState(true);
+  const guestReachedSignIn = useRef(false);
   const [extUserLogTarget, setExtUserLogTarget] = useState(null);
   const [extCompareTarget, setExtCompareTarget] = useState(null);
   const lastLogPath = useRef("/log");
@@ -473,7 +474,11 @@ export default function App() {
 
   function dismissGuestOnboarding(openSignIn) {
     setShowGuestOnboarding(false);
-    if (openSignIn) setShowAuthModal(true);
+    if (openSignIn) {
+      guestReachedSignIn.current = true;
+      setShowWelcome(false);
+      setShowAuthModal(true);
+    }
   }
 
   function completeOnboarding(navigateTo) {
@@ -1780,6 +1785,7 @@ export default function App() {
         restaurantWeights={weights}
         onWeightSave={replaceRestaurantWeights}
         onComplete={completeOnboarding}
+        startAtCard={guestReachedSignIn.current ? 2 : 0}
       />
     )}
     {showTasteBudsPrompt && (
