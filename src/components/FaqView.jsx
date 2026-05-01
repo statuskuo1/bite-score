@@ -1,14 +1,30 @@
 import { useState } from "react";
 
-const Q_STYLE = { fontWeight: 500, fontSize: 14, color: "#F0997B", marginBottom: 6 };
 const A_STYLE = { fontSize: 14, color: "#AEABA4", lineHeight: 1.7 };
-const ITEM_STYLE = { borderBottom: "0.5px solid rgba(255,255,255,0.1)", padding: "20px 0" };
 
 function FaqItem({ q, children }) {
+  const [open, setOpen] = useState(false);
   return (
-    <div style={ITEM_STYLE}>
-      <div style={Q_STYLE}>{q}</div>
-      <div style={A_STYLE}>{children}</div>
+    <div style={{ borderBottom: "0.5px solid rgba(255,255,255,0.1)" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          width: "100%", padding: "16px 0",
+          background: "none", border: "none",
+          cursor: "pointer", textAlign: "left", gap: 12,
+        }}
+      >
+        <span style={{ fontWeight: 500, fontSize: 14, color: "#F1EFE8", lineHeight: 1.4 }}>{q}</span>
+        <span style={{
+          fontSize: 16, color: "#888780", lineHeight: 1, flexShrink: 0,
+          display: "inline-block",
+          transform: open ? "rotate(90deg)" : "none",
+          transition: "transform 0.15s",
+        }}>›</span>
+      </button>
+      {open && <div style={{ ...A_STYLE, paddingBottom: 16 }}>{children}</div>}
     </div>
   );
 }
@@ -36,7 +52,7 @@ function CollapsibleSection({ title, children, defaultOpen = false }) {
           cursor: "pointer", textAlign: "left",
         }}
       >
-        <span style={{ fontSize: 12, fontWeight: 700, color: "#F0997B", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+        <span style={{ fontSize: 14, fontWeight: 700, color: "#F0997B", textTransform: "uppercase", letterSpacing: "0.06em" }}>
           {title}
         </span>
         <span style={{
@@ -101,11 +117,32 @@ export function FaqView() {
           recommendation engine powered by people you actually know.
         </FaqItem>
 
-        <FaqItem q="How is taste compatibility calculated?">
-          Compatibility looks at restaurants you've both visited and compares how similarly you
-          rated them. The closer your scores across shared restaurants, the higher your match
-          percentage. If you haven't been to any of the same places yet, there's not enough
-          data to calculate.
+        <FaqItem q="How is compatibility calculated?">
+          Compatibility measures how well your food preferences align with another person's — not
+          just whether you've eaten at the same places.
+          <div style={{ marginTop: 8 }}>
+            It blends two signals:
+          </div>
+          <div style={{ marginTop: 6 }}>
+            <IndentedLine>Taste profile similarity (70%) — how closely your weight preferences, average spend tolerance, and cuisine region distribution match.</IndentedLine>
+            <IndentedLine>Rating agreement (30%) — for restaurants you've both logged, how closely your taste scores align.</IndentedLine>
+          </div>
+          <div style={{ marginTop: 8 }}>
+            If you have no shared visits yet, compatibility is based entirely on your taste profiles.
+            The score updates as you both log more.
+          </div>
+          <div style={{ marginTop: 8 }}>
+            Three dimensions of preference similarity:
+          </div>
+          <div style={{ marginTop: 6 }}>
+            <IndentedLine>Weights — do you both prioritize taste over cost, or value bang per buck more?</IndentedLine>
+            <IndentedLine>Spend tolerance — are you both comfortable at the same price range?</IndentedLine>
+            <IndentedLine>Cuisine regions — do your top regions overlap?</IndentedLine>
+          </div>
+          <div style={{ marginTop: 8 }}>
+            Minimum 5 entries required for a meaningful score. If either person has fewer than 5
+            entries, compatibility shows as — until there's enough data.
+          </div>
         </FaqItem>
       </CollapsibleSection>
 
