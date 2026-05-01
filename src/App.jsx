@@ -729,6 +729,11 @@ export default function App() {
     if (user?.id) {
       try { localStorage.setItem(`bite_restaurantWeights_${user.id}`, JSON.stringify(clamped)); }
       catch (e) { console.error("restaurant weights save:", e); }
+      supabase.from("profiles").update({
+        pref_weight_taste: clamped.taste,
+        pref_weight_bpb: clamped.bpb,
+        pref_weight_wait: clamped.wait,
+      }).eq("id", user.id);
     }
   }
 

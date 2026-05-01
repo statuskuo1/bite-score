@@ -306,6 +306,7 @@ export function CommunityTab({ user, myEntries, restaurantWeights, drinkWeights,
       {active === "people" && user && (
         <PeopleTab
           user={user}
+          myWeights={restaurantWeights}
           onCompareWith={jumpToCompare}
           onMarkFollowersSeen={onMarkFollowersSeen}
           onFollowChange={onFollowChange}

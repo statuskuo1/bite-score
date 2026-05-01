@@ -128,7 +128,7 @@ async function loadProfilesByIds(client, ids) {
   if (!ids.length) return {};
   const { data } = await client
     .from("profiles")
-    .select("id, username, display_name, avatar_url")
+    .select("id, username, display_name, avatar_url, pref_weight_taste, pref_weight_bpb, pref_weight_wait")
     .in("id", ids);
   const map = {};
   for (const p of data || []) map[p.id] = p;

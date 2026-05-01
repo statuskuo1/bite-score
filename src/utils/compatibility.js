@@ -1,17 +1,11 @@
-/**
- * Taste-by-cuisine compatibility math.
- *
- * Design note: BITE bakes in personal cost / wait / repeatability weights. Two
- * users with the same raw taste for Korean food should match — even if their
- * BITE diverges because one is more price-sensitive. So everything in here
- * works on raw `visit.taste` (0-10), never on BITE.
- *
- * The `getCuisine` extractor is pluggable so we can add cafés later (returning
- * e.g. `category` instead of cuisine string) without touching the math.
- */
+import { REGION_MAP } from "../constants/cuisineConstants.js";
+import { toUSD } from "./currency.js";
 
 export const MIN_SHARED_CUISINES = 2;
 export const MIN_VISITS_PER_CUISINE = 1;
+const MIN_ENTRIES = 5;
+
+const DEFAULT_WEIGHTS = { taste: 50, bpb: 40, wait: 10 };
 
 /** Default extractor for restaurant_visits joined with restaurant_places. Returns
  *  primary cuisine plus an optional second when `is_fusion` is set, so a fusion
@@ -55,27 +49,25 @@ export function avgTasteByCuisine(visits, getCuisine = getRestaurantCuisines) {
 /**
  * Pair compatibility between two users' visits.
  *
- * Returns:
- *   {
- *     score:           0..100 (percent), null if insufficient overlap
- *     sharedCuisines:  count of cuisines both rated
- *     agreements: [
- *       { cuisine, mine, theirs, delta }   // sorted ascending by delta
- *     ]
- *     onlyMine:   [{cuisine, avg}]   // I rated, they didn't (signal "they should try")
- *     onlyTheirs: [{cuisine, avg}]   // they rated, I didn't ("you should try")
- *     notEnoughData: bool
- *   }
+ * score formula:
+ *   preferenceScore = mean(weightSimilarity, spendSimilarity, regionOverlap)
+ *   if sharedRestaurants >= 1:
+ *     score = 0.7 * preferenceScore + 0.3 * ratingAgreementScore
+ *   else:
+ *     score = preferenceScore
+ *
+ * Returns null score (shown as —%) when either user has < 5 entries.
+ * Also returns cuisine-level agreements/onlyMine/onlyTheirs for CompareTab.
  */
-export function pairCompatibility(myVisits, theirVisits, getCuisine = getRestaurantCuisines, opts = {}) {
-  const minShared = opts.minShared ?? MIN_SHARED_CUISINES;
-  const mine = avgTasteByCuisine(myVisits, getCuisine);
-  const theirs = avgTasteByCuisine(theirVisits, getCuisine);
+export function pairCompatibility(myVisits, theirVisits, myWeights, theirWeights) {
+  // Cuisine data — kept for CompareTab's breakdown view.
+  const mine = avgTasteByCuisine(myVisits);
+  const theirs = avgTasteByCuisine(theirVisits);
   const myKeys = new Set(Object.keys(mine));
   const theirKeys = new Set(Object.keys(theirs));
 
-  const shared = [...myKeys].filter((k) => theirKeys.has(k));
-  const agreements = shared
+  const sharedCuisineKeys = [...myKeys].filter((k) => theirKeys.has(k));
+  const agreements = sharedCuisineKeys
     .map((k) => ({
       cuisine: mine[k].cuisine || theirs[k].cuisine,
       mine: mine[k].avg,
@@ -94,14 +86,72 @@ export function pairCompatibility(myVisits, theirVisits, getCuisine = getRestaur
     .map((k) => ({ cuisine: theirs[k].cuisine, avg: theirs[k].avg, count: theirs[k].count }))
     .sort((a, b) => b.avg - a.avg);
 
-  if (agreements.length < minShared) {
-    return { score: null, sharedCuisines: agreements.length, agreements, onlyMine, onlyTheirs, notEnoughData: true };
+  const base = { sharedCuisines: agreements.length, agreements, onlyMine, onlyTheirs };
+
+  // Minimum data check.
+  if ((myVisits?.length ?? 0) < MIN_ENTRIES || (theirVisits?.length ?? 0) < MIN_ENTRIES) {
+    return { ...base, score: null, notEnoughData: true };
   }
 
-  const meanDelta = agreements.reduce((acc, a) => acc + a.delta, 0) / agreements.length;
-  // Taste range is 0-10, so a 10-point gap = 0% match, 0 gap = 100% match.
-  const score = Math.max(0, Math.min(100, Math.round((1 - meanDelta / 10) * 100)));
-  return { score, sharedCuisines: agreements.length, agreements, onlyMine, onlyTheirs, notEnoughData: false };
+  // ── Preference score ──────────────────────────────────────────────────────
+
+  // 1. Weight similarity — euclidean distance of {taste,bpb,wait} vectors (0-100 → 0-1).
+  const wA = myWeights ?? DEFAULT_WEIGHTS;
+  const wB = theirWeights ?? DEFAULT_WEIGHTS;
+  const dt = (wA.taste - wB.taste) / 100;
+  const db = (wA.bpb - wB.bpb) / 100;
+  const dw = (wA.wait - wB.wait) / 100;
+  const weightSimilarity = 1 - Math.sqrt(dt * dt + db * db + dw * dw) / Math.sqrt(3);
+
+  // 2. Spend similarity — average USD/portion comparison, $100 spread = 0%.
+  function avgUSDPerPortion(visits) {
+    let sum = 0, count = 0;
+    for (const v of visits || []) {
+      if (!v.cost || !v.portions) continue;
+      sum += toUSD(v.cost, v.currency_code || "USD") / v.portions;
+      count++;
+    }
+    return count ? sum / count : 0;
+  }
+  const spendSimilarity = 1 - Math.min(1, Math.abs(avgUSDPerPortion(myVisits) - avgUSDPerPortion(theirVisits)) / 100);
+
+  // 3. Region overlap — top-3 cuisine regions, count shared / 3.
+  function top3Regions(visits) {
+    const counts = {};
+    for (const v of visits || []) {
+      const r = REGION_MAP[v.cuisine];
+      if (r) counts[r] = (counts[r] || 0) + 1;
+    }
+    return new Set(
+      Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([r]) => r),
+    );
+  }
+  const regA = top3Regions(myVisits);
+  const regB = top3Regions(theirVisits);
+  const regionOverlap = [...regA].filter((r) => regB.has(r)).length / 3;
+
+  const preferenceScore = (weightSimilarity + spendSimilarity + regionOverlap) / 3;
+
+  // ── Rating agreement on shared restaurants ────────────────────────────────
+  const myPlaces = visitsByPlace(myVisits);
+  const theirPlaces = visitsByPlace(theirVisits);
+  const sharedPlaceIds = Object.keys(myPlaces).filter((pid) => theirPlaces[pid]);
+
+  let raw;
+  if (sharedPlaceIds.length >= 1) {
+    const avgDelta = sharedPlaceIds.reduce((s, pid) =>
+      s + Math.abs(myPlaces[pid].taste - theirPlaces[pid].taste) / 10, 0,
+    ) / sharedPlaceIds.length;
+    raw = 0.7 * preferenceScore + 0.3 * (1 - avgDelta);
+  } else {
+    raw = preferenceScore;
+  }
+
+  return {
+    ...base,
+    score: Math.max(0, Math.min(100, Math.round(raw * 100))),
+    notEnoughData: false,
+  };
 }
 
 /**

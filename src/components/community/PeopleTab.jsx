@@ -248,7 +248,7 @@ function FollowerRow({ entry, onFollow, onOpen, busy, t }) {
  * before. Compare is no longer a top-strip sub-tab but the route stays
  * addressable.
  */
-export function PeopleTab({ user, onCompareWith, onMarkFollowersSeen, onFollowChange, onViewLog }) {
+export function PeopleTab({ user, myWeights, onCompareWith, onMarkFollowersSeen, onFollowChange, onViewLog }) {
   const { t } = useLang();
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -411,7 +411,11 @@ export function PeopleTab({ user, onCompareWith, onMarkFollowersSeen, onFollowCh
         out[f.otherUserId] = { ratings: null, city: "", compatScore: null };
         continue;
       }
-      const compat = pairCompatibility(myVisits, v);
+      const p = f.otherProfile;
+      const theirWeights = p?.pref_weight_taste != null
+        ? { taste: p.pref_weight_taste, bpb: p.pref_weight_bpb, wait: p.pref_weight_wait }
+        : null;
+      const compat = pairCompatibility(myVisits, v, myWeights ?? null, theirWeights);
       out[f.otherUserId] = {
         ratings: v.length,
         city: modeOf(v, "city"),
@@ -419,7 +423,7 @@ export function PeopleTab({ user, onCompareWith, onMarkFollowersSeen, onFollowCh
       };
     }
     return out;
-  }, [tasteBuds, budVisits, myVisits]);
+  }, [tasteBuds, budVisits, myVisits, myWeights]);
 
   /** All non-mutual followers — everyone who follows you that you haven't followed back. */
   const pendingFollowers = useMemo(
