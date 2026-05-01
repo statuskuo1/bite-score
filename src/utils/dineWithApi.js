@@ -23,19 +23,26 @@
  */
 export async function insertDineTag(client, { taggerId, taggedId, entryId, entryType, restaurantName, city = "", cuisine = "", notify = true }) {
   try {
+    // Upsert with ignoreDuplicates: pairs with the partial unique index added in
+    // 20260516. A re-tag of the same (entry_id, tagger, tagged) triple becomes a
+    // no-op instead of inserting a duplicate row. maybeSingle (not single)
+    // because no-op upserts return zero rows.
     const { data, error } = await client
       .from("dine_with_tags")
-      .insert({
-        tagger_id: taggerId,
-        tagged_id: taggedId,
-        entry_id: entryId || null,
-        entry_type: entryType,
-        restaurant_name: restaurantName,
-        city,
-        cuisine,
-      })
+      .upsert(
+        {
+          tagger_id: taggerId,
+          tagged_id: taggedId,
+          entry_id: entryId || null,
+          entry_type: entryType,
+          restaurant_name: restaurantName,
+          city,
+          cuisine,
+        },
+        { onConflict: "entry_id,tagger_id,tagged_id", ignoreDuplicates: true },
+      )
       .select("id")
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.warn("[BITE] insertDineTag:", error.message);

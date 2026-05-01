@@ -177,12 +177,15 @@ export async function fetchCoDinersForPosts(client, posts, viewerId) {
   }
   if (!data?.length) return out;
 
-  /** The RPC returns one row per (entry_id, tagged user). Group locally,
-   *  then look the entry back up to its post key (rest vs cafe). */
+  /** The RPC returns one row per (entry_id, tagged user). Group locally
+   *  into a Map<entry_id, Map<profile_id, profile>> so duplicate
+   *  (entry, tagged) rows from a hosted DB that hasn't run the 20260516
+   *  cleanup migration yet still collapse to one entry per profile. Mirrors
+   *  the dedupe pattern in fetchDinedWithByEntry. */
   const byEntry = new Map();
   for (const row of data) {
-    if (!byEntry.has(row.entry_id)) byEntry.set(row.entry_id, []);
-    byEntry.get(row.entry_id).push({
+    if (!byEntry.has(row.entry_id)) byEntry.set(row.entry_id, new Map());
+    byEntry.get(row.entry_id).set(row.id, {
       id: row.id,
       username: row.username,
       display_name: row.display_name,
@@ -190,8 +193,8 @@ export async function fetchCoDinersForPosts(client, posts, viewerId) {
     });
   }
   for (const post of posts) {
-    const profs = byEntry.get(post.id);
-    if (profs?.length) out.set(`${post.kind}-${post.id}`, profs);
+    const m = byEntry.get(post.id);
+    if (m?.size) out.set(`${post.kind}-${post.id}`, [...m.values()]);
   }
   return out;
 }

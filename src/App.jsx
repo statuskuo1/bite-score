@@ -1346,12 +1346,23 @@ export default function App() {
         }
         dispatch({ type: "UPD", e: { ...e, placeId: resolvedPlaceId, ownerId: e.ownerId ?? user?.id ?? null } });
         const prevRestIds = new Set((editDineWith || []).map((p) => p.id));
+        const newRestIds = new Set((e.dineWith || []).map((p) => p.id));
+        const removedRestIds = [...prevRestIds].filter((id) => !newRestIds.has(id));
         const newlyTaggedRest = (e.dineWith || []).filter((p) => !prevRestIds.has(p.id));
+        if (removedRestIds.length && e.id) {
+          // Untagging during edit: explicitly delete the rows. Notifications stay
+          // (IG / Strava convention — once delivered, notifications aren't recalled).
+          const { error: delErr } = await supabase.from("dine_with_tags").delete()
+            .eq("tagger_id", user.id).eq("entry_id", e.id).in("tagged_id", removedRestIds);
+          if (delErr) console.warn("[BITE] edit untag delete (rest):", delErr.message);
+        }
         if (newlyTaggedRest.length && e.id) {
           await Promise.all(newlyTaggedRest.map((p) => insertDineTag(supabase, {
             taggerId: user.id, taggedId: p.id, entryId: e.id,
             entryType: "restaurant", restaurantName: e.name, city: e.city || "", cuisine: e.cuisine || "",
           })));
+        }
+        if (removedRestIds.length || newlyTaggedRest.length) {
           fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
         }
         setEditR(null); setEditDineWith([]);
@@ -1384,12 +1395,21 @@ export default function App() {
         }
         setCafes(p=>p.map(x=>x.id===e.id?{...e,id:x.id,placeId:resolvedPlaceId??x.placeId,ownerId:e.ownerId??user?.id??x.ownerId}:x));
         const prevCafeIds = new Set((editDineWith || []).map((p) => p.id));
+        const newCafeIds = new Set((e.dineWith || []).map((p) => p.id));
+        const removedCafeIds = [...prevCafeIds].filter((id) => !newCafeIds.has(id));
         const newlyTaggedCafe = (e.dineWith || []).filter((p) => !prevCafeIds.has(p.id));
+        if (removedCafeIds.length && e.id) {
+          const { error: delErr } = await supabase.from("dine_with_tags").delete()
+            .eq("tagger_id", user.id).eq("entry_id", e.id).in("tagged_id", removedCafeIds);
+          if (delErr) console.warn("[BITE] edit untag delete (cafe):", delErr.message);
+        }
         if (newlyTaggedCafe.length && e.id) {
           await Promise.all(newlyTaggedCafe.map((p) => insertDineTag(supabase, {
             taggerId: user.id, taggedId: p.id, entryId: e.id,
             entryType: "cafe", restaurantName: e.name, city: e.city || "", cuisine: e.category || "",
           })));
+        }
+        if (removedCafeIds.length || newlyTaggedCafe.length) {
           fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
         }
         setEditC(null); setEditDineWith([]);
@@ -1407,9 +1427,18 @@ export default function App() {
         }
         setCafes(p=>p.map(x=>x.id===e.id?{...e,id:x.id,placeId:resolvedPlaceId??x.placeId,ownerId:e.ownerId??user?.id??x.ownerId}:x));
         const prevIds = new Set((editDineWith||[]).map(p=>p.id));
+        const newIds = new Set((e.dineWith||[]).map(p=>p.id));
+        const removedIds = [...prevIds].filter((id) => !newIds.has(id));
         const newlyTagged = (e.dineWith||[]).filter(p=>!prevIds.has(p.id));
+        if (removedIds.length && e.id) {
+          const { error: delErr } = await supabase.from("dine_with_tags").delete()
+            .eq("tagger_id", user.id).eq("entry_id", e.id).in("tagged_id", removedIds);
+          if (delErr) console.warn("[BITE] edit untag delete (cafe save+continue):", delErr.message);
+        }
         if (newlyTagged.length && e.id) {
           await Promise.all(newlyTagged.map(p=>insertDineTag(supabase,{taggerId:user.id,taggedId:p.id,entryId:e.id,entryType:"cafe",restaurantName:e.name,city:e.city||"",cuisine:e.category||""})));
+        }
+        if (removedIds.length || newlyTagged.length) {
           fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
         }
         setEditC(null); setEditDineWith([]);
@@ -1532,12 +1561,12 @@ export default function App() {
                       }
                       if (sourceTaggerId) {
                         await Promise.all([
-                          supabase.from("dine_with_tags").insert({
+                          supabase.from("dine_with_tags").upsert({
                             tagger_id: user.id, tagged_id: sourceTaggerId,
                             entry_id: data.id, entry_type: "restaurant",
                             restaurant_name: e.name, city: e.city||"", cuisine: e.cuisine||"",
                             dismissed: true,
-                          }),
+                          }, { onConflict: "entry_id,tagger_id,tagged_id", ignoreDuplicates: true }),
                           supabase.from("notifications").insert({
                             user_id: sourceTaggerId, from_user_id: user.id,
                             type: "dine_tag_accepted",
@@ -1590,12 +1619,12 @@ export default function App() {
                   }
                   if (sourceTaggerId && inserted?.id) {
                     await Promise.all([
-                      supabase.from("dine_with_tags").insert({
+                      supabase.from("dine_with_tags").upsert({
                         tagger_id: user.id, tagged_id: sourceTaggerId,
                         entry_id: inserted.id, entry_type: "cafe",
                         restaurant_name: e.name, city: e.city||"", cuisine: e.category||"",
                         dismissed: true,
-                      }),
+                      }, { onConflict: "entry_id,tagger_id,tagged_id", ignoreDuplicates: true }),
                       supabase.from("notifications").insert({
                         user_id: sourceTaggerId, from_user_id: user.id,
                         type: "dine_tag_accepted",

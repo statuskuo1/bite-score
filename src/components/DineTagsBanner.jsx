@@ -78,7 +78,7 @@ export function DineTagsBanner({ tags, onDismiss, onAddType, entries, cafes, use
       dismissDineTag(supabase, tag.id),
       // If we already tagged them back, dismiss that row too so their banner clears immediately.
       existingOutgoing && dismissDineTag(supabase, existingOutgoing.id),
-      !existingOutgoing && supabase.from("dine_with_tags").insert({
+      !existingOutgoing && supabase.from("dine_with_tags").upsert({
         tagger_id: userId,
         tagged_id: tag.tagger_id,
         entry_id: existingEntry.id,
@@ -87,7 +87,7 @@ export function DineTagsBanner({ tags, onDismiss, onAddType, entries, cafes, use
         city: tag.city || "",
         cuisine: tag.cuisine || "",
         dismissed: true,
-      }),
+      }, { onConflict: "entry_id,tagger_id,tagged_id", ignoreDuplicates: true }),
       supabase.from("notifications").insert({
         user_id: tag.tagger_id,
         from_user_id: userId,
