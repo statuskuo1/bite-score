@@ -164,6 +164,7 @@ export default function App() {
   const [homeCurrency, setHomeCurrency] = useState("USD");
   const [onboardingDone, setOnboardingDone] = useState(null);
   const [tasteBudsDone, setTasteBudsDone] = useState(true);
+  const [tasteHalfStep, setTasteHalfStep] = useState(false);
   const [showTasteBudsPrompt, setShowTasteBudsPrompt] = useState(false);
   const [showGuestOnboarding, setShowGuestOnboarding] = useState(true);
   const guestReachedSignIn = useRef(false);
@@ -658,6 +659,10 @@ export default function App() {
             const sw = localStorage.getItem(`bite_sweetWeights_${user.id}`);
             if (sw) setSweetWeights(JSON.parse(sw));
           } catch (e) { console.error("sweet weights load:", e); }
+          try {
+            const ts = localStorage.getItem(`bite_tasteHalfStep_${user.id}`);
+            if (ts !== null) setTasteHalfStep(JSON.parse(ts));
+          } catch (e) { console.error("taste step load:", e); }
         }
 
         const { data: sData, error: settingsErr } = await supabase.from("settings").select("*");
@@ -734,6 +739,15 @@ export default function App() {
         pref_weight_bpb: clamped.bpb,
         pref_weight_wait: clamped.wait,
       }).eq("id", user.id);
+    }
+  }
+
+  function saveTasteStep(half) {
+    setTasteHalfStep(half);
+    if (user?.id) {
+      try { localStorage.setItem(`bite_tasteHalfStep_${user.id}`, JSON.stringify(half)); }
+      catch (e) { console.error("taste step save:", e); }
+      supabase.from("profiles").update({ pref_taste_half_step: half }).eq("id", user.id);
     }
   }
 
@@ -1411,7 +1425,7 @@ export default function App() {
           fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
         }
         setEditR(null); setEditDineWith([]);
-      }} onCancel={()=>{setEditR(null);setEditDineWith([]);window.scrollTo({top:0,behavior:"smooth"});}}/>}
+      }} onCancel={()=>{setEditR(null);setEditDineWith([]);window.scrollTo({top:0,behavior:"smooth"});}} tasteStep={tasteHalfStep?0.5:0.1} onTasteStepChange={saveTasteStep}/>}
       {pathname.startsWith("/log")&&editC&&<CafeForm initial={editC} initialDineWith={editDineWith} weights={editC?.category==="Sweets"?sweetWeights:drinkWeights}
         user={user} tasteBudIds={tasteBudIds}
         onPlaceCreated={(p)=>upsertPlace(setCafePlaces, p.id, p)}
@@ -1491,7 +1505,7 @@ export default function App() {
         setAddType("cafe");
         navigate("/add");
       }}
-      onCancel={()=>{setEditC(null);setEditDineWith([]);window.scrollTo({top:0,behavior:"smooth"});}} existingCafes={cafes} existingCities={existingCities} places={cafePlaces}/>}
+      onCancel={()=>{setEditC(null);setEditDineWith([]);window.scrollTo({top:0,behavior:"smooth"});}} tasteStep={tasteHalfStep?0.5:0.1} onTasteStepChange={saveTasteStep} existingCafes={cafes} existingCities={existingCities} places={cafePlaces}/>}
 
       {/* ── Add Rating ── */}
       {pathname==="/add"&&!user&&(
@@ -1505,6 +1519,7 @@ export default function App() {
             onPlaceCreated={()=>{}}
             onSave={()=>{}}
             onCancel={()=>{}}
+            tasteStep={0.1}
             addType="restaurant"
             setAddType={()=>{}}
           />
@@ -1631,6 +1646,7 @@ export default function App() {
                   }
                 }}
                 onCancel={()=>{formStateRef.current=null;setAddPrefill(null);setAddInitialDineWith([]);setAddTagTaggerId(null);navigate("/log");}}
+                tasteStep={tasteHalfStep?0.5:0.1} onTasteStepChange={saveTasteStep}
                 addType={addType} setAddType={setAddType}
               />
             :<CafeForm key={addFormKey} initial={{...INIT_CAFE,city:lastCity.current||profile?.home_city||"",...(addPrefill||(addDraftData?.addType==="cafe"?addDraftData.f:null)||{})}} initialDineWith={addInitialDineWith.length?addInitialDineWith:(addDraftData?.addType==="cafe"&&!addPrefill?addDraftData.dineWith||[]:[])} weights={drinkWeights}
@@ -1717,6 +1733,7 @@ export default function App() {
                 existingCafes={cafes}
                 existingCities={existingCities}
                 places={cafePlaces}
+                tasteStep={tasteHalfStep?0.5:0.1} onTasteStepChange={saveTasteStep}
               />
           }
         </div>

@@ -14,7 +14,7 @@ import { CityInput } from "./CityInput.jsx";
 import { DineWithPicker } from "./DineWithPicker.jsx";
 import { getCurrencyForCity, CURRENCY_SYMBOLS } from "../utils/currency.js";
 
-export function RestForm({initial,initialDineWith=[],onSave,onCancel,onFormChange,weights,addType,setAddType,existingEntries,existingCities,places,onPlaceCreated,user,tasteBudIds}) {
+export function RestForm({initial,initialDineWith=[],onSave,onCancel,onFormChange,weights,addType,setAddType,existingEntries,existingCities,places,onPlaceCreated,user,tasteBudIds,tasteStep=0.1,onTasteStepChange}) {
   const {t} = useLang();
   const isEdit = !!initial.id;
   const [f,setF] = useState(initial);
@@ -114,8 +114,24 @@ export function RestForm({initial,initialDineWith=[],onSave,onCancel,onFormChang
 
       <div style={S.sec}><SectionLabel>{t.scoreInputs}</SectionLabel></div>
       <div style={S.mb16}>
-        <FieldLabel>Taste — <span style={{color:"#F0997B"}}>{f.taste} · {tasteLabel(f.taste,t)}</span></FieldLabel>
-        <input type="range" min="0" max="10" step="0.1" value={f.taste} onChange={e=>inp("taste",e.target.value)} style={{width:"100%"}}/>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+          <FieldLabel style={{margin:0}}>Taste — <span style={{color:"#F0997B"}}>{f.taste} · {tasteLabel(f.taste,t)}</span></FieldLabel>
+          {onTasteStepChange&&<div style={{display:"flex",gap:4}}>
+            {[0.1,0.5].map(s=>(
+              <button key={s} onClick={()=>{
+                if(s!==tasteStep){
+                  if(s===0.5) inp("taste",String(Math.round(+f.taste*2)/2));
+                  onTasteStepChange(s===0.5);
+                }
+              }} style={{padding:"2px 8px",borderRadius:5,border:"none",cursor:"pointer",fontSize:11,
+                background:tasteStep===s?"#F0997B":"#2C2C2A",
+                color:tasteStep===s?"#141413":"#888780"}}>
+                {s===0.1?"0.1":"0.5"}
+              </button>
+            ))}
+          </div>}
+        </div>
+        <input type="range" min="0" max="10" step={tasteStep} value={f.taste} onChange={e=>inp("taste",e.target.value)} style={{width:"100%"}}/>
         <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#888780",marginTop:4}}><span>0 sucks</span><span>5 avg</span><span>10 incredible</span></div>
       </div>
       <div style={{display:"flex",gap:10,marginBottom:16}}>
