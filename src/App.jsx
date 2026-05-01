@@ -61,6 +61,8 @@ import { getCurrencyForCity, toUSD, fromUSD, CURRENCY_SYMBOLS } from "./utils/cu
 import { CityInput, resolveCity } from "./components/CityInput.jsx";
 import { CategoryTabs } from "./components/CategoryTabs.jsx";
 import { ConfirmSheet } from "./components/ConfirmSheet.jsx";
+import { OnboardingModal } from "./components/OnboardingModal.jsx";
+import { TasteBudsPromptSheet } from "./components/TasteBudsPromptSheet.jsx";
 const GUEST_PALETTE_ENTRIES = [
   {id:"gp1",name:"Lilia",             cuisine:"Italian",        letter:"I",city:"NYC",taste:9.2,cost:120,portions:2,wait:20,repeatability:3,useR:true,notes:""},
   {id:"gp2",name:"Don Angie",         cuisine:"Italian",        letter:"I",city:"NYC",taste:8.8,cost:95, portions:2,wait:15,repeatability:3,useR:true,notes:""},
@@ -160,6 +162,10 @@ export default function App() {
   const [addDraftData, setAddDraftData] = useState(null);
   const [tasteBudIds, setTasteBudIds] = useState(() => new Set());
   const [homeCurrency, setHomeCurrency] = useState("USD");
+  const [onboardingDone, setOnboardingDone] = useState(true);
+  const [tasteBudsDone, setTasteBudsDone] = useState(true);
+  const [showTasteBudsPrompt, setShowTasteBudsPrompt] = useState(false);
+  const [showGuestOnboarding, setShowGuestOnboarding] = useState(true);
   const [extUserLogTarget, setExtUserLogTarget] = useState(null);
   const [extCompareTarget, setExtCompareTarget] = useState(null);
   const lastLogPath = useRef("/log");
@@ -178,6 +184,12 @@ export default function App() {
   useEffect(() => {
     if (profile?.home_currency) setHomeCurrency(profile.home_currency);
   }, [profile?.home_currency]);
+
+  useEffect(() => {
+    if (!profile) return;
+    setOnboardingDone(profile.has_completed_onboarding ?? true);
+    setTasteBudsDone(profile.has_seen_taste_buds_prompt ?? true);
+  }, [profile?.has_completed_onboarding, profile?.has_seen_taste_buds_prompt]);
 
   useEffect(() => {
     if (!user?.id) { lastCity.current = ""; return; }
@@ -457,6 +469,28 @@ export default function App() {
       if (welcomeCity.trim()) patch.home_city = welcomeCity.trim();
       supabase.from("profiles").update(patch).eq("id", user.id);
     }
+  }
+
+  function dismissGuestOnboarding(openSignIn) {
+    setShowGuestOnboarding(false);
+    if (openSignIn) setShowAuthModal(true);
+  }
+
+  function completeOnboarding(navigateTo) {
+    setOnboardingDone(true);
+    setShowWelcome(false);
+    if (user?.id) {
+      supabase.from("profiles").update({ has_completed_onboarding: true }).eq("id", user.id);
+      try { localStorage.setItem(`bite_welcomeDismissed_${user.id}`, "1"); } catch {}
+    }
+    if (navigateTo) navigate(navigateTo);
+  }
+
+  function dismissTasteBudsPrompt(navigateTo) {
+    setShowTasteBudsPrompt(false);
+    setTasteBudsDone(true);
+    if (user?.id) supabase.from("profiles").update({ has_seen_taste_buds_prompt: true }).eq("id", user.id);
+    if (navigateTo) navigate(navigateTo);
   }
 
   // Redirect / → /log (signed-in) or /community/feed (guest).
@@ -1025,7 +1059,7 @@ export default function App() {
         </p>
       )}
 
-      {authReady && showWelcome && dbLoaded && (
+      {authReady && user && showWelcome && dbLoaded && onboardingDone && (
         <div onClick={()=>dismissWelcome()} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:"1.5rem"}}>
           <div onClick={e=>e.stopPropagation()} style={{background:"#1E1E1C",borderRadius:16,padding:"1.5rem",maxWidth:360,width:"100%",border:"0.5px solid rgba(255,255,255,0.15)"}}>
             <div style={{fontSize:24,marginBottom:12,textAlign:"center",cursor:"default",userSelect:"none"}}>👋</div>
@@ -1544,7 +1578,9 @@ export default function App() {
                       return;
                     }
                     if (data) {
+                      const isFirstEntry = st.entries.length === 0 && cafes.length === 0;
                       dispatch({ type: "ADD", e: mapRestaurantVisitRow(data) });
+                      if (isFirstEntry && !tasteBudsDone) setShowTasteBudsPrompt(true);
                       if (user?.id) { try { localStorage.removeItem(`bite_addRating_draft_${user.id}`); } catch {} }
                       setAddDraftData(null);
                       const toTag = (e.dineWith || []).filter(p => p.id !== sourceTaggerId);
@@ -1600,7 +1636,9 @@ export default function App() {
                   if (user?.id) { try { localStorage.removeItem(`bite_addRating_draft_${user.id}`); } catch {} }
                   setAddDraftData(null);
                   if (e.city) persistLastCity(e.city);
+                  const isFirstCafeEntry = st.entries.length === 0 && cafes.length === 0;
                   const inserted = await insertCafeEntry(e);
+                  if (inserted && isFirstCafeEntry && !tasteBudsDone) setShowTasteBudsPrompt(true);
                   const toTag = (e.dineWith || []).filter(p => p.id !== sourceTaggerId);
                   if (toTag.length && inserted?.id) {
                     try {
@@ -1729,6 +1767,27 @@ export default function App() {
         />
       )}
     </div>
+    {!user && showGuestOnboarding && authReady && (
+      <OnboardingModal
+        restaurantWeights={weights}
+        onWeightSave={replaceRestaurantWeights}
+        onComplete={(action) => dismissGuestOnboarding(action === "signin")}
+        isGuest
+      />
+    )}
+    {user && !onboardingDone && (
+      <OnboardingModal
+        restaurantWeights={weights}
+        onWeightSave={replaceRestaurantWeights}
+        onComplete={completeOnboarding}
+      />
+    )}
+    {showTasteBudsPrompt && (
+      <TasteBudsPromptSheet
+        onFindFriends={() => dismissTasteBudsPrompt("/community/people/discover")}
+        onDismiss={() => dismissTasteBudsPrompt()}
+      />
+    )}
     {notifSheetProfile && (
       <MiniProfileSheet
         profile={notifSheetProfile}
