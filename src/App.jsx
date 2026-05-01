@@ -162,7 +162,7 @@ export default function App() {
   const [addDraftData, setAddDraftData] = useState(null);
   const [tasteBudIds, setTasteBudIds] = useState(() => new Set());
   const [homeCurrency, setHomeCurrency] = useState("USD");
-  const [onboardingDone, setOnboardingDone] = useState(true);
+  const [onboardingDone, setOnboardingDone] = useState(null);
   const [tasteBudsDone, setTasteBudsDone] = useState(true);
   const [showTasteBudsPrompt, setShowTasteBudsPrompt] = useState(false);
   const [showGuestOnboarding, setShowGuestOnboarding] = useState(true);
@@ -1064,7 +1064,7 @@ export default function App() {
         </p>
       )}
 
-      {authReady && user && showWelcome && dbLoaded && onboardingDone && (
+      {authReady && user && showWelcome && dbLoaded && onboardingDone === true && (
         <div onClick={()=>dismissWelcome()} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:"1.5rem"}}>
           <div onClick={e=>e.stopPropagation()} style={{background:"#1E1E1C",borderRadius:16,padding:"1.5rem",maxWidth:360,width:"100%",border:"0.5px solid rgba(255,255,255,0.15)"}}>
             <div style={{fontSize:24,marginBottom:12,textAlign:"center",cursor:"default",userSelect:"none"}}>👋</div>
@@ -1780,7 +1780,7 @@ export default function App() {
         isGuest
       />
     )}
-    {user && !onboardingDone && (
+    {user && onboardingDone === false && (
       <OnboardingModal
         restaurantWeights={weights}
         onWeightSave={replaceRestaurantWeights}
