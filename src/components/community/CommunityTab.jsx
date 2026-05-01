@@ -68,11 +68,11 @@ function PeopleMockup() {
 
 function ExploreMockup() {
   const ROWS = [
-    { flag:"🇮🇹", name:"Lilia",             cuisine:"Italian",        city:"NYC", bite:"9.14", label:"Exceptional",  color:"#97C459" },
-    { flag:"🍕",   name:"Lucali",            cuisine:"Italian",        city:"NYC", bite:"8.82", label:"Exceptional",  color:"#97C459" },
-    { flag:"🇯🇵", name:"Raku",              cuisine:"Japanese",       city:"NYC", bite:"8.47", label:"Worth It",     color:"#5B9BD5" },
-    { flag:"🇮🇹", name:"Don Angie",         cuisine:"Italian",        city:"NYC", bite:"8.31", label:"Worth It",     color:"#5B9BD5" },
-    { flag:"🇺🇸", name:"Ugly Bagel",        cuisine:"American",       city:"NYC", bite:"7.95", label:"Solid Pick",   color:"#EF9F27" },
+    { flag:"🇮🇹", name:"Lilia",             cuisine:"Italian",        city:"New York City", bite:"9.14", label:"Exceptional",  color:"#97C459" },
+    { flag:"🍕",   name:"Lucali",            cuisine:"Italian",        city:"New York City", bite:"8.82", label:"Exceptional",  color:"#97C459" },
+    { flag:"🇯🇵", name:"Raku",              cuisine:"Japanese",       city:"New York City", bite:"8.47", label:"Worth It",     color:"#5B9BD5" },
+    { flag:"🇮🇹", name:"Don Angie",         cuisine:"Italian",        city:"New York City", bite:"8.31", label:"Worth It",     color:"#5B9BD5" },
+    { flag:"🇺🇸", name:"Ugly Bagel",        cuisine:"American",       city:"New York City", bite:"7.95", label:"Solid Pick",   color:"#EF9F27" },
   ];
   return (
     <div>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { resolveCity } from "./CityInput.jsx";
 import { useLang } from "../contexts/LangContext.jsx";
 import { supabase } from "../config/supabaseClient.js";
 import { fetchAggregatedRestaurantPlaces, fetchAggregatedCafePlaces } from "../utils/visitPlacesApi.js";
@@ -105,19 +106,19 @@ export function GuestLogView({ weights, drinkWeights, sweetWeights, onSignIn }) 
 
   const restaurantCityCounts = useMemo(() => {
     const m = new Map();
-    restaurants.forEach(e => { const c = e.city || "NYC"; m.set(c, (m.get(c) || 0) + 1); });
+    restaurants.forEach(e => { const c = resolveCity(e.city || "") || "New York City"; m.set(c, (m.get(c) || 0) + 1); });
     return [...m.entries()].sort((a, b) => b[1] - a[1]);
   }, [restaurants]);
 
   const drinkCityCounts = useMemo(() => {
     const m = new Map();
-    drinks.forEach(e => { const c = e.city || "NYC"; m.set(c, (m.get(c) || 0) + 1); });
+    drinks.forEach(e => { const c = resolveCity(e.city || "") || "New York City"; m.set(c, (m.get(c) || 0) + 1); });
     return [...m.entries()].sort((a, b) => b[1] - a[1]);
   }, [drinks]);
 
   const sweetCityCounts = useMemo(() => {
     const m = new Map();
-    sweets.forEach(e => { const c = e.city || "NYC"; m.set(c, (m.get(c) || 0) + 1); });
+    sweets.forEach(e => { const c = resolveCity(e.city || "") || "New York City"; m.set(c, (m.get(c) || 0) + 1); });
     return [...m.entries()].sort((a, b) => b[1] - a[1]);
   }, [sweets]);
 
@@ -146,10 +147,10 @@ export function GuestLogView({ weights, drinkWeights, sweetWeights, onSignIn }) 
     }).filter(e => {
       const sc = calcBiteOutOf10(e.taste, e.cost, e.portions, e.wait, e.useR, e.repeatability, weights);
       if (tiers.size > 0 && !tiers.has(scoreLabel(sc, t))) return false;
-      if (cityFilter.size > 0 && !cityFilter.has(e.city || "NYC")) return false;
+      if (cityFilter.size > 0 && !cityFilter.has(resolveCity(e.city || "") || "New York City")) return false;
       if (search.trim()) {
         const q = search.trim().toLowerCase();
-        return e.name.toLowerCase().includes(q) || e.cuisine.toLowerCase().includes(q) || (e.city || "NYC").toLowerCase().includes(q);
+        return e.name.toLowerCase().includes(q) || e.cuisine.toLowerCase().includes(q) || (resolveCity(e.city || "") || "New York City").toLowerCase().includes(q);
       }
       return true;
     });
@@ -165,10 +166,10 @@ export function GuestLogView({ weights, drinkWeights, sweetWeights, onSignIn }) 
       else if (cafeSortBy === "repeat") d = a.repeatability - b.repeatability;
       return cafeSortAsc ? d : -d;
     }).filter(e => {
-      if (cafeCityFilter.size > 0 && !cafeCityFilter.has(e.city || "NYC")) return false;
+      if (cafeCityFilter.size > 0 && !cafeCityFilter.has(resolveCity(e.city || "") || "New York City")) return false;
       if (cafeSearch.trim()) {
         const q = cafeSearch.trim().toLowerCase();
-        return e.name.toLowerCase().includes(q) || e.category.toLowerCase().includes(q) || (e.city || "NYC").toLowerCase().includes(q);
+        return e.name.toLowerCase().includes(q) || e.category.toLowerCase().includes(q) || (resolveCity(e.city || "") || "New York City").toLowerCase().includes(q);
       }
       return true;
     });
@@ -186,10 +187,10 @@ export function GuestLogView({ weights, drinkWeights, sweetWeights, onSignIn }) 
     }).filter(e => {
       const sc = calcCafeOutOf10(e.taste, e.cost, e.portions, e.wait, e.useR, e.repeatability, sweetWeights);
       if (sweetsTiers.size > 0 && !sweetsTiers.has(scoreLabel(sc, t))) return false;
-      if (sweetsCityFilter.size > 0 && !sweetsCityFilter.has(e.city || "NYC")) return false;
+      if (sweetsCityFilter.size > 0 && !sweetsCityFilter.has(resolveCity(e.city || "") || "New York City")) return false;
       if (sweetsSearch.trim()) {
         const q = sweetsSearch.trim().toLowerCase();
-        return e.name.toLowerCase().includes(q) || (e.city || "NYC").toLowerCase().includes(q);
+        return e.name.toLowerCase().includes(q) || (resolveCity(e.city || "") || "New York City").toLowerCase().includes(q);
       }
       return true;
     });

@@ -5,6 +5,7 @@ import { fetchAggregatedRestaurantPlaces } from "../../utils/visitPlacesApi.js";
 import { supabase } from "../../config/supabaseClient.js";
 import { FLAGS } from "../../constants/cuisineConstants.js";
 import { CuisineInput } from "../CuisineInput.jsx";
+import { resolveCity } from "../CityInput.jsx";
 
 const DEFAULT_WEIGHTS = { taste: 50, bpb: 40, wait: 10 };
 
@@ -126,13 +127,17 @@ export function PlacePickerModal({
     () => topFromVisits(myVisits, theirVisits, "cuisine"),
     [myVisits, theirVisits],
   );
-  const userCities = useMemo(
-    () => topFromVisits(myVisits, theirVisits, "city"),
-    [myVisits, theirVisits],
-  );
+  const userCities = useMemo(() => {
+    const counts = {};
+    for (const v of [...(myVisits || []), ...(theirVisits || [])]) {
+      const val = resolveCity(v.city || "");
+      if (val) counts[val] = (counts[val] || 0) + 1;
+    }
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k]) => k);
+  }, [myVisits, theirVisits]);
   // Full city list from globalCache — used for text-filtering when user types
   const allCities = useMemo(
-    () => [...new Set((globalCache.restaurants || []).map(p => p.city).filter(Boolean))].sort(),
+    () => [...new Set((globalCache.restaurants || []).map(p => resolveCity(p.city || "")).filter(Boolean))].sort(),
     [cacheReady], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
@@ -152,7 +157,7 @@ export function PlacePickerModal({
         if (visitTab === "neither" && (inMine || inTheirs)) return false;
         if (visitTab === "onlyMine" && (!inMine || inTheirs)) return false;
         if (visitTab === "onlyTheirs" && (inMine || !inTheirs)) return false;
-        if (city && city !== "Anywhere" && place.city !== city) return false;
+        if (city && city !== "Anywhere" && resolveCity(place.city || "") !== resolveCity(city)) return false;
         if (cuisine && cuisine !== "Anything") {
           if (!place.cuisine) return false;
           if (place.cuisine !== cuisine && place.cuisine2 !== cuisine) return false;

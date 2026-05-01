@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { resolveCity } from "../CityInput.jsx";
 import { useLang } from "../../contexts/LangContext.jsx";
 import { supabase } from "../../config/supabaseClient.js";
 import {
@@ -157,7 +158,7 @@ export function ExploreGlobalSection({ user, restaurantWeights, drinkWeights, sw
   const cityCounts = useMemo(() => {
     const m = new Map();
     baseRows.forEach((p) => {
-      const c = p.city || "NYC";
+      const c = resolveCity(p.city || "") || "New York City";
       m.set(c, (m.get(c) || 0) + 1);
     });
     return [...m.entries()].sort((a, b) => b[1] - a[1]);
@@ -167,7 +168,7 @@ export function ExploreGlobalSection({ user, restaurantWeights, drinkWeights, sw
 
   const rows = useMemo(() => {
     return baseRows
-      .filter((p) => cityFilter.size === 0 || cityFilter.has(p.city || "NYC"))
+      .filter((p) => cityFilter.size === 0 || cityFilter.has(resolveCity(p.city || "") || "New York City"))
       .filter((p) => tiers.size === 0 || tiers.has(scoreLabel(p.bite, t)))
       .filter((p) => {
         if (!search.trim()) return true;

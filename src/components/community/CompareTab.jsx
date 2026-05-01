@@ -333,6 +333,14 @@ export function CompareTab({ user, myWeights, initialTarget, onClearTarget, onFo
   if (!target) {
     return (
       <div>
+        <button
+          type="button"
+          onClick={() => navigate("/community/people/taste-buds")}
+          style={{
+            fontSize: 12, color: "#888780", background: "none", border: "none",
+            cursor: "pointer", padding: 0, marginBottom: 12,
+          }}
+        >{t.backToBuds || "← Back to Buds"}</button>
         <p style={{ fontSize: 12, color: "#888780", margin: "0 0 12px" }}>
           {t.pickTasteBudToCompare || "Pick a Taste Bud to compare scores."}
         </p>

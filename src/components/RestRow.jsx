@@ -36,7 +36,7 @@ export function RestRow({ e, display, onEdit, onDelete, user, visits = 1, group,
         fontSize: 11, padding: "1px 6px", borderRadius: 8,
         background: "rgba(91,155,213,0.12)", color: "#5B9BD5",
         border: "0.5px solid rgba(91,155,213,0.25)",
-      }}>📍 {e.city || "NYC"}</span>
+      }}>📍 {e.city || "New York City"}</span>
     </>
   );
 

@@ -64,14 +64,14 @@ import { ConfirmSheet } from "./components/ConfirmSheet.jsx";
 import { OnboardingModal } from "./components/OnboardingModal.jsx";
 import { TasteBudsPromptSheet } from "./components/TasteBudsPromptSheet.jsx";
 const GUEST_PALETTE_ENTRIES = [
-  {id:"gp1",name:"Lilia",             cuisine:"Italian",        letter:"I",city:"NYC",taste:9.2,cost:120,portions:2,wait:20,repeatability:3,useR:true,notes:""},
-  {id:"gp2",name:"Don Angie",         cuisine:"Italian",        letter:"I",city:"NYC",taste:8.8,cost:95, portions:2,wait:15,repeatability:3,useR:true,notes:""},
-  {id:"gp3",name:"Lucali",            cuisine:"Italian",        letter:"I",city:"NYC",taste:9.5,cost:55, portions:2,wait:45,repeatability:3,useR:true,notes:""},
-  {id:"gp4",name:"Ugly Bagel",        cuisine:"American",       letter:"A",city:"NYC",taste:8.5,cost:22, portions:1,wait:10,repeatability:2,useR:true,notes:""},
-  {id:"gp5",name:"Superiority Burger",cuisine:"American",       letter:"A",city:"NYC",taste:8.1,cost:18, portions:1,wait:12,repeatability:2,useR:true,notes:""},
-  {id:"gp6",name:"Raku",              cuisine:"Japanese",       letter:"J",city:"NYC",taste:8.7,cost:75, portions:1,wait:25,repeatability:3,useR:true,notes:""},
-  {id:"gp7",name:"Xi'an Famous",      cuisine:"Chinese",        letter:"C",city:"NYC",taste:8.2,cost:28, portions:1,wait:8, repeatability:2,useR:true,notes:""},
-  {id:"gp8",name:"Sammy's Halal",     cuisine:"Middle Eastern", letter:"M",city:"NYC",taste:7.8,cost:14, portions:1,wait:5, repeatability:2,useR:true,notes:""},
+  {id:"gp1",name:"Lilia",             cuisine:"Italian",        letter:"I",city:"New York City",taste:9.2,cost:120,portions:2,wait:20,repeatability:3,useR:true,notes:""},
+  {id:"gp2",name:"Don Angie",         cuisine:"Italian",        letter:"I",city:"New York City",taste:8.8,cost:95, portions:2,wait:15,repeatability:3,useR:true,notes:""},
+  {id:"gp3",name:"Lucali",            cuisine:"Italian",        letter:"I",city:"New York City",taste:9.5,cost:55, portions:2,wait:45,repeatability:3,useR:true,notes:""},
+  {id:"gp4",name:"Ugly Bagel",        cuisine:"American",       letter:"A",city:"New York City",taste:8.5,cost:22, portions:1,wait:10,repeatability:2,useR:true,notes:""},
+  {id:"gp5",name:"Superiority Burger",cuisine:"American",       letter:"A",city:"New York City",taste:8.1,cost:18, portions:1,wait:12,repeatability:2,useR:true,notes:""},
+  {id:"gp6",name:"Raku",              cuisine:"Japanese",       letter:"J",city:"New York City",taste:8.7,cost:75, portions:1,wait:25,repeatability:3,useR:true,notes:""},
+  {id:"gp7",name:"Xi'an Famous",      cuisine:"Chinese",        letter:"C",city:"New York City",taste:8.2,cost:28, portions:1,wait:8, repeatability:2,useR:true,notes:""},
+  {id:"gp8",name:"Sammy's Halal",     cuisine:"Middle Eastern", letter:"M",city:"New York City",taste:7.8,cost:14, portions:1,wait:5, repeatability:2,useR:true,notes:""},
 ];
 
 function GuestPreview({ message, onSignIn, children }) {
@@ -805,14 +805,14 @@ export default function App() {
   const restaurantCityCounts = useMemo(() => {
     const m = new Map();
     st.entries.forEach((e) => {
-      const c = resolveCity(e.city || "") || "NYC";
+      const c = resolveCity(e.city || "") || "New York City";
       m.set(c, (m.get(c) || 0) + 1);
     });
     return [...m.entries()].sort((a, b) => b[1] - a[1]);
   }, [st.entries]);
   const filtered = sortedR.filter(e=>{
     if(tiers.size>0&&!tiers.has(scoreLabel(calcBiteOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights,e.currency_code||"USD"),t)))return false;
-    if(cityFilter.size>0&&!cityFilter.has(resolveCity(e.city||"")||"NYC"))return false;
+    if(cityFilter.size>0&&!cityFilter.has(resolveCity(e.city||"")||"New York City"))return false;
     if(search.trim()){const q=search.trim().toLowerCase();return e.name.toLowerCase().includes(q)||e.cuisine.toLowerCase().includes(q)||(e.city||'NYC').toLowerCase().includes(q)||(e.notes&&e.notes.toLowerCase().includes(q));}
     return true;
   });
@@ -822,7 +822,7 @@ export default function App() {
     const m = new Map();
     cafes.forEach((e) => {
       if (!DRINK_CATS.includes(e.category)) return;
-      const c = resolveCity(e.city || "") || "NYC";
+      const c = resolveCity(e.city || "") || "New York City";
       m.set(c, (m.get(c) || 0) + 1);
     });
     return [...m.entries()].sort((a, b) => b[1] - a[1]);
@@ -839,8 +839,8 @@ export default function App() {
   }).filter(e=>{
     if(cafeFilterMilk&&e.milkLevel!==cafeFilterMilk)return false;
     if(cafeFilterBean){const origins=Array.isArray(e.beanRegion)?e.beanRegion:(e.beanRegion?[e.beanRegion]:[]);if(!origins.some(o=>regionOf(o)===cafeFilterBean))return false;}
-    if(cafeCityFilter.size>0&&!cafeCityFilter.has(resolveCity(e.city||"")||"NYC"))return false;
-    if(cafeSearch.trim()){const q=cafeSearch.trim().toLowerCase();return e.name.toLowerCase().includes(q)||e.order.toLowerCase().includes(q)||(e.city||"NYC").toLowerCase().includes(q);}
+    if(cafeCityFilter.size>0&&!cafeCityFilter.has(resolveCity(e.city||"")||"New York City"))return false;
+    if(cafeSearch.trim()){const q=cafeSearch.trim().toLowerCase();return e.name.toLowerCase().includes(q)||e.order.toLowerCase().includes(q)||(e.city||"New York City").toLowerCase().includes(q);}
     return true;
   });
 
@@ -848,7 +848,7 @@ export default function App() {
     const m = new Map();
     cafes.forEach((e) => {
       if (e.category !== "Sweets") return;
-      const c = resolveCity(e.city || "") || "NYC";
+      const c = resolveCity(e.city || "") || "New York City";
       m.set(c, (m.get(c) || 0) + 1);
     });
     return [...m.entries()].sort((a, b) => b[1] - a[1]);
@@ -873,8 +873,8 @@ export default function App() {
     return sweetsSortAsc?-d:d;
   }).filter(e=>{
     if(sweetsTiers.size>0&&!sweetsTiers.has(scoreLabel(calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,sweetWeights,e.currency_code||"USD"),t)))return false;
-    if(sweetsCityFilter.size>0&&!sweetsCityFilter.has(resolveCity(e.city||"")||"NYC"))return false;
-    if(sweetsSearch.trim()){const q=sweetsSearch.trim().toLowerCase();return e.name.toLowerCase().includes(q)||e.order.toLowerCase().includes(q)||(e.city||"NYC").toLowerCase().includes(q);}
+    if(sweetsCityFilter.size>0&&!sweetsCityFilter.has(resolveCity(e.city||"")||"New York City"))return false;
+    if(sweetsSearch.trim()){const q=sweetsSearch.trim().toLowerCase();return e.name.toLowerCase().includes(q)||e.order.toLowerCase().includes(q)||(e.city||"New York City").toLowerCase().includes(q);}
     return true;
   });
 
@@ -1512,7 +1512,7 @@ export default function App() {
       {pathname==="/add"&&!user&&(
         <GuestPreview message="Sign in to start logging your own ratings" onSignIn={() => setShowAuthModal(true)}>
           <RestForm
-            initial={{...INIT_REST, city:"NYC"}}
+            initial={{...INIT_REST, city:"New York City"}}
             weights={weights}
             existingEntries={[]}
             existingCities={[]}
