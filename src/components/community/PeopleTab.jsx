@@ -437,9 +437,9 @@ export function PeopleTab({ user, myWeights, onCompareWith, onMarkFollowersSeen,
     [tasteBuds],
   );
 
-  /** One-way following (you follow them, they don't follow back) sorted alphabetically. */
+  /** Everyone I follow, sorted alphabetically (one-way + taste buds combined). */
   const followingOnly = useMemo(
-    () => following.filter((f) => !f.isMutual).sort(byDisplayName),
+    () => [...following].sort(byDisplayName),
     [following],
   );
 
@@ -624,7 +624,7 @@ export function PeopleTab({ user, myWeights, onCompareWith, onMarkFollowersSeen,
         <div>
           {followingOnly.length === 0 && (
             <p style={{ fontSize: 12, color: "#888780", margin: "0 0 16px" }}>
-              {t.noOneWayFollowing || "Not following anyone one-way. People you follow who follow back appear under Taste Buds."}
+              {t.noFollowingYet || "Not following anyone yet. Find people under Discover."}
             </p>
           )}
           {followingOnly.length > 0 && followingFiltered.length === 0 && (

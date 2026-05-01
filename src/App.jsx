@@ -189,17 +189,24 @@ export default function App() {
 
   useEffect(() => {
     if (!profile) return;
-    setOnboardingDone(profile.has_completed_onboarding ?? true);
+    // localStorage acts as a fast synchronous override: if the user has ever
+    // dismissed/completed onboarding on this device, skip the modal even if
+    // the DB write hasn't propagated yet (race condition on quick refresh).
+    let locallyDone = false;
+    try { locallyDone = !!localStorage.getItem(`bite_welcomeDismissed_${user?.id}`); } catch {}
+    setOnboardingDone(locallyDone || (profile.has_completed_onboarding ?? true));
     setTasteBudsDone(profile.has_seen_taste_buds_prompt ?? true);
-  }, [profile?.has_completed_onboarding, profile?.has_seen_taste_buds_prompt]);
+  }, [profile?.has_completed_onboarding, profile?.has_seen_taste_buds_prompt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Persist "seen" the moment the signed-in OnboardingModal first renders so a
-  // mid-flow refresh or tab-close doesn't loop back to card 0. React state stays
-  // false this session so the modal keeps showing; on next page load DB returns
-  // true and the modal is skipped.
+  // mid-flow refresh or tab-close doesn't loop back to card 0. Sets localStorage
+  // synchronously so next load skips the modal immediately, then fires the DB
+  // write asynchronously.
   useEffect(() => {
     if (!user?.id || onboardingDone !== false || !authReady) return;
-    supabase.from("profiles").update({ has_completed_onboarding: true }).eq("id", user.id);
+    try { localStorage.setItem(`bite_welcomeDismissed_${user.id}`, "1"); } catch {}
+    supabase.from("profiles").update({ has_completed_onboarding: true }).eq("id", user.id)
+      .then(({ error }) => { if (error) console.warn("[BITE] mark onboarding seen:", error.message); });
   }, [user?.id, onboardingDone, authReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -358,6 +365,14 @@ export default function App() {
         entryType: tag?.entry_type || meta.entry_type || "restaurant",
       });
     });
+  }
+
+  function handleDineTagBackTap(notif) {
+    setShowNotifPanel(false);
+    const p = notif.fromProfile;
+    if (!p) return;
+    setExtUserLogTarget(p);
+    navigate("/community/people");
   }
 
   async function handleDineTagMutualBack(notif) {
@@ -1073,6 +1088,7 @@ export default function App() {
                   onRefetch={refetchNotifications}
                   onOpenProfile={handleOpenNotifProfile}
                   onDineTagTap={handleDineTagTap}
+                  onDineTagBackTap={handleDineTagBackTap}
                   onHeartTap={handleHeartTap}
                   onTagMutualBack={handleDineTagMutualBack}
                   sheetOpen={!!notifSheetProfile || !!heartSheetTarget}
