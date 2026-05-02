@@ -154,6 +154,12 @@ export default function App() {
   /** Tap-target for heart-reaction notifications. When set, FeedPostSheet
    *  mounts and renders the hearted post as a single read-only card. */
   const [heartSheetTarget, setHeartSheetTarget] = useState(null);
+  /** Tap-target for tag-back notifications (`dine_tag_back` /
+   *  `dine_tag_accepted`). Sends the user to /community/feed and tells
+   *  FeedTab to scroll the matching post into view. If the post isn't in
+   *  the viewer's mutual-only feed, FeedTab falls back to opening
+   *  FeedPostSheet over the feed (with hearts enabled). */
+  const [feedScrollTarget, setFeedScrollTarget] = useState(null);
   const [dineTags, setDineTags] = useState([]);
   const [dineTagCount, setDineTagCount] = useState(0);
   const [dineTagsReady, setDineTagsReady] = useState(false);
@@ -194,16 +200,21 @@ export default function App() {
   useEffect(() => {
     if (!profile || !user?.id) return;
     if (profile.pref_weight_taste && profile.pref_weight_bpb && profile.pref_weight_wait) {
-      const w = normalizeWeights({
-        taste: profile.pref_weight_taste,
-        bpb: profile.pref_weight_bpb,
-        wait: profile.pref_weight_wait,
-      });
-      setWeights(w);
-      try {
-        localStorage.setItem(`bite_restaurantWeights_${user.id}`, JSON.stringify(w));
-        localStorage.setItem("bite_restaurantWeights_bootstrap", JSON.stringify(w));
-      } catch {}
+      // Only apply Supabase weights if this device has no local override yet (new device scenario).
+      let hasLocal = false;
+      try { hasLocal = !!localStorage.getItem(`bite_restaurantWeights_${user.id}`); } catch {}
+      if (!hasLocal) {
+        const w = normalizeWeights({
+          taste: profile.pref_weight_taste,
+          bpb: profile.pref_weight_bpb,
+          wait: profile.pref_weight_wait,
+        });
+        setWeights(w);
+        try {
+          localStorage.setItem(`bite_restaurantWeights_${user.id}`, JSON.stringify(w));
+          localStorage.setItem("bite_restaurantWeights_bootstrap", JSON.stringify(w));
+        } catch {}
+      }
     }
   }, [profile?.pref_weight_taste, profile?.pref_weight_bpb, profile?.pref_weight_wait]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -388,8 +399,22 @@ export default function App() {
     });
   }
 
+  /** entry_type in notification meta is "restaurant" | "cafe"; the feed's
+   *  post.kind is "rest" | "cafe". Normalize for FeedTab's scroll target. */
+  function entryTypeToKind(t) {
+    return t === "cafe" ? "cafe" : "rest";
+  }
+
   function handleDineTagBackTap(notif) {
     setShowNotifPanel(false);
+    const meta = notif.meta || {};
+    if (meta.entry_id && meta.entry_type) {
+      setFeedScrollTarget({ postId: meta.entry_id, postType: meta.entry_type, kind: entryTypeToKind(meta.entry_type) });
+      navigate("/community/feed");
+      return;
+    }
+    // Legacy notifications without entry_id — fall back to opening the
+    // friend's profile so the user can still find the post manually.
     const p = notif.fromProfile;
     if (!p) return;
     setExtUserLogTarget(p);
@@ -405,7 +430,8 @@ export default function App() {
     setShowNotifPanel(false);
     const meta = notif.meta || {};
     if (!meta.entry_id || !meta.entry_type) return;
-    setHeartSheetTarget({ postId: meta.entry_id, postType: meta.entry_type });
+    setFeedScrollTarget({ postId: meta.entry_id, postType: meta.entry_type, kind: entryTypeToKind(meta.entry_type) });
+    navigate("/community/feed");
   }
 
   async function handleDineTagMutualBack(notif) {
@@ -414,7 +440,7 @@ export default function App() {
     const restaurantName = notif.meta?.restaurant_name || "";
     const [{ data: incomingTag }, { data: outgoingTag }] = await Promise.all([
       supabase.from("dine_with_tags").select("id").eq("tagger_id", fromUserId).eq("tagged_id", user.id).ilike("restaurant_name", restaurantName).eq("dismissed", false).maybeSingle(),
-      supabase.from("dine_with_tags").select("id").eq("tagger_id", user.id).eq("tagged_id", fromUserId).ilike("restaurant_name", restaurantName).maybeSingle(),
+      supabase.from("dine_with_tags").select("id, entry_id, entry_type").eq("tagger_id", user.id).eq("tagged_id", fromUserId).ilike("restaurant_name", restaurantName).maybeSingle(),
     ]);
     await Promise.all([
       incomingTag && dismissDineTag(supabase, incomingTag.id),
@@ -422,7 +448,12 @@ export default function App() {
       supabase.from("notifications").insert({
         user_id: fromUserId, from_user_id: user.id,
         type: "dine_tag_back",
-        meta: { restaurant_name: restaurantName, city: notif.meta?.city || "" },
+        meta: {
+          restaurant_name: restaurantName,
+          city: notif.meta?.city || "",
+          entry_id: outgoingTag?.entry_id || null,
+          entry_type: outgoingTag?.entry_type || null,
+        },
       }),
     ].filter(Boolean));
     setDineTags((prev) => prev.filter((t) => t.tagger_id !== fromUserId || (t.restaurant_name || "").toLowerCase() !== restaurantName.toLowerCase()));
@@ -1502,6 +1533,8 @@ export default function App() {
           onExternalUserLogConsumed={() => setExtUserLogTarget(null)}
           externalCompareTarget={extCompareTarget}
           onExternalCompareConsumed={() => setExtCompareTarget(null)}
+          externalFeedScrollTarget={feedScrollTarget}
+          onExternalFeedScrollConsumed={() => setFeedScrollTarget(null)}
           onSignIn={() => setShowAuthModal(true)}
           myDisplayName={profile?.display_name || ""}
         />
@@ -1764,6 +1797,13 @@ export default function App() {
                             restaurant_name: e.name, city: e.city||"", cuisine: e.cuisine||"",
                             dismissed: true,
                           }, { onConflict: "entry_id,tagger_id,tagged_id", ignoreDuplicates: true }),
+                          // Loop closed — clear the original tag from this user's banner.
+                          supabase.from("dine_with_tags")
+                            .update({ dismissed: true })
+                            .eq("tagger_id", sourceTaggerId)
+                            .eq("tagged_id", user.id)
+                            .ilike("restaurant_name", e.name)
+                            .eq("dismissed", false),
                           supabase.from("notifications").insert({
                             user_id: sourceTaggerId, from_user_id: user.id,
                             type: "dine_tag_accepted",
@@ -1772,6 +1812,7 @@ export default function App() {
                         ]);
                         fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
                       }
+                      refreshDineTags();
                       formStateRef.current = null;
                       navigate("/log");
                     }
@@ -1825,6 +1866,13 @@ export default function App() {
                         restaurant_name: e.name, city: e.city||"", cuisine: e.category||"",
                         dismissed: true,
                       }, { onConflict: "entry_id,tagger_id,tagged_id", ignoreDuplicates: true }),
+                      // Loop closed — clear the original tag from this user's banner.
+                      supabase.from("dine_with_tags")
+                        .update({ dismissed: true })
+                        .eq("tagger_id", sourceTaggerId)
+                        .eq("tagged_id", user.id)
+                        .ilike("restaurant_name", e.name)
+                        .eq("dismissed", false),
                       supabase.from("notifications").insert({
                         user_id: sourceTaggerId, from_user_id: user.id,
                         type: "dine_tag_accepted",
@@ -1833,6 +1881,7 @@ export default function App() {
                     ]);
                     fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
                   }
+                  refreshDineTags();
                   formStateRef.current = null;
                   navigate(e.category==="Sweets"?"/log/sweets":"/log/drinks");
                 }}
