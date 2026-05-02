@@ -582,23 +582,14 @@ export function AuthModal({ open, onClose }) {
           /* ── Profile view ── */
           <div>
             <div style={{ textAlign: "center", marginBottom: 12 }}>
-              {profile?.avatar_url ? (
-                <img
-                  src={profile.avatar_url}
-                  alt=""
-                  referrerPolicy="no-referrer"
-                  style={{ width: 56, height: 56, borderRadius: "50%", objectFit: "cover", border: "0.5px solid rgba(255,255,255,0.12)", marginBottom: 8 }}
-                />
-              ) : (
-                <div style={{
-                  width: 56, height: 56, borderRadius: "50%",
-                  background: "#3C1F13", color: "#F0997B",
-                  display: "inline-flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 22, fontWeight: 600, lineHeight: 1, marginBottom: 8,
-                }}>
-                  {((profile?.display_name || usernameTrim || username || user?.email || "?")).charAt(0).toUpperCase()}
-                </div>
-              )}
+              <div style={{
+                width: 56, height: 56, borderRadius: "50%",
+                background: "#3C1F13", color: "#F0997B",
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                fontSize: 22, fontWeight: 600, lineHeight: 1, marginBottom: 8,
+              }}>
+                {((profile?.display_name || usernameTrim || username || user?.email || "?")).charAt(0).toUpperCase()}
+              </div>
               <div style={{ fontSize: 16, fontWeight: 600, color: "#F1EFE8", lineHeight: 1.2 }}>
                 {profile?.display_name || username || user?.email?.split("@")[0] || "—"}
               </div>
