@@ -59,9 +59,9 @@ function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile, onDineTagTap,
     : isDineTagMutual
       ? `@${p?.username || "someone"} tagged you at ${restaurantName}. Looks like you already logged! Tag them back?`
       : isDineTagBack
-        ? `@${p?.username || "someone"} tagged you back at ${restaurantName} 🤝`
+        ? `@${p?.username || "someone"} tagged you back at ${restaurantName}. see their BITE Score`
         : isDineTagAccepted
-          ? `@${p?.username || "someone"} logged ${restaurantName} 🍽`
+          ? `@${p?.username || "someone"} tagged you back at ${restaurantName}. see their BITE Score`
           : isHeartReaction
             ? `@${p?.username || "someone"} hearted your BITE at ${restaurantName} ❤️`
             : isTasteBuds
