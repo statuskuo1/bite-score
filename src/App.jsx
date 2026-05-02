@@ -621,9 +621,18 @@ export default function App() {
   }
   const [search, setSearch] = useState("");
   const [contextRestaurant, setContextRestaurant] = useState(null); // { name, idx } for ±3 ranking view
-  const [weights, setWeights] = useState({...RESTAURANT_WEIGHT_DEFAULTS});
-  const [drinkWeights, setDrinkWeights] = useState({...CAFE_WEIGHT_DEFAULTS});
-  const [sweetWeights, setSweetWeights] = useState({...CAFE_WEIGHT_DEFAULTS});
+  const [weights, setWeights] = useState(() => {
+    try { const v = localStorage.getItem("bite_restaurantWeights_bootstrap"); if (v) return normalizeWeights(JSON.parse(v)); } catch {}
+    return { ...RESTAURANT_WEIGHT_DEFAULTS };
+  });
+  const [drinkWeights, setDrinkWeights] = useState(() => {
+    try { const v = localStorage.getItem("bite_drinkWeights_bootstrap"); if (v) return normalizeWeights(JSON.parse(v)); } catch {}
+    return { ...CAFE_WEIGHT_DEFAULTS };
+  });
+  const [sweetWeights, setSweetWeights] = useState(() => {
+    try { const v = localStorage.getItem("bite_sweetWeights_bootstrap"); if (v) return normalizeWeights(JSON.parse(v)); } catch {}
+    return { ...CAFE_WEIGHT_DEFAULTS };
+  });
   const [questL, setQuestL] = useState(new Set());
   const [cafeSortBy, setCafeSortBy] = useState("bite");
   const [cafeSortAsc, setCafeSortAsc] = useState(false);
@@ -750,7 +759,7 @@ export default function App() {
     const next = { ...weights, [k]: nv };
     setWeights(next);
     if (user?.id) {
-      try { localStorage.setItem(`bite_restaurantWeights_${user.id}`, JSON.stringify(next)); }
+      try { localStorage.setItem(`bite_restaurantWeights_${user.id}`, JSON.stringify(next)); localStorage.setItem("bite_restaurantWeights_bootstrap", JSON.stringify(next)); }
       catch (e) { console.error("restaurant weights save:", e); }
       supabase.from("profiles").update({
         pref_weight_taste: next.taste,
@@ -764,7 +773,7 @@ export default function App() {
     const next = { ...defaults };
     setWeights(next);
     if (user?.id) {
-      try { localStorage.setItem(`bite_restaurantWeights_${user.id}`, JSON.stringify(next)); }
+      try { localStorage.setItem(`bite_restaurantWeights_${user.id}`, JSON.stringify(next)); localStorage.setItem("bite_restaurantWeights_bootstrap", JSON.stringify(next)); }
       catch (e) { console.error("restaurant weights save:", e); }
       supabase.from("profiles").update({
         pref_weight_taste: next.taste,
@@ -778,7 +787,7 @@ export default function App() {
     const clamped = clampWeights(next);
     setWeights(clamped);
     if (user?.id) {
-      try { localStorage.setItem(`bite_restaurantWeights_${user.id}`, JSON.stringify(clamped)); }
+      try { localStorage.setItem(`bite_restaurantWeights_${user.id}`, JSON.stringify(clamped)); localStorage.setItem("bite_restaurantWeights_bootstrap", JSON.stringify(clamped)); }
       catch (e) { console.error("restaurant weights save:", e); }
       supabase.from("profiles").update({
         pref_weight_taste: clamped.taste,
@@ -809,7 +818,7 @@ export default function App() {
     const clamped = clampWeights(next);
     setDrinkWeights(clamped);
     if (user?.id) {
-      try { localStorage.setItem(`bite_drinkWeights_${user.id}`, JSON.stringify(clamped)); }
+      try { localStorage.setItem(`bite_drinkWeights_${user.id}`, JSON.stringify(clamped)); localStorage.setItem("bite_drinkWeights_bootstrap", JSON.stringify(clamped)); }
       catch (e) { console.error("drink weights save:", e); }
     }
   }
@@ -817,7 +826,7 @@ export default function App() {
     const clamped = clampWeights(next);
     setSweetWeights(clamped);
     if (user?.id) {
-      try { localStorage.setItem(`bite_sweetWeights_${user.id}`, JSON.stringify(clamped)); }
+      try { localStorage.setItem(`bite_sweetWeights_${user.id}`, JSON.stringify(clamped)); localStorage.setItem("bite_sweetWeights_bootstrap", JSON.stringify(clamped)); }
       catch (e) { console.error("sweet weights save:", e); }
     }
   }
