@@ -261,6 +261,7 @@ export function PeopleTab({ user, myWeights, onCompareWith, onMarkFollowersSeen,
   const [followers, setFollowers] = useState([]);
   const [tasteBuds, setTasteBuds] = useState([]);
   const [busyById, setBusyById] = useState({});
+  const [seenPendingCount, setSeenPendingCount] = useState(null);
   const [myVisits, setMyVisits] = useState(() =>
     myRestVisitsCache.userId === user?.id ? myRestVisitsCache.data : [],
   );
@@ -432,6 +433,10 @@ export function PeopleTab({ user, myWeights, onCompareWith, onMarkFollowersSeen,
     [followers],
   );
 
+  useEffect(() => {
+    if (section === "discover") setSeenPendingCount(pendingFollowers.length);
+  }, [section, pendingFollowers.length]);
+
   /** Taste Buds (mutual) sorted alphabetically. */
   const tasteBudsSorted = useMemo(
     () => [...tasteBuds].sort(byDisplayName),
@@ -552,7 +557,10 @@ export function PeopleTab({ user, myWeights, onCompareWith, onMarkFollowersSeen,
       }}>
         {SECTIONS.map((s) => {
           const on = section === s.key;
-          const showDot = s.key === "discover" && pendingFollowers.length > 0;
+          const showDot = s.key === "discover"
+            && pendingFollowers.length > 0
+            && section !== "discover"
+            && (seenPendingCount === null || pendingFollowers.length > seenPendingCount);
           return (
             <button
               key={s.key}

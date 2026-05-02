@@ -52,6 +52,7 @@ export async function insertDineTag(client, { taggerId, taggedId, entryId, entry
     if (notify) {
       // If the tagged user already has an outgoing tag back to us, this is a mutual
       // confirmation — use dine_tag_back so they don't see "all bark no bite" again.
+      const since8h = new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString();
       const { data: reverseRow } = await client
         .from("dine_with_tags")
         .select("id")
@@ -59,6 +60,7 @@ export async function insertDineTag(client, { taggerId, taggedId, entryId, entry
         .eq("tagged_id", taggerId)
         .ilike("restaurant_name", restaurantName)
         .eq("dismissed", false)
+        .gte("created_at", since8h)
         .maybeSingle();
 
       const { error: nErr } = await client.from("notifications").insert({

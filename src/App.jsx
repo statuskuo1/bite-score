@@ -620,6 +620,7 @@ export default function App() {
     try { localStorage.setItem(`bite_lastUsedCity_${user.id}`, city); } catch {}
   }
   const [search, setSearch] = useState("");
+  const [contextRestaurant, setContextRestaurant] = useState(null); // { name, idx } for ±3 ranking view
   const [weights, setWeights] = useState({...RESTAURANT_WEIGHT_DEFAULTS});
   const [drinkWeights, setDrinkWeights] = useState({...CAFE_WEIGHT_DEFAULTS});
   const [sweetWeights, setSweetWeights] = useState({...CAFE_WEIGHT_DEFAULTS});
@@ -947,6 +948,33 @@ export default function App() {
     }).sort((a, b) => sortAsc ? a.sortVal - b.sortVal : b.sortVal - a.sortVal);
   }, [filtered, sortBy, sortAsc, weights]);
 
+  // Full unfiltered rank list for the ±3 context feature (no search/tier/city filters).
+  const restaurantGroupsAll = useMemo(() => {
+    const groups = {};
+    sortedR.forEach((e) => { const k = e.name; if (!groups[k]) groups[k] = []; groups[k].push(e); });
+    return Object.values(groups).map((grp) => {
+      const e = grp[grp.length - 1];
+      const biteVals = grp.map((x) => calcBiteOutOf10(x.taste, x.cost, x.portions, x.wait, x.useR, x.repeatability, weights, x.currency_code||"USD")).filter((v) => v != null);
+      const avgBite = biteVals.length ? biteVals.reduce((a, b) => a + b, 0) / biteVals.length : 0;
+      const avgTaste = grp.reduce((a, x) => a + x.taste, 0) / grp.length;
+      const avgBpb = grp.reduce((a, x) => a + (x.cost / x.portions), 0) / grp.length;
+      const avgWait = grp.reduce((a, x) => a + x.wait, 0) / grp.length;
+      const avgRepeat = grp.reduce((a, x) => a + x.repeatability, 0) / grp.length;
+      const visits = grp.length;
+      const sortVal = sortBy === "taste" ? avgTaste
+        : sortBy === "bpb" ? -avgBpb
+        : sortBy === "wait" ? -avgWait
+        : sortBy === "repeat" ? avgRepeat + (visits * 0.001)
+        : avgBite;
+      return { grp, e, sortVal };
+    }).sort((a, b) => sortAsc ? a.sortVal - b.sortVal : b.sortVal - a.sortVal);
+  }, [sortedR, sortBy, sortAsc, weights]);
+
+  const restaurantRankMap = useMemo(
+    () => new Map(restaurantGroupsAll.map(({ e }, i) => [e.name, i + 1])),
+    [restaurantGroupsAll],
+  );
+
   const drinkGroups = useMemo(() => {
     const groups = {};
     sortedDrinks.forEach((e) => { const k = e.name; if (!groups[k]) groups[k] = []; groups[k].push(e); });
@@ -1231,7 +1259,7 @@ export default function App() {
                 selectedCities={cityFilter}
                 onCitiesChange={setCityFilter}
                 search={search}
-                onSearch={setSearch}
+                onSearch={(v)=>{setSearch(v);setContextRestaurant(null);}}
                 filterContent={
                   <>
                     <div style={{padding:"6px 10px",borderBottom:"0.5px solid rgba(255,255,255,0.1)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -1256,23 +1284,64 @@ export default function App() {
                 onToggleSortAsc={()=>setSortAsc(a=>!a)}
               />
               {filtered.length===0&&<p style={{color:"#888780",fontSize:14}}>{sortedR.length===0?t.noRestaurantsYet:t.noEntries}</p>}
-              {restaurantGroupsPage.visible.map(({grp,e})=>{
-                const visits=grp.length;
-                const display=getDisplay(e);
-                return (
-                  <RestRow key={e.id} e={e} display={display} user={user} visits={visits} group={grp} weights={weights} homeCurrency={homeCurrency} dinedWithForEntry={(id)=>dinedWithMap.get(id)||[]}
-                    onEdit={v=>{const entry=v||e;setEditR(entry);setEditDineWith(dinedWithMap.get(entry.id)||[]);window.scrollTo({top:0,behavior:"smooth"});}}
-                    onDelete={id=>{
-                      const did=id||e.id;
-                      const row=st.entries.find(x=>x.id===did);
-                      if(!canMutateVisit(row,user))return;
-                      setPendingDelete({onConfirm:async()=>{
-                        try{await supabase.from("restaurant_visits").delete().eq("id",did);}catch(err){console.error("restaurant delete threw:",err);}
-                        dispatch({type:"DEL",id:did});
-                      }});
-                    }}/>
-                );
-              })}
+              {contextRestaurant ? (
+                <div>
+                  <button type="button" onClick={()=>setContextRestaurant(null)} style={{fontSize:12,color:"#F0997B",background:"none",border:"none",cursor:"pointer",padding:"4px 0 10px",display:"flex",alignItems:"center",gap:4}}>
+                    ← Back to full list
+                  </button>
+                  {restaurantGroupsAll.slice(Math.max(0,contextRestaurant.idx-3),contextRestaurant.idx+4).map(({grp,e},i)=>{
+                    const absRank=Math.max(1,contextRestaurant.idx-2)+i;
+                    const isCenter=e.name===contextRestaurant.name;
+                    const visits=grp.length;
+                    const display=getDisplay(e);
+                    return (
+                      <div key={e.id} style={isCenter?{outline:"1.5px solid #F0997B",borderRadius:10,marginBottom:6}:{marginBottom:6}}>
+                        <RestRow rank={absRank} e={e} display={display} user={user} visits={visits} group={grp} weights={weights} homeCurrency={homeCurrency} dinedWithForEntry={(id)=>dinedWithMap.get(id)||[]}
+                          onEdit={v=>{const entry=v||e;setEditR(entry);setEditDineWith(dinedWithMap.get(entry.id)||[]);window.scrollTo({top:0,behavior:"smooth"});}}
+                          onDelete={id=>{
+                            const did=id||e.id;
+                            const row=st.entries.find(x=>x.id===did);
+                            if(!canMutateVisit(row,user))return;
+                            setPendingDelete({onConfirm:async()=>{
+                              try{await supabase.from("restaurant_visits").delete().eq("id",did);}catch(err){console.error("restaurant delete threw:",err);}
+                              dispatch({type:"DEL",id:did});
+                            }});
+                          }}/>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <>
+                  {restaurantGroupsPage.visible.map(({grp,e},i)=>{
+                    const visits=grp.length;
+                    const display=getDisplay(e);
+                    return (
+                      <div key={e.id}>
+                        <RestRow rank={i+1} e={e} display={display} user={user} visits={visits} group={grp} weights={weights} homeCurrency={homeCurrency} dinedWithForEntry={(id)=>dinedWithMap.get(id)||[]}
+                          onEdit={v=>{const entry=v||e;setEditR(entry);setEditDineWith(dinedWithMap.get(entry.id)||[]);window.scrollTo({top:0,behavior:"smooth"});}}
+                          onDelete={id=>{
+                            const did=id||e.id;
+                            const row=st.entries.find(x=>x.id===did);
+                            if(!canMutateVisit(row,user))return;
+                            setPendingDelete({onConfirm:async()=>{
+                              try{await supabase.from("restaurant_visits").delete().eq("id",did);}catch(err){console.error("restaurant delete threw:",err);}
+                              dispatch({type:"DEL",id:did});
+                            }});
+                          }}/>
+                        {search.trim() && (
+                          <button type="button" onClick={()=>{
+                            const idx=restaurantGroupsAll.findIndex(g=>g.e.name===e.name);
+                            if(idx>=0){setSearch("");setContextRestaurant({name:e.name,idx});}
+                          }} style={{fontSize:11,color:"#F0997B",background:"none",border:"none",cursor:"pointer",padding:"2px 0 6px 58px",display:"block"}}>
+                            Show #{restaurantRankMap.get(e.name)} in ranking
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </>
+              )}
               <ShowMoreButton
                 remaining={restaurantGroupsPage.remaining}
                 pageSize={restaurantGroupsPage.pageSize}
@@ -1321,8 +1390,8 @@ export default function App() {
                 onToggleSortAsc={()=>setCafeSortAsc(a=>!a)}
               />
               {!sortedDrinks.length&&<p style={{color:"#888780",fontSize:14}}>{cafes.some(e=>DRINK_CATS.includes(e.category))?t.noEntries:t.noDrinks}</p>}
-              {drinkGroupsPage.visible.map(([name,grp])=>(
-                <CafeGroupRow key={name} group={grp} cafeSortBy={cafeSortBy} weights={drinkWeights} user={user} dinedWithForEntry={(id)=>dinedWithMap.get(id)||[]} onEdit={e=>{setEditC(e);setEditDineWith(dinedWithMap.get(e.id)||[]);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={id=>{
+              {drinkGroupsPage.visible.map(([name,grp],i)=>(
+                <CafeGroupRow key={name} rank={i+1} group={grp} cafeSortBy={cafeSortBy} weights={drinkWeights} user={user} dinedWithForEntry={(id)=>dinedWithMap.get(id)||[]} onEdit={e=>{setEditC(e);setEditDineWith(dinedWithMap.get(e.id)||[]);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={id=>{
                       const row=cafes.find(x=>x.id===id);
                       if(!canMutateVisit(row,user))return;
                       setPendingDelete({onConfirm:async()=>{
@@ -1374,8 +1443,8 @@ export default function App() {
                 onToggleSortAsc={()=>setSweetsSortAsc(a=>!a)}
               />
               {!sortedSweets.length&&<p style={{color:"#888780",fontSize:14}}>{cafes.some(e=>e.category==="Sweets")?t.noEntries:t.noSweets}</p>}
-              {sweetGroupsPage.visible.map(([name,grp])=>(
-                <CafeGroupRow key={name} group={grp} cafeSortBy={sweetsSortBy} weights={sweetWeights} user={user} dinedWithForEntry={(id)=>dinedWithMap.get(id)||[]} onEdit={e=>{setEditC(e);setEditDineWith(dinedWithMap.get(e.id)||[]);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={id=>{
+              {sweetGroupsPage.visible.map(([name,grp],i)=>(
+                <CafeGroupRow key={name} rank={i+1} group={grp} cafeSortBy={sweetsSortBy} weights={sweetWeights} user={user} dinedWithForEntry={(id)=>dinedWithMap.get(id)||[]} onEdit={e=>{setEditC(e);setEditDineWith(dinedWithMap.get(e.id)||[]);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={id=>{
                       const row=cafes.find(x=>x.id===id);
                       if(!canMutateVisit(row,user))return;
                       setPendingDelete({onConfirm:async()=>{

@@ -66,7 +66,7 @@ function roundedRepeat(avgRepeat) {
   return Math.max(0, Math.min(3, Math.round(avgRepeat)));
 }
 
-function TopPickRow({ pick, restaurantWeights }) {
+function TopPickRow({ pick, restaurantWeights, rank }) {
   const { t } = useLang();
   const bite = calcBiteOutOf10(
     pick.avgTaste, pick.avgCost, pick.avgPortions, pick.avgWait,
@@ -76,6 +76,11 @@ function TopPickRow({ pick, restaurantWeights }) {
   const col = tasteColor(pick.avgTaste);
   return (
     <div style={ROW_STYLE}>
+      {rank != null && (
+        <div style={{ width: 22, textAlign: "right", fontSize: 11, fontWeight: 700, color: "#666663", flexShrink: 0, lineHeight: 1 }}>
+          #{rank}
+        </div>
+      )}
       <div style={FLAG_BOX_STYLE}>{flagFor(pick.cuisine, pick.name)}</div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
@@ -285,8 +290,8 @@ export function ExploreTopPicksSection({ user, myEntries = [], restaurantWeights
             : (t.topPicksEmptyAll || "You've already logged everything the community recommends — nice!")}
         </p>
       ) : (
-        topPicks.map((p) => (
-          <TopPickRow key={p.placeId} pick={p} restaurantWeights={restaurantWeights} />
+        topPicks.map((p, i) => (
+          <TopPickRow key={p.placeId} rank={i+1} pick={p} restaurantWeights={restaurantWeights} />
         ))
       )}
     </div>

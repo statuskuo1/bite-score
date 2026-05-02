@@ -7,7 +7,7 @@ import { EntryCard } from "./EntryCard.jsx";
 import { VisitsModal } from "./VisitsModal.jsx";
 import { formatCost } from "../utils/currency.js";
 
-export function RestRow({ e, display, onEdit, onDelete, user, visits = 1, group, weights, showAuthor = false, homeCurrency = "USD", dinedWithForEntry }) {
+export function RestRow({ e, display, onEdit, onDelete, user, visits = 1, group, weights, showAuthor = false, homeCurrency = "USD", dinedWithForEntry, rank }) {
   const { t } = useLang();
   const [showVisits, setShowVisits] = useState(false);
   const flag = FLAGS[e.cuisine] || (e.letter || e.cuisine?.[0])?.toUpperCase() || "?";
@@ -63,6 +63,7 @@ export function RestRow({ e, display, onEdit, onDelete, user, visits = 1, group,
         onDelete={onDelete}
       />
       <EntryCard
+        rank={rank}
         icon={flag}
         title={e.name}
         badges={badges}

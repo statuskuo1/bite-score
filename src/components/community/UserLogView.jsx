@@ -256,9 +256,10 @@ export function UserLogView({ user, targetProfile, restaurantWeights, onBack }) 
         </p>
       )}
 
-      {loaded && groupsPage.visible.map(({ grp, head }) => (
+      {loaded && groupsPage.visible.map(({ grp, head }, i) => (
         <RestRow
           key={head.id}
+          rank={i+1}
           e={head}
           display={getDisplay(head)}
           user={user}

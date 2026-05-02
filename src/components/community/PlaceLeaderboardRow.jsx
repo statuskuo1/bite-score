@@ -20,7 +20,7 @@ import { S } from "../../styles/sharedStyles.js";
  * answers "what does this place look like, on average, to the community?"
  * before the viewer's weights are applied.
  */
-export function PlaceLeaderboardRow({ place, bite, display }) {
+export function PlaceLeaderboardRow({ place, bite, display, rank }) {
   const { t } = useLang();
   const [exp, setExp] = useState(false);
   const isCafe = "category" in place;
@@ -73,6 +73,11 @@ export function PlaceLeaderboardRow({ place, bite, display }) {
           padding: "10px 12px", cursor: "pointer",
         }}
       >
+        {rank != null && (
+          <div style={{ width: 22, textAlign: "right", fontSize: 11, fontWeight: 700, color: "#666663", flexShrink: 0, lineHeight: 1 }}>
+            #{rank}
+          </div>
+        )}
         <div style={{
           width: 36, height: 36, borderRadius: 8,
           background: "#252523", display: "flex", alignItems: "center", justifyContent: "center",

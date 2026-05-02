@@ -277,9 +277,10 @@ export function ExploreGlobalSection({ user, restaurantWeights, drinkWeights, sw
         <p style={{ color: "#888780", fontSize: 14 }}>{t.noEntriesYet}</p>
       )}
 
-      {!loading && rowsPage.visible.map((p) => (
+      {!loading && rowsPage.visible.map((p, i) => (
         <PlaceLeaderboardRow
           key={`${p.placeId}-${p.category || "rest"}`}
+          rank={i+1}
           place={p}
           bite={p.bite}
           display={getDisplay(p)}

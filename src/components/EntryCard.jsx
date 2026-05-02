@@ -34,6 +34,7 @@ export function EntryCard({
   mutable,
   onEdit,
   onDelete,
+  rank,
 }) {
   const [exp, setExp] = useState(false);
   const [showDiners, setShowDiners] = useState(false);
@@ -51,6 +52,11 @@ export function EntryCard({
             padding: "10px 14px", cursor: "pointer",
           }}
         >
+          {rank != null && (
+            <div style={{ width: 22, textAlign: "right", fontSize: 11, fontWeight: 700, color: "#666663", flexShrink: 0, lineHeight: 1 }}>
+              #{rank}
+            </div>
+          )}
           <div style={{
             width: 36, height: 36, borderRadius: 8, background: "#3C1F13",
             display: "flex", alignItems: "center", justifyContent: "center",
