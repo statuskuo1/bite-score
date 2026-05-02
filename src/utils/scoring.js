@@ -85,9 +85,9 @@ export function calcBite(t, cost, portions, w, useR, r, wts, currencyCode = "USD
   return useR ? applyR(base, r) : Math.round(base * 100) / 100;
 }
 
-/** Theoretical best raw BITE for these weights (taste 10, no bpb/wait drag, 3★). Same pipeline as calcBite. */
+/** Theoretical best raw BITE for these weights (taste 10, no bpb/wait drag, no repeat). Same pipeline as calcBite. */
 export function calcMaxBite(wts) {
-  return calcBite(10, 0, 1, 0, true, 3, wts);
+  return calcBite(10, 0, 1, 0, false, 0, wts);
 }
 
 /**
@@ -153,7 +153,7 @@ export function calcCafe(t, cost, portions, wait, useR, r, wts, currencyCode = "
 
 /** Best raw café score for these weights (same pipeline as calcCafe). */
 export function calcCafeMax(wts) {
-  return calcCafe(10, 0, 1, 0, true, 3, wts);
+  return calcCafe(10, 0, 1, 0, false, 0, wts);
 }
 
 /** Café: utility ratio (0–1), or null. */
