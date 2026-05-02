@@ -1318,7 +1318,7 @@ export default function App() {
                     const display=getDisplay(e);
                     return (
                       <div key={e.id}>
-                        <RestRow rank={i+1} e={e} display={display} user={user} visits={visits} group={grp} weights={weights} homeCurrency={homeCurrency} dinedWithForEntry={(id)=>dinedWithMap.get(id)||[]}
+                        <RestRow rank={restaurantRankMap.get(e.name) ?? i+1} e={e} display={display} user={user} visits={visits} group={grp} weights={weights} homeCurrency={homeCurrency} dinedWithForEntry={(id)=>dinedWithMap.get(id)||[]}
                           onEdit={v=>{const entry=v||e;setEditR(entry);setEditDineWith(dinedWithMap.get(entry.id)||[]);window.scrollTo({top:0,behavior:"smooth"});}}
                           onDelete={id=>{
                             const did=id||e.id;
