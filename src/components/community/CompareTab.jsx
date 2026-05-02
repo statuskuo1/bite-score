@@ -8,7 +8,7 @@ import { fetchRestaurantVisitsForUser } from "../../utils/visitPlacesApi.js";
 import { fetchProfileByUsername } from "../../utils/profileApi.js";
 import { myRestVisitsCache, getUserVisitsCache } from "../../utils/sessionCache.js";
 import { pairCompatibility, restaurantOverlap } from "../../utils/compatibility.js";
-import { tasteColor } from "../../utils/scoring.js";
+import { tasteColor, weightsToPercents } from "../../utils/scoring.js";
 import { FLAGS } from "../../constants/cuisineConstants.js";
 import { Pill } from "./Pill.jsx";
 import { Toggle } from "../Toggle.jsx";
@@ -318,13 +318,14 @@ export function CompareTab({ user, myWeights, username, primedTarget, onFollowCh
   }, [user?.id, target?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const theirWeights = target?.pref_weight_taste != null
-    ? { taste: target.pref_weight_taste, bpb: target.pref_weight_bpb, wait: target.pref_weight_wait }
+    ? weightsToPercents({ taste: target.pref_weight_taste, bpb: target.pref_weight_bpb, wait: target.pref_weight_wait })
     : null;
+  const myWeightsPct = myWeights ? weightsToPercents(myWeights) : null;
 
   const compat = useMemo(() => {
     if (!target?.id) return null;
-    return pairCompatibility(myVisits, theirVisits, myWeights ?? null, theirWeights);
-  }, [myVisits, theirVisits, target?.id, myWeights, theirWeights]); // eslint-disable-line react-hooks/exhaustive-deps
+    return pairCompatibility(myVisits, theirVisits, myWeightsPct ?? null, theirWeights);
+  }, [myVisits, theirVisits, target?.id, myWeightsPct, theirWeights]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const overlap = useMemo(() => {
     if (!target?.id) return null;
@@ -370,7 +371,7 @@ export function CompareTab({ user, myWeights, username, primedTarget, onFollowCh
 
   // ── Compare view: target selected ──
   const insufficientMine = (myVisits || []).length === 0;
-  const summaryLine = loading ? null : buildCompatExplanation(compat, myWeights, theirWeights);
+  const summaryLine = loading ? null : buildCompatExplanation(compat, myWeightsPct, theirWeights);
 
   const friendName = target.display_name || target.username || "—";
   const isTasteBud = buds.some((f) => f.otherUserId === target?.id);

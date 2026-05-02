@@ -1,4 +1,5 @@
 import { useLang } from "../contexts/LangContext.jsx";
+import { weightsToPercents } from "../utils/scoring.js";
 
 const RANGE_STYLE = `
 .bite-weight-range{
@@ -67,8 +68,9 @@ export function WeightSliders({weights, labels, onUpdate, onReset, defaults, car
   const keys = labels.map(([,k])=>k);
   const stack = keys.length >= 3;
   const gridStyle = stack
-    ? {display:"flex",flexDirection:"column",gap:7}
+    ? {display:"flex",flexDirection:"column",gap:10}
     : {display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:12};
+  const percents = weightsToPercents(weights);
   function reset() {
     if(!defaults || !onReset) return;
     onReset(defaults);
@@ -83,24 +85,26 @@ export function WeightSliders({weights, labels, onUpdate, onReset, defaults, car
       <div style={gridStyle}>
         {labels.map(([label,key])=>{
           const color = COLORS[key]||"#F0997B";
-          const pct = weights[key];
+          const raw = weights[key];
+          const pct = percents[key];
           if(stack){
             return (
               <div key={key} style={{display:"flex",alignItems:"center",gap:8,width:"100%"}}>
                 <span style={{fontSize:11,color:"#F1EFE8",flex:"0 0 52px",lineHeight:1.2}}>{label}</span>
-                <div style={{flex:1,minWidth:0,display:"flex",alignItems:"center"}}>
+                <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:2}}>
                   <input
                     type="range"
                     className="bite-weight-range bite-weight-range--compact"
-                    min={0}
-                    max={100}
+                    min={1}
+                    max={10}
                     step={1}
-                    value={pct}
+                    value={raw}
                     onChange={e=>onUpdate(key,+e.target.value)}
                     style={{width:"100%",accentColor:color,"--thumb-color":color}}
                   />
+                  <span style={{fontSize:10,color:"#888780",lineHeight:1,fontVariantNumeric:"tabular-nums"}}>≈ {pct}%</span>
                 </div>
-                <span style={{fontSize:11,fontWeight:500,color,width:38,textAlign:"right",flexShrink:0,fontVariantNumeric:"tabular-nums"}}>{pct}%</span>
+                <span style={{fontSize:11,fontWeight:500,color,width:32,textAlign:"right",flexShrink:0,fontVariantNumeric:"tabular-nums"}}>{raw}/10</span>
               </div>
             );
           }
@@ -108,20 +112,21 @@ export function WeightSliders({weights, labels, onUpdate, onReset, defaults, car
             <div key={key} style={{width:"100%"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
                 <span style={{fontSize:11,color:"#F1EFE8"}}>{label}</span>
-                <span style={{fontSize:11,fontWeight:500,color:color}}>{pct}%</span>
+                <span style={{fontSize:11,fontWeight:500,color:color}}>{raw}/10</span>
               </div>
               <div style={{minHeight:44,display:"flex",alignItems:"center",padding:"2px 0"}}>
                 <input
                   type="range"
                   className="bite-weight-range"
-                  min={0}
-                  max={100}
+                  min={1}
+                  max={10}
                   step={1}
-                  value={pct}
+                  value={raw}
                   onChange={e=>onUpdate(key,+e.target.value)}
                   style={{width:"100%",accentColor:color,"--thumb-color":color}}
                 />
               </div>
+              <div style={{fontSize:10,color:"#888780",marginTop:2,fontVariantNumeric:"tabular-nums"}}>≈ {pct}%</div>
             </div>
           );
         })}

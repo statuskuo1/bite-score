@@ -13,7 +13,7 @@ import {
   followsCache, myRestVisitsCache, getUserVisitsCache, FOLLOWS_TTL_MS,
 } from "../../utils/sessionCache.js";
 import { pairCompatibility } from "../../utils/compatibility.js";
-import { tasteColor } from "../../utils/scoring.js";
+import { tasteColor, weightsToPercents } from "../../utils/scoring.js";
 import { Pill } from "./Pill.jsx";
 import { UserIdentity } from "./UserIdentity.jsx";
 import { usePaginatedList } from "../usePaginatedList.js";
@@ -413,9 +413,10 @@ export function PeopleTab({ user, myWeights, onCompareWith, onMarkFollowersSeen,
       }
       const p = f.otherProfile;
       const theirWeights = p?.pref_weight_taste != null
-        ? { taste: p.pref_weight_taste, bpb: p.pref_weight_bpb, wait: p.pref_weight_wait }
+        ? weightsToPercents({ taste: p.pref_weight_taste, bpb: p.pref_weight_bpb, wait: p.pref_weight_wait })
         : null;
-      const compat = pairCompatibility(myVisits, v, myWeights ?? null, theirWeights);
+      const myWeightsPct = myWeights ? weightsToPercents(myWeights) : null;
+      const compat = pairCompatibility(myVisits, v, myWeightsPct, theirWeights);
       out[f.otherUserId] = {
         ratings: v.length,
         city: modeOf(v, "city"),

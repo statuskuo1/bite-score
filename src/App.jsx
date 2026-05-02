@@ -30,6 +30,10 @@ import {
   scoreLabel,
   tasteColor,
   tasteLabel,
+  RESTAURANT_WEIGHT_DEFAULTS,
+  CAFE_WEIGHT_DEFAULTS,
+  normalizeWeights,
+  weightsToPercents,
 } from "./utils/scoring.js";
 import { rating010FilterRows } from "./constants/ratingTiers0to10.js";
 import { BEAN_REGIONS, regionOf } from "./constants/coffeeConstants.js";
@@ -356,21 +360,15 @@ export default function App() {
           .lte("created_at", notif.created_at)
           .order("created_at", { ascending: false });
     lookupQ.limit(1).maybeSingle().then(({ data: tag }) => {
-      const entryId = tag?.entry_id || meta.entry_id || null;
-      const entryType = tag?.entry_type || meta.entry_type || "restaurant";
-      if (entryId) {
-        setHeartSheetTarget({ postId: entryId, postType: entryType });
-      } else {
-        applyDineTagPrefill({
-          restaurantName: meta.restaurant_name,
-          city: tag?.city || meta.city,
-          cuisine: tag?.cuisine || meta.cuisine,
-          taggerId: notif.from_user_id,
-          entryId: null,
-          taggerProfile: notif.fromProfile,
-          entryType,
-        });
-      }
+      applyDineTagPrefill({
+        restaurantName: meta.restaurant_name,
+        city: tag?.city || meta.city,
+        cuisine: tag?.cuisine || meta.cuisine,
+        taggerId: notif.from_user_id,
+        entryId: tag?.entry_id || meta.entry_id || null,
+        taggerProfile: notif.fromProfile,
+        entryType: tag?.entry_type || meta.entry_type || "restaurant",
+      });
     });
   }
 
@@ -622,11 +620,9 @@ export default function App() {
     try { localStorage.setItem(`bite_lastUsedCity_${user.id}`, city); } catch {}
   }
   const [search, setSearch] = useState("");
-  const [weights, setWeights] = useState({taste:50,bpb:40,wait:10});
-  const restaurantWeightsSum = weights.taste + weights.bpb + weights.wait;
-  const canProceedWelcome = restaurantWeightsSum === 100;
-  const [drinkWeights, setDrinkWeights] = useState({taste:70,bpb:20,wait:10});
-  const [sweetWeights, setSweetWeights] = useState({taste:70,bpb:20,wait:10});
+  const [weights, setWeights] = useState({...RESTAURANT_WEIGHT_DEFAULTS});
+  const [drinkWeights, setDrinkWeights] = useState({...CAFE_WEIGHT_DEFAULTS});
+  const [sweetWeights, setSweetWeights] = useState({...CAFE_WEIGHT_DEFAULTS});
   const [questL, setQuestL] = useState(new Set());
   const [cafeSortBy, setCafeSortBy] = useState("bite");
   const [cafeSortAsc, setCafeSortAsc] = useState(false);
@@ -692,15 +688,15 @@ export default function App() {
         if (user) {
           try {
             const rw = localStorage.getItem(`bite_restaurantWeights_${user.id}`);
-            if (rw) setWeights(JSON.parse(rw));
+            if (rw) setWeights(normalizeWeights(JSON.parse(rw)));
           } catch (e) { console.error("restaurant weights load:", e); }
           try {
             const dw = localStorage.getItem(`bite_drinkWeights_${user.id}`);
-            if (dw) setDrinkWeights(JSON.parse(dw));
+            if (dw) setDrinkWeights(normalizeWeights(JSON.parse(dw)));
           } catch (e) { console.error("drink weights load:", e); }
           try {
             const sw = localStorage.getItem(`bite_sweetWeights_${user.id}`);
-            if (sw) setSweetWeights(JSON.parse(sw));
+            if (sw) setSweetWeights(normalizeWeights(JSON.parse(sw)));
           } catch (e) { console.error("sweet weights load:", e); }
           try {
             const ts = localStorage.getItem(`bite_tasteHalfStep_${user.id}`);
@@ -747,14 +743,19 @@ export default function App() {
     };
   }, [authReady, user?.id]);
 
-  /** Each slider 0–100; BITE uses relative mix (see `restaurantWeightRatios` in scoring). */
+  /** Each slider is raw 1–10; BITE uses relative mix (see `restaurantWeightRatios` in scoring). */
   function updW(k, v) {
-    const nv = Math.round(Math.min(100, Math.max(0, +v)));
+    const nv = Math.round(Math.min(10, Math.max(1, +v)));
     const next = { ...weights, [k]: nv };
     setWeights(next);
     if (user?.id) {
       try { localStorage.setItem(`bite_restaurantWeights_${user.id}`, JSON.stringify(next)); }
       catch (e) { console.error("restaurant weights save:", e); }
+      supabase.from("profiles").update({
+        pref_weight_taste: next.taste,
+        pref_weight_bpb: next.bpb,
+        pref_weight_wait: next.wait,
+      }).eq("id", user.id);
     }
   }
 
@@ -764,15 +765,16 @@ export default function App() {
     if (user?.id) {
       try { localStorage.setItem(`bite_restaurantWeights_${user.id}`, JSON.stringify(next)); }
       catch (e) { console.error("restaurant weights save:", e); }
+      supabase.from("profiles").update({
+        pref_weight_taste: next.taste,
+        pref_weight_bpb: next.bpb,
+        pref_weight_wait: next.wait,
+      }).eq("id", user.id);
     }
   }
 
   function replaceRestaurantWeights(next) {
-    const clamped = {
-      taste: Math.round(Math.min(100, Math.max(0, Number(next.taste) || 0))),
-      bpb: Math.round(Math.min(100, Math.max(0, Number(next.bpb) || 0))),
-      wait: Math.round(Math.min(100, Math.max(0, Number(next.wait) || 0))),
-    };
+    const clamped = clampWeights(next);
     setWeights(clamped);
     if (user?.id) {
       try { localStorage.setItem(`bite_restaurantWeights_${user.id}`, JSON.stringify(clamped)); }
@@ -797,9 +799,9 @@ export default function App() {
   /** Drinks / sweets weights: same edit-then-Save pattern as restaurants (see PaletteView). */
   function clampWeights(next) {
     return {
-      taste: Math.round(Math.min(100, Math.max(0, Number(next.taste) || 0))),
-      bpb:   Math.round(Math.min(100, Math.max(0, Number(next.bpb)   || 0))),
-      wait:  Math.round(Math.min(100, Math.max(0, Number(next.wait)  || 0))),
+      taste: Math.round(Math.min(10, Math.max(1, Number(next.taste) || 1))),
+      bpb:   Math.round(Math.min(10, Math.max(1, Number(next.bpb)   || 1))),
+      wait:  Math.round(Math.min(10, Math.max(1, Number(next.wait)  || 1))),
     };
   }
   function replaceDrinkWeights(next) {
@@ -1143,20 +1145,12 @@ export default function App() {
               {(()=>{const cc=getCurrencyForCity(welcomeCity);const sym=CURRENCY_SYMBOLS[cc]||cc;return(<div style={{fontSize:12,color:"#666663",marginTop:6}}>{welcomeCity.trim()?`Currency: ${sym} ${cc}`:"Currency: $ USD (default)"}</div>);})()}
             </div>
             <div style={{borderTop:"0.5px solid rgba(255,255,255,0.08)",paddingTop:14,marginBottom:14}}>
-              <WeightSliders weights={weights} labels={[[t.taste,"taste"],[t.bangBuck,"bpb"],[t.wait,"wait"]]} onUpdate={updW} onReset={resetWeights} defaults={{taste:50,bpb:40,wait:10}} careHeadingPx={15}/>
-              <div style={{fontSize:12,color:canProceedWelcome?"#97C459":"#EF9F27",textAlign:"center",marginTop:8}}>
-                {t.weightsTotal}: {restaurantWeightsSum}/100
-              </div>
-              {!canProceedWelcome&&(
-                <div style={{fontSize:11,color:"#F1EFE8",textAlign:"center",marginTop:4}}>
-                  {t.weightsSumTo100}
-                </div>
-              )}
+              <WeightSliders weights={weights} labels={[[t.taste,"taste"],[t.bangBuck,"bpb"],[t.wait,"wait"]]} onUpdate={updW} onReset={resetWeights} defaults={RESTAURANT_WEIGHT_DEFAULTS} careHeadingPx={15}/>
             </div>
             {welcomeBodyDisplay.split("\n\n").slice(1).map((para,i)=>(
               <p key={i} style={{fontSize:13,color:"#F1EFE8",margin:"0 0 12px",lineHeight:1.7,textAlign:"center",whiteSpace:"pre-line"}}>{para}</p>
             ))}
-            <button type="button" disabled={!canProceedWelcome} onClick={dismissWelcome} style={{width:"100%",padding:"12px",background:canProceedWelcome?"#F0997B":"#5A4A43",color:canProceedWelcome?"#141413":"#AFA8A3",border:"none",borderRadius:10,fontSize:14,fontWeight:500,cursor:canProceedWelcome?"pointer":"not-allowed",opacity:canProceedWelcome?1:0.85}}>{t.welcomeBtn}</button>
+            <button type="button" onClick={dismissWelcome} style={{width:"100%",padding:"12px",background:"#F0997B",color:"#141413",border:"none",borderRadius:10,fontSize:14,fontWeight:500,cursor:"pointer"}}>{t.welcomeBtn}</button>
           </div>
         </div>
       )}

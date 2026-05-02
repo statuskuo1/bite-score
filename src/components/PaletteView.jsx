@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useLang } from "../contexts/LangContext.jsx";
 import { FLAGS, REGION_MAP, CUISINE_REGIONS, REGION_COLORS } from "../constants/cuisineConstants.js";
-import { calcBiteOutOf10, meanRestaurantBiteOutOf10 } from "../utils/scoring.js";
+import { calcBiteOutOf10, meanRestaurantBiteOutOf10, RESTAURANT_WEIGHT_DEFAULTS, normalizeWeights, weightsToPercents } from "../utils/scoring.js";
 import { S } from "../styles/sharedStyles.js";
 import { DonutChart } from "./DonutChart.jsx";
 import { DrinksPalette } from "./DrinksPalette.jsx";
@@ -15,7 +15,7 @@ import { getQuestMetrics } from "../utils/questMetrics.js";
 import { getRestaurantPersonality } from "../utils/tastePersonality.js";
 import { formatCost, toUSD, fromUSD, CURRENCY_SYMBOLS } from "../utils/currency.js";
 
-const WEIGHT_DEFAULTS = { taste: 50, bpb: 40, wait: 10 };
+const WEIGHT_DEFAULTS = RESTAURANT_WEIGHT_DEFAULTS;
 
 export function PaletteView({
   entries,
@@ -36,12 +36,12 @@ export function PaletteView({
   const { pathname } = useLocation();
   const paletteTab = pathname === "/taste/drinks" ? "drinks" : pathname === "/taste/sweets" ? "sweets" : "restaurants";
   const [editingW,setEditingW] = useState(false);
-  const [draftW,setDraftW] = useState(()=>({...weights}));
+  const [draftW,setDraftW] = useState(()=>normalizeWeights(weights));
   const [roastMode,setRoastMode] = useState(false);
   const [questSheetOpen,setQuestSheetOpen] = useState(false);
 
   useEffect(()=>{
-    if(!editingW)setDraftW({...weights});
+    if(!editingW)setDraftW(normalizeWeights(weights));
   },[weights,editingW]);
   const total = entries.length;
 
@@ -54,17 +54,13 @@ export function PaletteView({
   const rCount=sorted.length;
   const cc={};entries.forEach(e=>{cc[e.cuisine]=(cc[e.cuisine]||0)+1;});
   const topC=Object.entries(cc).sort((a,b)=>b[1]-a[1])[0]?.[0]||"—";
-  const restaurantWeightsSum = weights.taste + weights.bpb + weights.wait;
-  const weightsOk = restaurantWeightsSum === 100;
-  const draftSum = draftW.taste + draftW.bpb + draftW.wait;
-  const draftOk = draftSum === 100;
+  const livePcts = weightsToPercents(weights);
 
   function draftUpd(k,v){
-    const nv = Math.round(Math.min(100,Math.max(0,+v)));
+    const nv = Math.round(Math.min(10,Math.max(1,+v)));
     setDraftW(w=>({...w,[k]:nv}));
   }
   function saveRestaurantWeights(){
-    if(!draftOk)return;
     replaceRestaurantWeights(draftW);
     setEditingW(false);
   }
@@ -78,8 +74,8 @@ export function PaletteView({
   const personality = getRestaurantPersonality(entries, weights);
 
   const btnGhost = {fontSize:11,color:"#5B9BD5",background:"none",border:"1px solid rgba(91,155,213,0.45)",borderRadius:8,padding:"5px 12px",cursor:"pointer",fontWeight:500};
-  /** Hide personality / breakdown / stats only when there are no entries or committed weights don’t sum to 100 — not while editing draft (so the page doesn’t “disappear”). */
-  const showRestaurantBody = total>0&&weightsOk;
+  /** Hide personality / breakdown / stats only when there are no entries — sliders always normalize to 100% so weights are always valid. */
+  const showRestaurantBody = total>0;
   const questMetrics = getQuestMetrics(entries, questL);
   const summaryRight = t.questSummaryRight
     .replace("{done}", String(questMetrics.doneCount))
@@ -107,25 +103,14 @@ export function PaletteView({
             {editingW?(
               <>
                 <WeightSliders weights={draftW} labels={[[t.taste,"taste"],[t.bangBuck,"bpb"],[t.wait,"wait"]]} onUpdate={draftUpd} onReset={()=>setDraftW({...WEIGHT_DEFAULTS})} defaults={WEIGHT_DEFAULTS}/>
-                <div style={{fontSize:11,color:draftOk?"#97C459":"#EF9F27",textAlign:"center",marginTop:8}}>
-                  {t.weightsTotal}: {draftSum}/100
-                </div>
-                {!draftOk&&(
-                  <div style={{fontSize:11,color:"#F1EFE8",textAlign:"center",marginTop:4}}>{t.weightsSumTo100}</div>
-                )}
-                <button type="button" disabled={!draftOk} onClick={saveRestaurantWeights} style={{width:"100%",marginTop:10,padding:"10px",borderRadius:8,border:"none",fontSize:14,fontWeight:500,cursor:draftOk?"pointer":"not-allowed",background:draftOk?"#F0997B":"#5A4A43",color:draftOk?"#141413":"#AFA8A3",opacity:draftOk?1:0.85}}>{t.weightsSave}</button>
+                <button type="button" onClick={saveRestaurantWeights} style={{width:"100%",marginTop:10,padding:"10px",borderRadius:8,border:"none",fontSize:14,fontWeight:500,cursor:"pointer",background:"#F0997B",color:"#141413"}}>{t.weightsSave}</button>
               </>
             ):(
-              <>
-                <p style={{fontSize:13,color:"#F1EFE8",margin:0,lineHeight:1.5}}>
-                  {t.taste} <span style={{fontWeight:600,color:"#F0997B"}}>{weights.taste}%</span>
-                  {" · "}{t.bangBuck} <span style={{fontWeight:600,color:"#5B9BD5"}}>{weights.bpb}%</span>
-                  {" · "}{t.wait} <span style={{fontWeight:600,color:"#97C459"}}>{weights.wait}%</span>
-                </p>
-                {!weightsOk&&(
-                  <div style={{fontSize:11,color:"#F1EFE8",textAlign:"center",marginTop:8}}>{t.weightsSumTo100}</div>
-                )}
-              </>
+              <p style={{fontSize:13,color:"#F1EFE8",margin:0,lineHeight:1.5}}>
+                {t.taste} <span style={{fontWeight:600,color:"#F0997B"}}>{livePcts.taste}%</span>
+                {" · "}{t.bangBuck} <span style={{fontWeight:600,color:"#5B9BD5"}}>{livePcts.bpb}%</span>
+                {" · "}{t.wait} <span style={{fontWeight:600,color:"#97C459"}}>{livePcts.wait}%</span>
+              </p>
             )}
           </div>
           {!total?<p style={{color:"#888780",fontSize:14}}>{t.noEntriesYet}</p>:showRestaurantBody&&<>

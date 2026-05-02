@@ -14,12 +14,58 @@ export function applyR(base, r) {
   return Math.round((base + Math.abs(base) * rMult(r)) * 100) / 100;
 }
 
+/** Restaurant defaults on the raw 1–10 scale (50/40/10 % when normalized). */
+export const RESTAURANT_WEIGHT_DEFAULTS = { taste: 5, bpb: 4, wait: 1 };
+
+/**
+ * Normalize a weights object into the raw 1–10 scale.
+ *
+ * Accepts either:
+ *  - new raw values (each 1–10) → returned as-is, clamped to [1,10].
+ *  - legacy percentages (sum > 30 or any single value > 10) → divided by 10
+ *    and rounded, clamped to [1,10].
+ *
+ * Falls back to {5,4,1} on missing / non-finite input.
+ */
+export function normalizeWeights(w) {
+  if (!w) return { ...RESTAURANT_WEIGHT_DEFAULTS };
+  const t = Number(w.taste);
+  const b = Number(w.bpb);
+  const c = Number(w.wait);
+  if (!Number.isFinite(t) || !Number.isFinite(b) || !Number.isFinite(c)) {
+    return { ...RESTAURANT_WEIGHT_DEFAULTS };
+  }
+  const isLegacy = t + b + c > 30 || t > 10 || b > 10 || c > 10;
+  const scale = isLegacy ? (v) => Math.round(v / 10) : (v) => Math.round(v);
+  const clamp = (v) => Math.max(1, Math.min(10, scale(v)));
+  return { taste: clamp(t), bpb: clamp(b), wait: clamp(c) };
+}
+
+/**
+ * Convert any weights input to integer percentages summing to ~100.
+ * Accepts either raw 1–10 values or legacy percentages — both produce the
+ * same percent breakdown because we normalize by the sum.
+ */
+export function weightsToPercents(w) {
+  const wt = w || RESTAURANT_WEIGHT_DEFAULTS;
+  const a = Math.max(0, Number(wt.taste) || 0);
+  const b = Math.max(0, Number(wt.bpb) || 0);
+  const c = Math.max(0, Number(wt.wait) || 0);
+  const s = a + b + c;
+  if (s <= 0) return { taste: 50, bpb: 40, wait: 10 };
+  return {
+    taste: Math.round((a / s) * 100),
+    bpb: Math.round((b / s) * 100),
+    wait: Math.round((c / s) * 100),
+  };
+}
+
 /**
  * Taste / Bang-Buck / Wait as fractions that sum to 1.
- * Sliders are independent 0–100; ratios follow relative sizes (same as /100 when sum is 100).
+ * Works for raw 1–10 sliders or legacy 0–100 sliders — ratios follow relative sizes.
  */
 export function restaurantWeightRatios(wts) {
-  const wt = wts || { taste: 50, bpb: 40, wait: 10 };
+  const wt = wts || RESTAURANT_WEIGHT_DEFAULTS;
   const a = Math.max(0, Number(wt.taste) || 0);
   const b = Math.max(0, Number(wt.bpb) || 0);
   const c = Math.max(0, Number(wt.wait) || 0);
@@ -86,8 +132,8 @@ export function meanRestaurantBiteOutOf10(entries, wts) {
   return n === 0 ? null : sum / n;
 }
 
-/** Defaults for café (drinks + sweets) weight sliders. Independent from restaurants. */
-export const CAFE_WEIGHT_DEFAULTS = { taste: 70, bpb: 20, wait: 10 };
+/** Defaults for café (drinks + sweets) weight sliders, raw 1–10 scale (70/20/10 % when normalized). */
+export const CAFE_WEIGHT_DEFAULTS = { taste: 7, bpb: 2, wait: 1 };
 
 /**
  * Raw café score with parameterized weights. Same blend shape as restaurants

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLang } from "../contexts/LangContext.jsx";
-import { calcCafeOutOf10, CAFE_WEIGHT_DEFAULTS } from "../utils/scoring.js";
+import { calcCafeOutOf10, CAFE_WEIGHT_DEFAULTS, normalizeWeights, weightsToPercents } from "../utils/scoring.js";
 import { S } from "../styles/sharedStyles.js";
 import { WeightSliders } from "./WeightSliders.jsx";
 import { toUSD, fromUSD, CURRENCY_SYMBOLS } from "../utils/currency.js";
@@ -13,19 +13,15 @@ export function SweetsPalette({cafes, sweetWeights, replaceSweetWeights, homeCur
   const total = sweets.length;
 
   const [editingW,setEditingW] = useState(false);
-  const [draftW,setDraftW] = useState(()=>({...sweetWeights}));
+  const [draftW,setDraftW] = useState(()=>normalizeWeights(sweetWeights));
   const [sweetsRoastMode, setSweetsRoastMode] = useState(false);
-  useEffect(()=>{if(!editingW)setDraftW({...sweetWeights});},[sweetWeights,editingW]);
-  const draftSum = draftW.taste + draftW.bpb + draftW.wait;
-  const draftOk = draftSum === 100;
-  const liveSum = sweetWeights.taste + sweetWeights.bpb + sweetWeights.wait;
-  const liveOk = liveSum === 100;
+  useEffect(()=>{if(!editingW)setDraftW(normalizeWeights(sweetWeights));},[sweetWeights,editingW]);
+  const livePcts = weightsToPercents(sweetWeights);
   function draftUpd(k,v){
-    const nv = Math.round(Math.min(100,Math.max(0,+v)));
+    const nv = Math.round(Math.min(10,Math.max(1,+v)));
     setDraftW(w=>({...w,[k]:nv}));
   }
   function saveSweetWeights(){
-    if(!draftOk)return;
     replaceSweetWeights(draftW);
     setEditingW(false);
   }
@@ -41,19 +37,14 @@ export function SweetsPalette({cafes, sweetWeights, replaceSweetWeights, homeCur
       {editingW?(
         <>
           <WeightSliders weights={draftW} labels={[[t.taste,"taste"],[t.bangBuck,"bpb"],[t.wait,"wait"]]} onUpdate={draftUpd} onReset={()=>setDraftW({...CAFE_WEIGHT_DEFAULTS})} defaults={CAFE_WEIGHT_DEFAULTS}/>
-          <div style={{fontSize:11,color:draftOk?"#97C459":"#EF9F27",textAlign:"center",marginTop:8}}>{t.weightsTotal}: {draftSum}/100</div>
-          {!draftOk&&<div style={{fontSize:11,color:"#F1EFE8",textAlign:"center",marginTop:4}}>{t.weightsSumTo100}</div>}
-          <button type="button" disabled={!draftOk} onClick={saveSweetWeights} style={{width:"100%",marginTop:10,padding:"10px",borderRadius:8,border:"none",fontSize:14,fontWeight:500,cursor:draftOk?"pointer":"not-allowed",background:draftOk?"#F0997B":"#5A4A43",color:draftOk?"#141413":"#AFA8A3",opacity:draftOk?1:0.85}}>{t.weightsSave}</button>
+          <button type="button" onClick={saveSweetWeights} style={{width:"100%",marginTop:10,padding:"10px",borderRadius:8,border:"none",fontSize:14,fontWeight:500,cursor:"pointer",background:"#F0997B",color:"#141413"}}>{t.weightsSave}</button>
         </>
       ):(
-        <>
-          <p style={{fontSize:13,color:"#F1EFE8",margin:0,lineHeight:1.5}}>
-            {t.taste} <span style={{fontWeight:600,color:"#F0997B"}}>{sweetWeights.taste}%</span>
-            {" · "}{t.bangBuck} <span style={{fontWeight:600,color:"#5B9BD5"}}>{sweetWeights.bpb}%</span>
-            {" · "}{t.wait} <span style={{fontWeight:600,color:"#97C459"}}>{sweetWeights.wait}%</span>
-          </p>
-          {!liveOk&&<div style={{fontSize:11,color:"#F1EFE8",textAlign:"center",marginTop:8}}>{t.weightsSumTo100}</div>}
-        </>
+        <p style={{fontSize:13,color:"#F1EFE8",margin:0,lineHeight:1.5}}>
+          {t.taste} <span style={{fontWeight:600,color:"#F0997B"}}>{livePcts.taste}%</span>
+          {" · "}{t.bangBuck} <span style={{fontWeight:600,color:"#5B9BD5"}}>{livePcts.bpb}%</span>
+          {" · "}{t.wait} <span style={{fontWeight:600,color:"#97C459"}}>{livePcts.wait}%</span>
+        </p>
       )}
     </div>
   );

@@ -1,9 +1,10 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { MouthLogo } from "./MouthLogo.jsx";
 import { WeightSliders } from "./WeightSliders.jsx";
 import { useLang } from "../contexts/LangContext.jsx";
+import { RESTAURANT_WEIGHT_DEFAULTS, normalizeWeights } from "../utils/scoring.js";
 
-const WEIGHT_DEFAULTS = { taste: 50, bpb: 40, wait: 10 };
+const WEIGHT_DEFAULTS = RESTAURANT_WEIGHT_DEFAULTS;
 
 const OVERLAY = {
   position: "fixed", inset: 0,
@@ -34,13 +35,6 @@ const CTA_BTN = {
   fontWeight: 600,
   cursor: "pointer",
   marginTop: 0,
-};
-
-const CTA_BTN_DISABLED = {
-  ...CTA_BTN,
-  background: "#5A4A43",
-  color: "#AFA8A3",
-  cursor: "not-allowed",
 };
 
 const SKIP_LINK = {
@@ -78,18 +72,12 @@ function ProgressDots({ card, onGoTo }) {
 export function OnboardingModal({ restaurantWeights, onWeightSave, onComplete, isGuest, startAtCard = 0 }) {
   const { t } = useLang();
   const [card, setCard] = useState(startAtCard);
-  const [draftW, setDraftW] = useState({ ...restaurantWeights });
+  const [draftW, setDraftW] = useState(() => normalizeWeights(restaurantWeights));
 
   function draftUpd(k, v) {
-    const nv = Math.round(Math.min(100, Math.max(0, +v)));
+    const nv = Math.round(Math.min(10, Math.max(1, +v)));
     setDraftW((w) => ({ ...w, [k]: nv }));
   }
-
-  const weightSum = useMemo(
-    () => Object.values(draftW).reduce((s, v) => s + v, 0),
-    [draftW],
-  );
-  const weightOk = weightSum === 100;
 
   if (card === 0) {
     return (
@@ -155,13 +143,9 @@ export function OnboardingModal({ restaurantWeights, onWeightSave, onComplete, i
             defaults={WEIGHT_DEFAULTS}
             hideLabel
           />
-          <div style={{ fontSize: 12, color: weightOk ? "#97C459" : "#EF9F27", textAlign: "center", marginTop: 10 }}>
-            Total: {weightSum}/100{!weightOk && " — adjust to reach 100"}
-          </div>
           <button
             type="button"
-            style={weightOk ? { ...CTA_BTN, marginTop: 20 } : { ...CTA_BTN_DISABLED, marginTop: 20 }}
-            disabled={!weightOk}
+            style={{ ...CTA_BTN, marginTop: 20 }}
             onClick={() => { onWeightSave(draftW); setCard(2); }}
           >
             Looks good →
