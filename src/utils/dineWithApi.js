@@ -58,6 +58,7 @@ export async function insertDineTag(client, { taggerId, taggedId, entryId, entry
         .eq("tagger_id", taggedId)
         .eq("tagged_id", taggerId)
         .ilike("restaurant_name", restaurantName)
+        .eq("dismissed", false)
         .maybeSingle();
 
       const { error: nErr } = await client.from("notifications").insert({

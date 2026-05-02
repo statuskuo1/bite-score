@@ -356,15 +356,21 @@ export default function App() {
           .lte("created_at", notif.created_at)
           .order("created_at", { ascending: false });
     lookupQ.limit(1).maybeSingle().then(({ data: tag }) => {
-      applyDineTagPrefill({
-        restaurantName: meta.restaurant_name,
-        city: tag?.city || meta.city,
-        cuisine: tag?.cuisine || meta.cuisine,
-        taggerId: notif.from_user_id,
-        entryId: tag?.entry_id || meta.entry_id || null,
-        taggerProfile: notif.fromProfile,
-        entryType: tag?.entry_type || meta.entry_type || "restaurant",
-      });
+      const entryId = tag?.entry_id || meta.entry_id || null;
+      const entryType = tag?.entry_type || meta.entry_type || "restaurant";
+      if (entryId) {
+        setHeartSheetTarget({ postId: entryId, postType: entryType });
+      } else {
+        applyDineTagPrefill({
+          restaurantName: meta.restaurant_name,
+          city: tag?.city || meta.city,
+          cuisine: tag?.cuisine || meta.cuisine,
+          taggerId: notif.from_user_id,
+          entryId: null,
+          taggerProfile: notif.fromProfile,
+          entryType,
+        });
+      }
     });
   }
 
@@ -1673,7 +1679,7 @@ export default function App() {
                           supabase.from("notifications").insert({
                             user_id: sourceTaggerId, from_user_id: user.id,
                             type: "dine_tag_accepted",
-                            meta: { restaurant_name: e.name, entry_type: "restaurant", city: e.city||"" },
+                            meta: { restaurant_name: e.name, entry_type: "restaurant", city: e.city||"", entry_id: data.id },
                           }),
                         ]);
                         fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
@@ -1734,7 +1740,7 @@ export default function App() {
                       supabase.from("notifications").insert({
                         user_id: sourceTaggerId, from_user_id: user.id,
                         type: "dine_tag_accepted",
-                        meta: { restaurant_name: e.name, entry_type: "cafe", city: e.city||"" },
+                        meta: { restaurant_name: e.name, entry_type: "cafe", city: e.city||"", entry_id: inserted.id },
                       }),
                     ]);
                     fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
