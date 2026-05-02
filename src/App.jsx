@@ -192,6 +192,22 @@ export default function App() {
   }, [profile?.home_currency]);
 
   useEffect(() => {
+    if (!profile || !user?.id) return;
+    if (profile.pref_weight_taste && profile.pref_weight_bpb && profile.pref_weight_wait) {
+      const w = normalizeWeights({
+        taste: profile.pref_weight_taste,
+        bpb: profile.pref_weight_bpb,
+        wait: profile.pref_weight_wait,
+      });
+      setWeights(w);
+      try {
+        localStorage.setItem(`bite_restaurantWeights_${user.id}`, JSON.stringify(w));
+        localStorage.setItem("bite_restaurantWeights_bootstrap", JSON.stringify(w));
+      } catch {}
+    }
+  }, [profile?.pref_weight_taste, profile?.pref_weight_bpb, profile?.pref_weight_wait]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
     if (!profile) return;
     // localStorage acts as a fast synchronous override: if the user has ever
     // dismissed/completed onboarding on this device, skip the modal even if
