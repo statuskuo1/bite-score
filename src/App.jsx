@@ -1334,7 +1334,7 @@ export default function App() {
                             const idx=restaurantGroupsAll.findIndex(g=>g.e.name===e.name);
                             if(idx>=0){setSearch("");setContextRestaurant({name:e.name,idx});}
                           }} style={{fontSize:11,color:"#F0997B",background:"none",border:"none",cursor:"pointer",padding:"2px 0 6px 58px",display:"block"}}>
-                            Show #{restaurantRankMap.get(e.name)} in ranking
+                            Show ±3 rankings around #{restaurantRankMap.get(e.name)}
                           </button>
                         )}
                       </div>
