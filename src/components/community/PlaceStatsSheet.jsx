@@ -83,47 +83,14 @@ function topDishes(notesArr, limit = 6) {
     .map(([w]) => w.replace(/\b\w/g, (c) => c.toUpperCase()));
 }
 
-function RangeBar({ min, max }) {
-  const same = min.toFixed(1) === max.toFixed(1);
-  return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 600, color: "#F1EFE8", marginBottom: 4 }}>
-        <span>{min.toFixed(1)}</span>
-        {!same && <span>{max.toFixed(1)}</span>}
-      </div>
-      <div style={{ position: "relative", height: 4, borderRadius: 2, background: "#3A3A38" }}>
-        <div style={{
-          position: "absolute",
-          left: `${(min / 10) * 100}%`,
-          right: `${100 - (max / 10) * 100}%`,
-          height: "100%",
-          borderRadius: 2,
-          background: "#F0997B",
-          minWidth: 4,
-        }} />
-      </div>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "#888780", marginTop: 3, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-        <span>Low</span>
-        <span>High</span>
-      </div>
-    </div>
-  );
-}
-
-function StatCell({ label, value, sub, type, min, max }) {
+function StatCell({ label, value, sub }) {
   return (
     <div style={{ background: "#252523", borderRadius: 10, padding: "10px 12px" }}>
       <div style={{ fontSize: 10, color: "#888780", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
         {label}
       </div>
-      {type === "range" ? (
-        <RangeBar min={min} max={max} />
-      ) : (
-        <>
-          <div style={{ fontSize: 16, fontWeight: 600, color: "#F1EFE8" }}>{value}</div>
-          {sub && <div style={{ fontSize: 10, color: "#888780", marginTop: 2 }}>{sub}</div>}
-        </>
-      )}
+      <div style={{ fontSize: 16, fontWeight: 600, color: "#F1EFE8" }}>{value}</div>
+      {sub && <div style={{ fontSize: 10, color: "#888780", marginTop: 2 }}>{sub}</div>}
     </div>
   );
 }
@@ -273,15 +240,16 @@ export function PlaceStatsSheet({ post, restaurantWeights, drinkWeights, sweetWe
     : null;
 
   const statCells = stats ? [
-    stats.avgTaste != null && { label: "Avg Taste", value: stats.avgTaste.toFixed(1) },
-    stats.minTaste != null && stats.maxTaste != null && {
-      label: "Taste Range",
-      type: "range",
-      min: stats.minTaste,
-      max: stats.maxTaste,
+    stats.avgTaste != null && {
+      label: "Avg Taste",
+      value: stats.avgTaste.toFixed(1),
+      sub: (stats.minTaste != null && stats.maxTaste != null)
+        ? `min: ${stats.minTaste.toFixed(1)} · max: ${stats.maxTaste.toFixed(1)}`
+        : undefined,
     },
+    { label: "Logs", value: `${visitCount}` },
     costPerPortion != null && {
-      label: "Cost / portion",
+      label: "AVG Cost / portion",
       value: `${stats.costSymbol}${costPerPortion.toFixed(costPerPortion >= 100 ? 0 : 2)}`,
     },
     stats.avgWait != null && { label: "Avg Wait", value: `${Math.round(stats.avgWait)} min` },
