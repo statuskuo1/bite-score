@@ -209,7 +209,6 @@ export function PaletteView({
                   key={label}
                   label={label}
                   val={val}
-                  note={key === "avgBite" ? t.avgBitePaletteNote : undefined}
                 />
               ));
             })()}

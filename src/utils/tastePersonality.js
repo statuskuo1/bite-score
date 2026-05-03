@@ -1,5 +1,6 @@
 import { REGION_MAP } from "../constants/cuisineConstants.js";
 import { calcBiteOutOf10 } from "./scoring.js";
+import { toUSD } from "./currency.js";
 
 /**
  * English-only taste-personality engine for the Restaurants palette.
@@ -48,7 +49,7 @@ export function computeRestaurantSignals(entries, weights) {
   }
 
   const tastes = entries.map((e) => NUM(e.taste));
-  const costs = entries.map((e) => NUM(e.cost) / (NUM(e.portions, 1) || 1));
+  const costs = entries.map((e) => toUSD(NUM(e.cost), e.currency_code || "USD") / (NUM(e.portions, 1) || 1));
   const waits = entries.map((e) => NUM(e.wait));
 
   const sum = (arr) => arr.reduce((a, x) => a + x, 0);
