@@ -280,7 +280,7 @@ export function CompareTab({ user, myWeights, username, primedTarget, onFollowCh
       if (cancelled) return;
       setResolving(false);
       if (!p || p.id === user.id) {
-        navigate("/community/people/taste-buds", { replace: true });
+        navigate("/community/people/following", { replace: true });
         return;
       }
       setTarget(p);
@@ -342,12 +342,13 @@ export function CompareTab({ user, myWeights, username, primedTarget, onFollowCh
   const onlyTheirsPage = usePaginatedList(overlap?.onlyTheirs || [], target?.id || "", 3);
   const onlyMinePage = usePaginatedList(overlap?.onlyMine || [], target?.id || "", 3);
 
-  /** Back-navigate to People > Taste Buds. The dominant Compare entry path
+  /** Back-navigate to People > Following. The dominant Compare entry path
    *  is a tap on a Taste Bud → MiniProfileSheet → Compare, so back belongs
-   *  on the buds list. Bare /community/compare without a username is bounced
-   *  here automatically by CommunityTab. */
+   *  on the followed-people list (where the Taste Buds toggle lives). Bare
+   *  /community/compare without a username is bounced here automatically by
+   *  CommunityTab. */
   function goBackToBuds() {
-    navigate("/community/people/taste-buds");
+    navigate("/community/people/following");
   }
 
   /** Unfollow from Compare view — breaks the mutual, downgrades out of Taste Buds. */

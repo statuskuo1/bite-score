@@ -4,6 +4,7 @@ import { calcBiteOutOf10, calcCafeOutOf10, scoreColor, scoreLabel } from "../../
 import { toUSD, fromUSD, CURRENCY_SYMBOLS } from "../../utils/currency.js";
 import { FLAGS } from "../../constants/cuisineConstants.js";
 import { Avatar } from "./Avatar.jsx";
+import { MapsLink } from "./MapsLink.jsx";
 import { useLang } from "../../contexts/LangContext.jsx";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 import { listTasteBuds } from "../../utils/followsApi.js";
@@ -294,6 +295,9 @@ export function PlaceStatsSheet({ post, restaurantWeights, drinkWeights, sweetWe
             </div>
             <div style={{ fontSize: 12, color: "#888780", marginTop: 3 }}>
               {[post.kind === "rest" ? post.cuisine : post.category, post.city].filter(Boolean).join(" · ")}
+            </div>
+            <div style={{ marginTop: 6 }}>
+              <MapsLink name={post.name} city={post.city} size="md" />
             </div>
           </div>
           {/* Top-right: dismiss + you've been badge */}

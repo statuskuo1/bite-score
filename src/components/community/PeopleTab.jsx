@@ -8,7 +8,7 @@ import {
   unfollowUser,
   listFollows,
 } from "../../utils/followsApi.js";
-import { fetchRestaurantVisitsForUser } from "../../utils/visitPlacesApi.js";
+import { fetchRestaurantVisitsForUser, fetchTopBiters } from "../../utils/visitPlacesApi.js";
 import {
   followsCache, myRestVisitsCache, getUserVisitsCache, FOLLOWS_TTL_MS,
 } from "../../utils/sessionCache.js";
@@ -20,6 +20,11 @@ import { usePaginatedList } from "../usePaginatedList.js";
 import { ShowMoreButton } from "../ShowMoreButton.jsx";
 import { StatusBadge, UnfollowConfirmDialog, MiniProfileSheet } from "./MiniProfileSheet.jsx";
 import { PeopleGroupsSection } from "./PeopleGroupsSection.jsx";
+
+const topBitersCache = { data: null, fetchedAt: 0, userId: null };
+const TOP_BITERS_TTL_MS = 5 * 60 * 1000;
+
+const MEDALS = ["🥇", "🥈", "🥉"];
 
 const ROW_STYLE = {
   display: "flex",
@@ -279,6 +284,9 @@ export function PeopleTab({ user, myWeights, onCompareWith, onMarkFollowersSeen,
   /** Following sub-filter: when on, narrows the list to mutual follows
    *  (Taste Buds) and renders them with compatibility stats + Compare. */
   const [budsOnly, setBudsOnly] = useState(false);
+  const [topBiters, setTopBiters] = useState(() =>
+    topBitersCache.userId === user?.id ? topBitersCache.data : null,
+  );
   const debounceRef = useRef(null);
 
   // Normalize unknown sub-paths back to the default. Old `taste-buds` deep
@@ -392,6 +400,29 @@ export function PeopleTab({ user, myWeights, onCompareWith, onMarkFollowersSeen,
     }, 220);
     return () => clearTimeout(debounceRef.current);
   }, [query, user?.id]);
+
+  /** Fetch top biters when Discover tab is active. */
+  useEffect(() => {
+    if (!user?.id || section !== "discover") return;
+    if (
+      topBitersCache.userId === user.id &&
+      topBitersCache.data !== null &&
+      Date.now() - topBitersCache.fetchedAt < TOP_BITERS_TTL_MS
+    ) {
+      setTopBiters(topBitersCache.data);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const biters = await fetchTopBiters(supabase, 20);
+      if (cancelled) return;
+      setTopBiters(biters);
+      topBitersCache.data = biters;
+      topBitersCache.fetchedAt = Date.now();
+      topBitersCache.userId = user.id;
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id, section]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Map every other-user-id → their relation kind. */
   const relationByUserId = useMemo(() => {
@@ -777,7 +808,46 @@ export function PeopleTab({ user, myWeights, onCompareWith, onMarkFollowersSeen,
             </div>
           )}
 
-          {!query.trim() && pendingFollowers.length === 0 && (
+          {!query.trim() && topBiters !== null && topBiters.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ marginBottom: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#F1EFE8" }}>🔥 Top BITERs</span>
+                <span style={{ fontSize: 11, color: "#888780", marginLeft: 8 }}>Ranked by total logs</span>
+              </div>
+              {topBiters.map((biter, i) => {
+                const rank = i + 1;
+                const rel = relationByUserId.get(biter.profile.id) || "none";
+                return (
+                  <button
+                    key={biter.profile.id}
+                    type="button"
+                    onClick={() => openProfileSheet(biter.profile, rel)}
+                    style={{ ...ROW_STYLE, width: "100%", cursor: "pointer", textAlign: "left" }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 3, flexShrink: 0 }}>
+                      {rank <= 3 && (
+                        <span style={{ fontSize: 13, lineHeight: 1 }}>{MEDALS[rank - 1]}</span>
+                      )}
+                      <span style={{ width: 22, textAlign: "right", fontSize: 11, fontWeight: 700, color: "#666663", lineHeight: 1 }}>
+                        #{rank}
+                      </span>
+                    </div>
+                    <UserIdentity profile={biter.profile} size={28} />
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#F0997B", flexShrink: 0, whiteSpace: "nowrap" }}>
+                      {biter.count} {biter.count === 1 ? "bite" : "bites"}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {!query.trim() && topBiters !== null && topBiters.length === 0 && pendingFollowers.length === 0 && (
+            <p style={{ fontSize: 12, color: "#888780", margin: 0 }}>
+              {t.discoverEmpty || "Search by @username to find people. New followers will show up here too."}
+            </p>
+          )}
+          {!query.trim() && topBiters === null && pendingFollowers.length === 0 && (
             <p style={{ fontSize: 12, color: "#888780", margin: 0 }}>
               {t.discoverEmpty || "Search by @username to find people. New followers will show up here too."}
             </p>

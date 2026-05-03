@@ -12,6 +12,7 @@ import {
 import { CURRENCY_SYMBOLS } from "../../utils/currency.js";
 import { FLAGS } from "../../constants/cuisineConstants.js";
 import { Avatar } from "./Avatar.jsx";
+import { MapsLink } from "./MapsLink.jsx";
 import { addWantToGo, removeWantToGo } from "../../utils/wantToGoApi.js";
 import { supabase } from "../../config/supabaseClient.js";
 
@@ -531,6 +532,11 @@ export function FeedPostRow({
           }}>
             {subtitle(post)}
           </div>
+          {post.name && (
+            <div style={{ marginTop: 4 }}>
+              <MapsLink name={post.name} city={post.city} />
+            </div>
+          )}
         </div>
 
         {/* Score chip: poster's BITE only */}

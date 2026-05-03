@@ -157,6 +157,7 @@ export function PlacePickerModal({
         if (visitTab === "neither" && (inMine || inTheirs)) return false;
         if (visitTab === "onlyMine" && (!inMine || inTheirs)) return false;
         if (visitTab === "onlyTheirs" && (inMine || !inTheirs)) return false;
+        if (visitTab === "both" && (!inMine || !inTheirs)) return false;
         if (city && city !== "Anywhere" && resolveCity(place.city || "") !== resolveCity(city)) return false;
         if (cuisine && cuisine !== "Anything") {
           if (!place.cuisine) return false;
@@ -229,9 +230,10 @@ export function PlacePickerModal({
   const noFilteredResults = step === "results" && !cacheLoading && ranked.length === 0;
 
   const tabOptions = [
-    { key: "onlyMine", label: `Only ${myFn}` },
-    { key: "neither", label: "Neither" },
-    { key: "onlyTheirs", label: `Only ${thFn}` },
+    { key: "onlyMine", label: `${myFn}'s Been` },
+    { key: "neither", label: "Neither Been" },
+    { key: "both", label: "Both Been" },
+    { key: "onlyTheirs", label: `${thFn}'s Been` },
   ];
 
   function ResultCard({ item }) {
@@ -265,6 +267,13 @@ export function PlacePickerModal({
           </div>
         </div>
 
+        <div style={{
+          fontSize: 9, color: "#888780",
+          textTransform: "uppercase", letterSpacing: "0.06em",
+          marginBottom: 4,
+        }}>
+          BITE Estimate
+        </div>
         <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
           <span style={{
             fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 999,
