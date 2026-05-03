@@ -91,7 +91,7 @@ export function CafeGroupRow({ group, cafeSortBy, onEdit, onDelete, user, weight
           ["Repeat", "⭐".repeat(avgRepeat) || "✕"],
         ]}
         notes={group[group.length - 1].notes}
-        diners={visits === 1 ? unionDiners : []}
+        diners={unionDiners}
         post={{ placeId: group[0]?.placeId || null, kind: "cafe" }}
         viewerId={user?.id}
         mutable={swipeOk}

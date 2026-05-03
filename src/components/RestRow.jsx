@@ -82,7 +82,7 @@ export function RestRow({ e, display, onEdit, onDelete, user, visits = 1, group,
           ["Repeat", e.useR ? ("⭐".repeat(e.repeatability) || "✕") : t.off],
         ]}
         notes={e.notes}
-        diners={visits === 1 ? unionDiners : []}
+        diners={unionDiners}
         post={{ placeId: e.placeId || null, kind: "rest" }}
         viewerId={user?.id}
         mutable={swipeOk}
