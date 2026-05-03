@@ -579,121 +579,76 @@ export function AuthModal({ open, onClose }) {
           </div>
 
         ) : showProfileView ? (
-          /* ── Profile view ── */
+          /* ── Edit profile (direct — old profile view removed) ── */
           <div>
-            <div style={{ textAlign: "center", marginBottom: 12 }}>
-              <div style={{
-                width: 56, height: 56, borderRadius: "50%",
-                background: "#3C1F13", color: "#F0997B",
-                display: "inline-flex", alignItems: "center", justifyContent: "center",
-                fontSize: 22, fontWeight: 600, lineHeight: 1, marginBottom: 8,
-              }}>
-                {((profile?.display_name || usernameTrim || username || user?.email || "?")).charAt(0).toUpperCase()}
+            <div style={{ background: "#141413", borderRadius: 10, padding: "12px", marginBottom: 12 }}>
+              <label style={{ fontSize: 11, color: "#C4C2BA", display: "block", marginBottom: 4 }}>{t.profileUsernameLabel}</label>
+              <input
+                ref={usernameInputRef}
+                type="text"
+                autoComplete="off"
+                value={usernameDraft}
+                onChange={(e) => { setUsernameDraft(e.target.value.toLowerCase()); setSaveError(null); setSaveOk(false); setSuggestions([]); }}
+                maxLength={30}
+                style={{ width: "100%", boxSizing: "border-box", marginBottom: 3, fontSize: 13, padding: "6px 10px", borderColor: usernameInlineErr ? "#A32D2D" : undefined }}
+              />
+              <div style={{ fontSize: 11, color: usernameInlineErr ? "#A32D2D" : "#666663", marginBottom: saveError === "username_taken" && suggestions.length > 0 ? 5 : 10, lineHeight: 1.4 }}>
+                {usernameInlineErr || t.profileUsernameHelp}
               </div>
-              <div style={{ fontSize: 16, fontWeight: 600, color: "#F1EFE8", lineHeight: 1.2 }}>
-                {profile?.display_name || username || user?.email?.split("@")[0] || "—"}
-              </div>
-              <div style={{ fontSize: 13, color: "#C4C2BA", marginTop: 3 }}>@{username || "—"}</div>
-            </div>
-
-            {!editMode ? (
-              <>
-                <div style={{ textAlign: "center", fontSize: 13, color: "#C4C2BA", marginBottom: 14 }}>
-                  <button type="button" onClick={() => { onClose(); navigate("/community/people/discover"); }}
-                    style={{ background: "none", border: "none", color: "#C4C2BA", fontSize: 13, cursor: "pointer", padding: 0 }}>
-                    {socialCounts.followers} followers
-                  </button>
-                  <span style={{ margin: "0 5px", opacity: 0.4 }}>·</span>
-                  <button type="button" onClick={() => { onClose(); navigate("/community/people/following"); }}
-                    style={{ background: "none", border: "none", color: "#C4C2BA", fontSize: 13, cursor: "pointer", padding: 0 }}>
-                    {socialCounts.following} following
-                  </button>
-                  <span style={{ margin: "0 5px", opacity: 0.4 }}>·</span>
-                  <button type="button" onClick={() => { onClose(); navigate("/community/people/taste-buds"); }}
-                    style={{ background: "none", border: "none", color: "#C4C2BA", fontSize: 13, cursor: "pointer", padding: 0 }}>
-                    {socialCounts.tasteBuds} taste buds
-                  </button>
+              {saveError === "username_taken" && suggestions.length > 0 && (
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
+                  <span style={{ fontSize: 11, color: "#888780" }}>{t.profileUsernameSuggest}</span>
+                  {suggestions.map((s) => (
+                    <button key={s} type="button"
+                      onClick={() => { setUsernameDraft(s); setSaveError(null); setSuggestions([]); usernameInputRef.current?.focus(); }}
+                      style={{ padding: "3px 8px", borderRadius: 14, fontSize: 11, background: "#3C1F13", color: "#F0997B", border: "1px solid rgba(240,153,123,0.4)", cursor: "pointer" }}>
+                      {s}
+                    </button>
+                  ))}
                 </div>
-                <FoodStatsBlock stats={foodStats} style={{ marginBottom: 14 }} />
-                {saveOk && (
-                  <p style={{ fontSize: 12, color: "#97C459", margin: "0 0 8px", textAlign: "center" }}>{t.profileSaved}</p>
-                )}
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button type="button" onClick={() => { setHomeCityDraft(profile?.home_city || ""); setEditMode(true); }}
-                    style={{ ...btn, flex: 1, marginBottom: 0, background: "#3C1F13", color: "#F0997B", border: "none" }}>
-                    Edit profile
-                  </button>
-                  <button type="button" disabled={busy} onClick={signOut}
-                    style={{ ...btn, flex: 1, marginBottom: 0, background: "transparent", color: "#C4C2BA", border: "0.5px solid rgba(255,255,255,0.2)" }}>
-                    {t.signOut}
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div style={{ background: "#141413", borderRadius: 10, padding: "12px", marginBottom: 12 }}>
-                  <label style={{ fontSize: 11, color: "#C4C2BA", display: "block", marginBottom: 4 }}>{t.profileUsernameLabel}</label>
-                  <input
-                    ref={usernameInputRef}
-                    type="text"
-                    autoComplete="off"
-                    value={usernameDraft}
-                    onChange={(e) => { setUsernameDraft(e.target.value.toLowerCase()); setSaveError(null); setSaveOk(false); setSuggestions([]); }}
-                    maxLength={30}
-                    style={{ width: "100%", boxSizing: "border-box", marginBottom: 3, fontSize: 13, padding: "6px 10px", borderColor: usernameInlineErr ? "#A32D2D" : undefined }}
-                  />
-                  <div style={{ fontSize: 11, color: usernameInlineErr ? "#A32D2D" : "#666663", marginBottom: saveError === "username_taken" && suggestions.length > 0 ? 5 : 10, lineHeight: 1.4 }}>
-                    {usernameInlineErr || t.profileUsernameHelp}
+              )}
+              <label style={{ fontSize: 11, color: "#C4C2BA", display: "block", marginBottom: 4 }}>{t.profileDisplayNameLabel}</label>
+              <input
+                type="text"
+                autoComplete="off"
+                value={displayNameDraft}
+                onChange={(e) => { setDisplayNameDraft(e.target.value); setSaveOk(false); }}
+                maxLength={120}
+                style={{ width: "100%", boxSizing: "border-box", marginBottom: 3, fontSize: 13, padding: "6px 10px" }}
+              />
+              <div style={{ fontSize: 11, color: "#666663", marginBottom: 10, lineHeight: 1.4 }}>{t.profileDisplayNameHelp}</div>
+              <label style={{ fontSize: 11, color: "#C4C2BA", display: "block", marginBottom: 4 }}>Location</label>
+              <CityInput value={homeCityDraft} onChange={setHomeCityDraft} placeholder="e.g. NYC, Tokyo, London" />
+              {(() => {
+                const cc = getCurrencyForCity(homeCityDraft);
+                const sym = CURRENCY_SYMBOLS[cc] || cc;
+                return (
+                  <div style={{ fontSize: 11, color: "#666663", marginTop: 5, marginBottom: 10, lineHeight: 1.4 }}>
+                    {homeCityDraft.trim() ? `Currency: ${sym} ${cc}` : "Currency: $ USD (default)"}
                   </div>
-                  {saveError === "username_taken" && suggestions.length > 0 && (
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
-                      <span style={{ fontSize: 11, color: "#888780" }}>{t.profileUsernameSuggest}</span>
-                      {suggestions.map((s) => (
-                        <button key={s} type="button"
-                          onClick={() => { setUsernameDraft(s); setSaveError(null); setSuggestions([]); usernameInputRef.current?.focus(); }}
-                          style={{ padding: "3px 8px", borderRadius: 14, fontSize: 11, background: "#3C1F13", color: "#F0997B", border: "1px solid rgba(240,153,123,0.4)", cursor: "pointer" }}>
-                          {s}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  <label style={{ fontSize: 11, color: "#C4C2BA", display: "block", marginBottom: 4 }}>{t.profileDisplayNameLabel}</label>
-                  <input
-                    type="text"
-                    autoComplete="off"
-                    value={displayNameDraft}
-                    onChange={(e) => { setDisplayNameDraft(e.target.value); setSaveOk(false); }}
-                    maxLength={120}
-                    style={{ width: "100%", boxSizing: "border-box", marginBottom: 3, fontSize: 13, padding: "6px 10px" }}
-                  />
-                  <div style={{ fontSize: 11, color: "#666663", marginBottom: 10, lineHeight: 1.4 }}>{t.profileDisplayNameHelp}</div>
-                  <label style={{ fontSize: 11, color: "#C4C2BA", display: "block", marginBottom: 4 }}>Location</label>
-                  <CityInput value={homeCityDraft} onChange={setHomeCityDraft} placeholder="e.g. NYC, Tokyo, London" />
-                  {(() => {
-                    const cc = getCurrencyForCity(homeCityDraft);
-                    const sym = CURRENCY_SYMBOLS[cc] || cc;
-                    return (
-                      <div style={{ fontSize: 11, color: "#666663", marginTop: 5, marginBottom: 10, lineHeight: 1.4 }}>
-                        {homeCityDraft.trim() ? `Currency: ${sym} ${cc}` : "Currency: $ USD (default)"}
-                      </div>
-                    );
-                  })()}
-                  <label style={{ fontSize: 11, color: "#C4C2BA", display: "block", marginBottom: 3 }}>{t.profileEmailLabel}</label>
-                  <div style={{ fontSize: 13, color: "#F1EFE8", wordBreak: "break-all" }}>{user?.email || "—"}</div>
-                </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button type="button"
-                    onClick={() => { setEditMode(false); setSaveError(null); setSuggestions([]); setUsernameDraft(profile?.username ?? username ?? ""); setDisplayNameDraft(profile?.display_name ?? ""); setHomeCityDraft(profile?.home_city || ""); }}
-                    style={{ ...btn, flex: 1, marginBottom: 0, background: "transparent", color: "#C4C2BA", border: "0.5px solid rgba(255,255,255,0.2)" }}>
-                    Cancel
-                  </button>
-                  <button type="button" disabled={busy || saveBusy || !canSave} onClick={saveProfile}
-                    style={{ ...btn, flex: 1, marginBottom: 0, background: canSave ? "#F0997B" : "#5A4A43", color: canSave ? "#141413" : "#AFA8A3", cursor: (busy || saveBusy) ? "wait" : (canSave ? "pointer" : "not-allowed"), opacity: canSave ? 1 : 0.85 }}>
-                    {saveBusy ? "…" : t.profileSave}
-                  </button>
-                </div>
-              </>
+                );
+              })()}
+              <label style={{ fontSize: 11, color: "#C4C2BA", display: "block", marginBottom: 3 }}>{t.profileEmailLabel}</label>
+              <div style={{ fontSize: 13, color: "#F1EFE8", wordBreak: "break-all" }}>{user?.email || "—"}</div>
+            </div>
+            {saveOk && (
+              <p style={{ fontSize: 12, color: "#97C459", margin: "0 0 8px", textAlign: "center" }}>{t.profileSaved}</p>
             )}
+            <div style={{ display: "flex", gap: 8 }}>
+              <button type="button"
+                onClick={onClose}
+                style={{ ...btn, flex: 1, marginBottom: 0, background: "transparent", color: "#C4C2BA", border: "0.5px solid rgba(255,255,255,0.2)" }}>
+                Cancel
+              </button>
+              <button type="button" disabled={busy || saveBusy || !canSave} onClick={saveProfile}
+                style={{ ...btn, flex: 1, marginBottom: 0, background: canSave ? "#F0997B" : "#5A4A43", color: canSave ? "#141413" : "#AFA8A3", cursor: (busy || saveBusy) ? "wait" : (canSave ? "pointer" : "not-allowed"), opacity: canSave ? 1 : 0.85 }}>
+                {saveBusy ? "…" : t.profileSave}
+              </button>
+            </div>
+            <button type="button" disabled={busy} onClick={signOut}
+              style={{ width: "100%", marginTop: 10, padding: "8px", background: "none", border: "none", color: "#666663", fontSize: 12, cursor: "pointer" }}>
+              {t.signOut}
+            </button>
           </div>
 
         ) : pendingVerificationEmail ? (
