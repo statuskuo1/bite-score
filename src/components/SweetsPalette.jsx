@@ -49,17 +49,10 @@ export function SweetsPalette({cafes, sweetWeights, replaceSweetWeights, homeCur
     </div>
   );
 
-  if(!total) return (
-    <div style={{display:"flex",flexDirection:"column",gap:12}}>
-      {weightsCard}
-      <p style={{color:"#888780",fontSize:14}}>{t.noSweets}</p>
-    </div>
-  );
-
   const scored = [...sweets].map(e=>({...e,sc:calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,sweetWeights)})).sort((a,b)=>(b.sc??0)-(a.sc??0));
-  const avgT=(sweets.reduce((a,e)=>a+e.taste,0)/total).toFixed(1);
+  const avgT = total ? (sweets.reduce((a,e)=>a+e.taste,0)/total).toFixed(1) : "—";
   const mustReturn=sweets.filter(e=>e.repeatability===3).length;
-  const mustReturnPct=Math.round(mustReturn/total*100);
+  const mustReturnPct = total ? Math.round(mustReturn/total*100) : 0;
 
   // Order type breakdown
   const orderCounts={};sweets.forEach(e=>{const k=e.order||"Other";orderCounts[k]=(orderCounts[k]||0)+1;});
@@ -147,9 +140,12 @@ export function SweetsPalette({cafes, sweetWeights, replaceSweetWeights, homeCur
             <div>
               <div style={{display:"flex",gap:20,alignItems:"center",marginBottom:16}}>
                 <svg width={S2} height={S2} viewBox={"0 0 "+S2+" "+S2} style={{flexShrink:0}}>
+                  {paths2.length === 0 && (
+                    <><circle cx={CX2} cy={CY2} r={R2} fill="#2C2C2A"/><circle cx={CX2} cy={CY2} r={RI2} fill="#141413"/></>
+                  )}
                   {paths2.map(p=><path key={p.b} d={p.d} fill={p.color}/>)}
-                  <text x={CX2} y={CY2-4} textAnchor="middle" fill="#F1EFE8" fontSize={20} fontWeight="500">{total}</text>
-                  <text x={CX2} y={CY2+12} textAnchor="middle" fill="#888780" fontSize={9}>sweets</text>
+                  <text x={CX2} y={CY2-4} textAnchor="middle" fill={total?"#F1EFE8":"#444441"} fontSize={20} fontWeight="500">{total||"?"}</text>
+                  <text x={CX2} y={CY2+12} textAnchor="middle" fill="#888780" fontSize={9}>{total?"sweets":"log sweets"}</text>
                 </svg>
                 <div style={{flex:1}}>
                   {typeEntries.map(([b,count])=>(

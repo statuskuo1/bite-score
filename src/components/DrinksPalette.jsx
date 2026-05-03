@@ -49,16 +49,9 @@ export function DrinksPalette({cafes,drinkWeights,replaceDrinkWeights,homeCurren
     </div>
   );
 
-  if(!total) return (
-    <div style={{display:"flex",flexDirection:"column",gap:12}}>
-      {weightsCard}
-      <p style={{color:"#888780",fontSize:14}}>{t.noDrinks}</p>
-    </div>
-  );
-
-  const avgT=(drinks.reduce((a,e)=>a+e.taste,0)/total).toFixed(1);
+  const avgT = total ? (drinks.reduce((a,e)=>a+e.taste,0)/total).toFixed(1) : "—";
   const sym = CURRENCY_SYMBOLS[homeCurrency] || homeCurrency;
-  const avgCUSD = drinks.reduce((a,e)=>a+(toUSD(e.cost,e.currency_code||"USD")/(e.portions||1)),0)/total;
+  const avgCUSD = total ? drinks.reduce((a,e)=>a+(toUSD(e.cost,e.currency_code||"USD")/(e.portions||1)),0)/total : 0;
   const avgC = fromUSD(avgCUSD, homeCurrency).toFixed(2);
 
   const orderCounts={};drinks.forEach(e=>{const k=e.order||e.category;orderCounts[k]=(orderCounts[k]||0)+1;});

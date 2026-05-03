@@ -74,8 +74,6 @@ export function PaletteView({
   const personality = getRestaurantPersonality(entries, weights);
 
   const btnGhost = {fontSize:11,color:"#5B9BD5",background:"none",border:"1px solid rgba(91,155,213,0.45)",borderRadius:8,padding:"5px 12px",cursor:"pointer",fontWeight:500};
-  /** Hide personality / breakdown / stats only when there are no entries — sliders always normalize to 100% so weights are always valid. */
-  const showRestaurantBody = total>0;
   const questMetrics = getQuestMetrics(entries, questL);
   const summaryRight = t.questSummaryRight
     .replace("{done}", String(questMetrics.doneCount))
@@ -113,7 +111,7 @@ export function PaletteView({
               </p>
             )}
           </div>
-          {!total?<p style={{color:"#888780",fontSize:14}}>{t.noEntriesYet}</p>:showRestaurantBody&&<>
+          <>
           <div style={{...S.card}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
               <div style={{...S.lbl,marginBottom:0}}>{t.tastePalette}</div>
@@ -213,7 +211,7 @@ export function PaletteView({
               ));
             })()}
           </div>
-          </>}
+          </>
         </div>
       )}
 

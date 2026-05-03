@@ -77,6 +77,25 @@ const GUEST_PALETTE_ENTRIES = [
   {id:"gp8",name:"Sammy's Halal",     cuisine:"Middle Eastern", letter:"M",city:"New York City",taste:7.8,cost:14, portions:1,wait:5, repeatability:2,useR:true,notes:""},
 ];
 
+const EXAMPLE_RESTAURANT = {
+  id: "__example__",
+  name: "Lilia",
+  cuisine: "Italian",
+  isFusion: false,
+  cuisine2: "",
+  taste: 9.2,
+  cost: 120,
+  currency_code: "USD",
+  portions: 2,
+  wait: 25,
+  repeatability: 3,
+  useR: true,
+  notes: "Best pasta in NYC, no contest.",
+  city: "New York City",
+  placeId: null,
+  visitedAt: null,
+};
+
 function GuestPreview({ message, onSignIn, children }) {
   return (
     <div>
@@ -1299,6 +1318,25 @@ export default function App() {
                 sortAsc={sortAsc}
                 onToggleSortAsc={()=>setSortAsc(a=>!a)}
               />
+              {entries.length===0&&(
+                <div style={{position:"relative",marginBottom:8}}>
+                  <div style={{opacity:0.45,pointerEvents:"none"}}>
+                    <RestRow
+                      e={EXAMPLE_RESTAURANT}
+                      display={getDisplay(EXAMPLE_RESTAURANT)}
+                      user={user}
+                      visits={1}
+                      group={[EXAMPLE_RESTAURANT]}
+                      weights={weights}
+                      homeCurrency={homeCurrency}
+                      dinedWithForEntry={()=>[]}
+                      onEdit={()=>{}}
+                      onDelete={()=>{}}
+                    />
+                  </div>
+                  <div style={{position:"absolute",top:8,right:8,fontSize:10,fontWeight:700,letterSpacing:"0.08em",color:"#888780",textTransform:"uppercase",background:"#252523",border:"0.5px solid rgba(255,255,255,0.15)",borderRadius:6,padding:"2px 7px"}}>SAMPLE</div>
+                </div>
+              )}
               {filtered.length===0&&<p style={{color:"#888780",fontSize:14}}>{sortedR.length===0?t.noRestaurantsYet:t.noEntries}</p>}
               {contextRestaurant ? (
                 <div>

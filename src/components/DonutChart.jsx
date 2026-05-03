@@ -15,6 +15,9 @@ export function DonutChart({slices,total}) {
   function splitL(n){if(n.length<=13)return[n];const b=n.lastIndexOf(" ",13);if(b<=3)return[n.slice(0,13),n.slice(13)];return[n.slice(0,b),n.slice(b+1)];}
   return (
     <svg width={S} height={S} viewBox={"0 0 "+S+" "+S} style={{flexShrink:0,overflow:"visible"}}>
+      {paths.length === 0 && (
+        <><circle cx={CX} cy={CY} r={R} fill="#2C2C2A"/><circle cx={CX} cy={CY} r={RI} fill="#141413"/></>
+      )}
       {paths.map(s=>{
         const ih=hov===s.region,tx=ih?Math.cos(s.mid)*4:0,ty=ih?Math.sin(s.mid)*4:0;
         return <path key={s.region} d={s.d} fill={s.color} opacity={hov&&!ih?0.35:1}
