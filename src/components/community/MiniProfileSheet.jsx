@@ -105,7 +105,7 @@ export function UnfollowConfirmDialog({ profile, isTasteBuds, busy, onConfirm, o
  *   onViewLog    — (profile) => void
  *   t            — translations object
  */
-export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClose, onCompareWith, onUnfollow, onFollow, onViewLog, onWeightTap, t }) {
+export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClose, onCompareWith, onUnfollow, onFollow, onViewLog, onWeightTap, onEditProfile, onSignOut, t }) {
   const [stats, setStats] = useState(null);
   const [confirmUnfollow, setConfirmUnfollow] = useState(false);
   const [freshWeights, setFreshWeights] = useState(null);
@@ -276,7 +276,32 @@ export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClos
             );
           })()}
 
-          {relation === "self" ? null : (relation === "i_follow" || relation === "taste_buds") ? (
+          {relation === "self" ? (
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                type="button"
+                onClick={onEditProfile}
+                style={{
+                  flex: 1, padding: "12px 14px", borderRadius: 10,
+                  background: "#3C1F13", border: "1px solid rgba(240,153,123,0.4)",
+                  color: "#F0997B", fontSize: 14, fontWeight: 600, cursor: "pointer",
+                }}
+              >
+                Edit profile
+              </button>
+              <button
+                type="button"
+                onClick={onSignOut}
+                style={{
+                  flex: 1, padding: "12px 14px", borderRadius: 10,
+                  background: "transparent", border: "0.5px solid rgba(255,255,255,0.2)",
+                  color: "#C4C2BA", fontSize: 14, fontWeight: 500, cursor: "pointer",
+                }}
+              >
+                {t?.signOut || "Sign out"}
+              </button>
+            </div>
+          ) : (relation === "i_follow" || relation === "taste_buds") ? (
             <div style={{ display: "flex", gap: 8 }}>
               <button
                 type="button"

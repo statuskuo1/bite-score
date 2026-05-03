@@ -1982,6 +1982,8 @@ export default function App() {
         relation="self"
         onClose={() => setShowSelfSheet(false)}
         onWeightTap={() => { setShowSelfSheet(false); navigate("/taste"); }}
+        onEditProfile={() => { setShowSelfSheet(false); setShowAuthModal(true); }}
+        onSignOut={async () => { setShowSelfSheet(false); await supabase.auth.signOut(); }}
         t={t}
       />
     )}
