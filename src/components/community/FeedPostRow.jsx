@@ -205,22 +205,40 @@ function firstName(profile) {
   return dn.split(/\s+/)[0] || dn || "Someone";
 }
 
-function reactorSummary(reactors, count) {
-  if (!count) return "";
-  if (!reactors?.length) return `${count} ${count === 1 ? "heart" : "hearts"}`;
+/**
+ * Heart-row summary as discrete parts so the trailing "N other(s)" token
+ * can be wrapped in a clickable span. The `othersToken` (if non-null) is
+ * the substring the OthersListSheet trigger should attach to.
+ *
+ * Shapes:
+ *   no profiles, count > 0 → ["3 hearts"]                 (no trigger)
+ *   1 reactor              → ["FirstName"]                (no trigger)
+ *   2 reactors             → ["FirstName", "+", "1 other"]   (trigger on tail)
+ *   3+ reactors            → ["FirstName", "+", "N others"]  (trigger on tail)
+ */
+function reactorSummaryParts(reactors, count) {
+  if (!count) return { parts: [], othersToken: null };
+  if (!reactors?.length) {
+    return { parts: [`${count} ${count === 1 ? "heart" : "hearts"}`], othersToken: null };
+  }
   const first = firstName(reactors[0]);
   const others = count - 1;
-  if (others <= 0) return first;
-  if (others === 1) return `${first} + 1 other`;
-  return `${first} + ${others} others`;
+  if (others <= 0) return { parts: [first], othersToken: null };
+  const tail = others === 1 ? "1 other" : `${others} others`;
+  return { parts: [first, "+", tail], othersToken: tail };
 }
 
+/**
+ * Dined-with summary as parts. At 3+ co-diners the trailing "N others"
+ * token is the click target for the OthersListSheet.
+ */
 function dinedWithSummary(profiles) {
-  if (!profiles?.length) return null;
+  if (!profiles?.length) return { parts: null, othersToken: null };
   const names = profiles.map((p) => firstName(p));
-  if (names.length === 1) return [names[0]];
-  if (names.length === 2) return [names[0], "and", names[1]];
-  return [names[0], names[1], "and", `${names.length - 2} others`];
+  if (names.length === 1) return { parts: [names[0]], othersToken: null };
+  if (names.length === 2) return { parts: [names[0], "and", names[1]], othersToken: null };
+  const tail = `${names.length - 2} others`;
+  return { parts: [names[0], names[1], "and", tail], othersToken: tail };
 }
 
 function HeartIcon({ filled, size = 16 }) {
@@ -259,6 +277,7 @@ export function FeedPostRow({
   reactionBusy,
   onOpenProfile,
   onToggleHeart,
+  onOpenOthers,
 }) {
   const { t } = useLang();
   const [showStats, setShowStats] = useState(false);
@@ -293,9 +312,23 @@ export function FeedPostRow({
   const heartCount = reactionState?.count || 0;
   const heartMine = !!reactionState?.mine;
   const reactors = reactionState?.reactors || [];
+  const reactorSum = reactorSummaryParts(reactors, heartCount);
 
   const headerInteractive = typeof onOpenProfile === "function";
   const heartInteractive = typeof onToggleHeart === "function";
+  const othersInteractive = typeof onOpenOthers === "function";
+
+  /** Inline accent style for the clickable "N others" tokens — mirrors the
+   *  existing accent-orange copy but with a dotted underline + pointer to
+   *  signal interactivity. */
+  const othersTokenStyle = {
+    color: ACCENT_ORANGE,
+    fontWeight: 500,
+    cursor: "pointer",
+    textDecoration: "underline",
+    textDecorationStyle: "dotted",
+    textUnderlineOffset: 2,
+  };
 
   return (
     <div style={{
@@ -456,7 +489,7 @@ export function FeedPostRow({
       </div>
 
       {/* Dined with */}
-      {dinedWith && (
+      {dinedWith.parts && (
         <div style={{
           display: "flex",
           alignItems: "center",
@@ -478,18 +511,31 @@ export function FeedPostRow({
             whiteSpace: "nowrap",
           }}>
             <span style={{ color: "#888780" }}>dined with </span>
-            {dinedWith.map((part, i) => (
-              <span
-                key={i}
-                style={{
-                  color: part === "and" ? "#888780" : ACCENT_ORANGE,
-                  fontWeight: part === "and" ? 400 : 500,
-                }}
-              >
-                {part}
-                {i < dinedWith.length - 1 ? " " : ""}
-              </span>
-            ))}
+            {dinedWith.parts.map((part, i) => {
+              const isOthersToken = othersInteractive && part === dinedWith.othersToken;
+              const isAnd = part === "and";
+              const baseStyle = isAnd
+                ? { color: "#888780", fontWeight: 400 }
+                : { color: ACCENT_ORANGE, fontWeight: 500 };
+              return (
+                <span
+                  key={i}
+                  onClick={isOthersToken ? (e) => {
+                    e.stopPropagation();
+                    onOpenOthers({
+                      kind: "co_diners",
+                      post,
+                      profiles: coDiners,
+                      title: "Dined with",
+                    });
+                  } : undefined}
+                  style={isOthersToken ? othersTokenStyle : baseStyle}
+                >
+                  {part}
+                  {i < dinedWith.parts.length - 1 ? " " : ""}
+                </span>
+              );
+            })}
           </div>
         </div>
       )}
@@ -572,7 +618,27 @@ export function FeedPostRow({
               whiteSpace: "nowrap",
               minWidth: 0,
             }}>
-              {reactorSummary(reactors, heartCount)}
+              {reactorSum.parts.map((part, i) => {
+                const isOthersToken = othersInteractive && part === reactorSum.othersToken;
+                return (
+                  <span
+                    key={i}
+                    onClick={isOthersToken ? (e) => {
+                      e.stopPropagation();
+                      onOpenOthers({
+                        kind: "reactors",
+                        post,
+                        profiles: reactors,
+                        title: "Hearts",
+                      });
+                    } : undefined}
+                    style={isOthersToken ? othersTokenStyle : undefined}
+                  >
+                    {part}
+                    {i < reactorSum.parts.length - 1 ? " " : ""}
+                  </span>
+                );
+              })}
             </span>
           </div>
         )}

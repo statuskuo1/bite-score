@@ -109,6 +109,61 @@ export async function fetchReactionsForPosts(client, posts, viewerId) {
 }
 
 /**
+ * Fetch the full reactor profile list for a single post — no slice.
+ *
+ * The batch helper above caps at REACTOR_AVATAR_LIMIT for the avatar stack,
+ * but the "+N others" expanded modal needs every reactor. Returns an array
+ * of profiles ordered by `created_at desc` so newest hearts surface first
+ * (matches the avatar-stack ordering).
+ *
+ * Fails soft: returns [] on any DB error so the modal renders an empty
+ * list instead of crashing the feed.
+ */
+export async function fetchAllReactorsForPost(client, post) {
+  if (!post?.id) return [];
+  const dbType = DB_TYPE_BY_KIND[post.kind];
+  if (!dbType) return [];
+
+  const { data: rows, error } = await client
+    .from("feed_reactions")
+    .select("user_id, created_at")
+    .eq("post_type", dbType)
+    .eq("post_id", post.id)
+    .order("created_at", { ascending: false });
+  if (error) {
+    console.warn("[BITE] fetchAllReactorsForPost:", error.message);
+    return [];
+  }
+  if (!rows?.length) return [];
+
+  const userIds = [...new Set(rows.map((r) => r.user_id).filter(Boolean))];
+  if (!userIds.length) return [];
+
+  const { data: profs, error: pErr } = await client
+    .from("profiles")
+    .select("id, username, display_name, avatar_url")
+    .in("id", userIds);
+  if (pErr) {
+    console.warn("[BITE] fetchAllReactorsForPost profiles:", pErr.message);
+    return [];
+  }
+  const byId = new Map((profs || []).map((p) => [p.id, p]));
+
+  /** Preserve the created_at desc order from the reactions query, dedupe
+   *  on user_id (a unique constraint should already prevent duplicates
+   *  but the dedupe is cheap insurance). */
+  const seen = new Set();
+  const out = [];
+  for (const r of rows) {
+    if (!r.user_id || seen.has(r.user_id)) continue;
+    seen.add(r.user_id);
+    const p = byId.get(r.user_id);
+    if (p) out.push(p);
+  }
+  return out;
+}
+
+/**
  * Toggle a heart on a single post. Returns the new state for that post.
  *
  * Optimistic callers should compute the next state locally (count ± 1, mine

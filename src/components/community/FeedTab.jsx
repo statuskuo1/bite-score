@@ -9,6 +9,7 @@ import {
 import {
   fetchReactionsForPosts,
   toggleHeart,
+  fetchAllReactorsForPost,
 } from "../../utils/feedReactionsApi.js";
 import {
   followUser,
@@ -18,6 +19,7 @@ import {
 import { FeedPostRow } from "./FeedPostRow.jsx";
 import { MiniProfileSheet } from "./MiniProfileSheet.jsx";
 import { FeedPostSheet } from "./FeedPostSheet.jsx";
+import { OthersListSheet } from "./OthersListSheet.jsx";
 
 const PAGE_SIZE = 30;
 
@@ -124,6 +126,15 @@ export function FeedTab({
    *  Taste Buds feed (e.g., one-way follow). Shown over the feed with
    *  hearts enabled (FeedPostSheet does the viewer != owner gating). */
   const [fallbackSheet, setFallbackSheet] = useState(null);
+
+  /** Expanded "+N others" sheet — surfaces every co-diner or heart reactor
+   *  on a post with each person's own BITE for the place. Sits at zIndex
+   *  310 so MiniProfileSheet (320) can stack on top when a row is tapped,
+   *  and the list survives a profile-sheet dismissal so the user lands
+   *  back on this list (not the feed). Loading flag covers the reactors
+   *  pre-fetch since the feed-load reactors array is capped. */
+  const [othersList, setOthersList] = useState(null);
+  const [othersLoading, setOthersLoading] = useState(false);
 
   useEffect(() => {
     if (!user?.id) {
@@ -293,6 +304,30 @@ export function FeedTab({
     setSheetRelation(null);
   }
 
+  /** Open the expanded "+N others" sheet. Co-diners arrive with the full
+   *  profile list already (coDinersByKey), so we set state synchronously.
+   *  Reactors arrive capped (REACTOR_AVATAR_LIMIT) — show the avatars we
+   *  have, then pre-fetch the full list and update once it lands. */
+  async function openOthersList(payload) {
+    if (!payload?.profiles || !payload.post) return;
+    setOthersList({
+      kind: payload.kind,
+      post: payload.post,
+      profiles: payload.profiles,
+      title: payload.title,
+    });
+    if (payload.kind !== "reactors") return;
+    setOthersLoading(true);
+    const all = await fetchAllReactorsForPost(supabase, payload.post);
+    setOthersLoading(false);
+    /** Guard: if the user closed the sheet (or opened a different one)
+     *  while we were fetching, drop the late result. */
+    setOthersList((prev) => {
+      if (!prev || prev.kind !== "reactors" || prev.post?.id !== payload.post.id) return prev;
+      return { ...prev, profiles: all.length ? all : prev.profiles };
+    });
+  }
+
   async function handleFollow(targetId) {
     if (!user?.id || !targetId) return;
     setSheetBusy(true);
@@ -411,6 +446,7 @@ export function FeedTab({
               reactionBusy={busyHeartKey === key}
               onOpenProfile={openProfileSheet}
               onToggleHeart={handleToggleHeart}
+              onOpenOthers={openOthersList}
             />
           </div>
         );
@@ -437,17 +473,28 @@ export function FeedTab({
         </button>
       )}
 
+      {othersList && (
+        <OthersListSheet
+          post={othersList.post}
+          profiles={othersList.profiles}
+          title={othersList.title}
+          loading={othersLoading && othersList.kind === "reactors"}
+          onClose={() => { setOthersList(null); setOthersLoading(false); }}
+          onOpenProfile={openProfileSheet}
+        />
+      )}
+
       {sheetProfile && (
         <MiniProfileSheet
           profile={sheetProfile}
           relation={sheetRelation}
           busy={sheetBusy}
           onClose={closeSheet}
-          onCompareWith={(p) => { closeSheet(); onCompareWith?.(p); }}
+          onCompareWith={(p) => { closeSheet(); setOthersList(null); onCompareWith?.(p); }}
           onUnfollow={handleUnfollow}
           onFollow={handleFollow}
-          onViewLog={(p) => { closeSheet(); onViewLog?.(p); }}
-          onWeightTap={sheetRelation === "self" ? () => { closeSheet(); navigate("/taste"); } : undefined}
+          onViewLog={(p) => { closeSheet(); setOthersList(null); onViewLog?.(p); }}
+          onWeightTap={sheetRelation === "self" ? () => { closeSheet(); setOthersList(null); navigate("/taste"); } : undefined}
           t={t}
         />
       )}
