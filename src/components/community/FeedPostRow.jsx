@@ -257,10 +257,14 @@ function viewerFirst(profiles, viewerId) {
  *   2 (viewer + 1 other)   → "you and Name"
  *   3+ (viewer + 2+ others)→ "you and N others"   (N = profiles.length - 1)
  *
- * Viewer-not-included rules (existing behavior):
+ * Viewer-not-included rules:
  *   1 → "Name"
  *   2 → "Name1 and Name2"
- *   3+→ "Name1 Name2 and N others"
+ *   3+→ "Name1 and N others"   (N = profiles.length - 1)
+ *
+ * The 3+ shapes intentionally collapse to a single name + "N others" on
+ * both sides so a long tag list never blows out the row to two lines.
+ * Two co-diners is the only case where both names are spelled out.
  */
 function dinedWithSummary(profiles, viewerId) {
   if (!profiles?.length) return { parts: null, othersToken: null };
@@ -310,11 +314,10 @@ function dinedWithSummary(profiles, viewerId) {
       othersToken: null,
     };
   }
-  const tail = `${others.length - 2} others`;
+  const tail = `${others.length - 1} others`;
   return {
     parts: [
       { kind: "name", text: firstName(others[0]), profile: others[0] },
-      { kind: "name", text: firstName(others[1]), profile: others[1] },
       { kind: "and", text: "and" },
       { kind: "others", text: tail },
     ],
