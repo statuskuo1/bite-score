@@ -7,7 +7,7 @@ import { Avatar } from "./Avatar.jsx";
 import { useLang } from "../../contexts/LangContext.jsx";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 import { listTasteBuds } from "../../utils/followsApi.js";
-import { addWantToGo } from "../../utils/wantToGoApi.js";
+import { addWantToGo, removeWantToGo } from "../../utils/wantToGoApi.js";
 
 const STOP_WORDS = new Set([
   "the","a","an","and","or","but","it","its","is","was","were","are","be","been","being",
@@ -379,21 +379,23 @@ export function PlaceStatsSheet({ post, restaurantWeights, drinkWeights, sweetWe
                     <button
                       type="button"
                       onClick={async () => {
-                        if (!user?.id || wantedToGo) return;
-                        setWantedToGo(true);
-                        await addWantToGo(supabase, user.id, {
-                          placeId: post.placeId,
-                          kind: post.kind || "rest",
-                          name: post.name,
-                          cuisine: post.cuisine || post.category,
-                          city: post.city,
-                        });
+                        if (!user?.id) return;
+                        if (wantedToGo) {
+                          setWantedToGo(false);
+                          await removeWantToGo(supabase, user.id, { placeId: post.placeId, kind: post.kind || "rest" });
+                        } else {
+                          setWantedToGo(true);
+                          await addWantToGo(supabase, user.id, {
+                            placeId: post.placeId, kind: post.kind || "rest",
+                            name: post.name, cuisine: post.cuisine || post.category, city: post.city,
+                          });
+                        }
                       }}
                       style={{
                         fontSize: 11,
                         color: wantedToGo ? "#7DBF8E" : "#F0997B",
                         background: "none", border: "none",
-                        cursor: wantedToGo ? "default" : "pointer",
+                        cursor: "pointer",
                         padding: 0, fontWeight: 500,
                       }}
                     >

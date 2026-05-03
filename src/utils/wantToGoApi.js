@@ -7,3 +7,14 @@ export async function addWantToGo(client, userId, { placeId, kind, name, cuisine
   if (error) console.warn("[BITE] addWantToGo:", error.message);
   return { ok: !error };
 }
+
+export async function removeWantToGo(client, userId, { placeId, kind }) {
+  if (!userId || !placeId) return { ok: false };
+  const { error } = await client.from("want_to_go")
+    .delete()
+    .eq("user_id", userId)
+    .eq("place_id", placeId)
+    .eq("kind", kind);
+  if (error) console.warn("[BITE] removeWantToGo:", error.message);
+  return { ok: !error };
+}

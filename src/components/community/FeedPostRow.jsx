@@ -12,7 +12,7 @@ import {
 import { CURRENCY_SYMBOLS } from "../../utils/currency.js";
 import { FLAGS } from "../../constants/cuisineConstants.js";
 import { Avatar } from "./Avatar.jsx";
-import { addWantToGo } from "../../utils/wantToGoApi.js";
+import { addWantToGo, removeWantToGo } from "../../utils/wantToGoApi.js";
 import { supabase } from "../../config/supabaseClient.js";
 
 /**
@@ -346,21 +346,23 @@ export function FeedPostRow({
             <button
               type="button"
               onClick={async () => {
-                if (!viewerId || wantedToGo) return;
-                setWantedToGo(true);
-                await addWantToGo(supabase, viewerId, {
-                  placeId: post.placeId,
-                  kind: post.kind,
-                  name: post.name,
-                  cuisine: post.cuisine || post.category,
-                  city: post.city,
-                });
+                if (!viewerId) return;
+                if (wantedToGo) {
+                  setWantedToGo(false);
+                  await removeWantToGo(supabase, viewerId, { placeId: post.placeId, kind: post.kind });
+                } else {
+                  setWantedToGo(true);
+                  await addWantToGo(supabase, viewerId, {
+                    placeId: post.placeId, kind: post.kind,
+                    name: post.name, cuisine: post.cuisine || post.category, city: post.city,
+                  });
+                }
               }}
               style={{
                 fontSize: 11,
                 color: wantedToGo ? "#7DBF8E" : ACCENT_ORANGE,
                 background: "none", border: "none",
-                cursor: wantedToGo ? "default" : "pointer",
+                cursor: "pointer",
                 padding: 0, fontWeight: 500, flexShrink: 0,
               }}
             >
@@ -409,7 +411,7 @@ export function FeedPostRow({
           </div>
         </div>
 
-        {/* Score chip: poster's BITE primary, viewer's score secondary */}
+        {/* Score chip: poster's BITE only */}
         <div style={{
           flexShrink: 0,
           padding: "8px 12px",
@@ -424,11 +426,6 @@ export function FeedPostRow({
           <div style={{ fontSize: 10, fontWeight: 500, color: primaryCol, marginTop: 4, opacity: 0.9 }}>
             {primaryTier || "BITE"}
           </div>
-          {viewerScore != null && (
-            <div style={{ fontSize: 11, color: "#888780", marginTop: 3, lineHeight: 1.2 }}>
-              your est. BITE: {viewerScore.toFixed(1)}
-            </div>
-          )}
         </div>
       </div>
 
@@ -437,13 +434,20 @@ export function FeedPostRow({
         display: "flex",
         flexWrap: "wrap",
         gap: 6,
-        marginBottom: dinedWith || post.notes ? 12 : 0,
+        marginBottom: 8,
       }}>
         {tasteVal && <Pill icon="✦">{tasteVal} taste</Pill>}
         {cost && <Pill>{cost}</Pill>}
         <Pill icon="⏱">{wait} min</Pill>
         <RepeatPill rating={post.repeatability} useR={post.useR} />
       </div>
+
+      {/* Viewer's estimated BITE — outside the chip so it doesn't stretch the place row */}
+      {viewerScore != null && (
+        <div style={{ fontSize: 11, color: "#888780", marginBottom: dinedWith || post.notes ? 10 : 0 }}>
+          your est. BITE: {viewerScore.toFixed(1)}
+        </div>
+      )}
 
       {/* Dined with */}
       {dinedWith && (
