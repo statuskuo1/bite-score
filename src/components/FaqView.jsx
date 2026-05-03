@@ -78,8 +78,33 @@ const FAQ_DATA = [
     items: [
       {
         q: "What is BITE Score?",
-        text: "bite benefit index taste efficiency personal restaurant rating system weighs everything you actually care about one number taste cost portion size wait time whether you'd go back set the weights score reflects priorities change them anytime scores adjust real time",
-        node: "BITE — the Benefit Index of Taste and Efficiency — is a personal restaurant rating system that weighs everything you actually care about into one number: taste, cost, portion size, wait time, and whether you'd go back. You set the weights, so the score reflects your priorities. Change them anytime and your scores adjust in real time.",
+        text: "satisfaction index taste cost portion size meals one person wait time repeatability weighted how much you care factors example restaurant date night quick bite same score normalized 0 10 benefit index efficiency",
+        node: (
+          <>
+            A satisfaction index determined by your ratings in taste, cost, portion size (how many meals for one person), wait time, and repeatability, weighted by how much you care about these factors.
+            <div style={{ marginTop: 12, fontWeight: 500, color: "#F1EFE8" }}>
+              Same satisfaction, two different paths:
+            </div>
+            <div style={{ marginTop: 8 }}>
+              <IndentedLine><b>Restaurant A — "Date Night"</b></IndentedLine>
+              <IndentedLine>Taste 8.5 · Cost $50 · Wait 30 min</IndentedLine>
+              <IndentedLine>Weights: 75% taste / 15% cost / 10% wait</IndentedLine>
+              <IndentedLine>→ BITE Score: <b>7.0</b></IndentedLine>
+            </div>
+            <div style={{ marginTop: 8 }}>
+              <IndentedLine><b>Restaurant B — "Quick Bite"</b></IndentedLine>
+              <IndentedLine>Taste 8.0 · Cost $8 · Wait 2 min</IndentedLine>
+              <IndentedLine>Weights: 50% taste / 35% cost / 15% wait</IndentedLine>
+              <IndentedLine>→ BITE Score: <b>7.0</b></IndentedLine>
+            </div>
+            <div style={{ marginTop: 12 }}>
+              Scores are normalized to 0–10. Learn more in the math section.
+            </div>
+            <div style={{ marginTop: 8, fontStyle: "italic", color: "#888780" }}>
+              BITE = Benefit Index of Taste and Efficiency.
+            </div>
+          </>
+        ),
       },
       {
         q: "How do I rate?",
@@ -128,25 +153,40 @@ const FAQ_DATA = [
     items: [
       {
         q: "How is the BITE Score calculated?",
-        text: "three factors weighted preferences adjustable my palette taste bang per buck cost portions benchmarked median meal spend country wait minutes penalized curve scores normalized 0 10",
+        text: "three factors weighted preferences adjustable my palette taste 0 10 increments consistency bang per buck cost portions benchmarked median meal spend country wait minutes penalized curve scores normalized 0 10",
         node: (
           <>
             Three factors, each weighted by your preferences (adjustable anytime in My Palette):
             <div style={{ marginTop: 8 }}>
-              <IndentedLine>Taste</IndentedLine>
-              <IndentedLine>Bang per Buck — cost ÷ portions, benchmarked against the median meal spend for your country.</IndentedLine>
-              <IndentedLine>Wait — logged in minutes, but penalized on a curve.</IndentedLine>
+              <IndentedLine>Taste: 0–10, in 0.1 or 0.5 increments for consistency.</IndentedLine>
+              <IndentedLine>Bang per Buck: cost ÷ portions, benchmarked against the median meal spend for your country.</IndentedLine>
+              <IndentedLine>Wait: logged in minutes, but penalized on a curve.</IndentedLine>
             </div>
             <div style={{ marginTop: 8 }}>Scores are normalized to 0–10.</div>
           </>
         ),
       },
       {
+        q: "How are scores normalized between 0–10?",
+        text: "scores normalized 0 10 raw score compared theoretical best your weights taste 10 no cost drag wait penalty ratio capped 0 1 multiply 70 percent personal max comparable adjust weights",
+        node: (
+          <>
+            Each rating's raw score is compared to the theoretical best for your weights (taste = 10, no cost drag, no wait penalty). We take that ratio (capped between 0 and 1) and multiply by 10.
+            <div style={{ marginTop: 8 }}>
+              So a 7 always means "70% of your personal max" — scores stay comparable even when you adjust your weights.
+            </div>
+          </>
+        ),
+      },
+      {
         q: "What does Repeatability do?",
-        text: "michelin style 0 3 star rating adjusts base score must return +40% boost would seek out +20% wouldn't return -30% penalty good meal going back high base score low repeatability drops solid base high repeatability climbs",
+        text: "michelin style 0 3 star rating adjusts base score formula wt taste wbpb bpb ww wait must return +40% boost would seek out +20% wouldn't return -30% penalty good meal going back high base score low repeatability drops solid base high repeatability climbs",
         node: (
           <>
             A Michelin-style 0–3 star rating that adjusts your base score:
+            <div style={{ marginTop: 8, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", color: "#F1EFE8" }}>
+              Base Score = w<sub>t</sub> · T − w<sub>bpb</sub> · BPB − w<sub>w</sub> · W
+            </div>
             <div style={{ marginTop: 8 }}>
               <IndentedLine>⭐⭐⭐ Must return: +40% boost</IndentedLine>
               <IndentedLine>⭐⭐ Would seek out: +20% boost</IndentedLine>
