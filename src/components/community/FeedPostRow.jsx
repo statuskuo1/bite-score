@@ -266,10 +266,11 @@ export function FeedPostRow({
 
   const author = authorProfile(post);
 
-  // For own posts use current React-state weights (DB may have stale defaults).
-  const posterWeights = post.ownerId === viewerId
-    ? restaurantWeights
-    : normalizeWeights({ taste: post.authorWeightTaste, bpb: post.authorWeightBpb, wait: post.authorWeightWait });
+  const posterWeights = normalizeWeights({
+    taste: post.authorWeightTaste,
+    bpb: post.authorWeightBpb,
+    wait: post.authorWeightWait,
+  });
   const posterPcts = weightsToPercents(posterWeights);
 
   // Primary score: poster's BITE using their own weights

@@ -379,6 +379,11 @@ export function FeedTab({
         const showDivider = lastBucket !== null && bucket !== lastBucket;
         lastBucket = bucket;
         const isHighlighted = highlightKey === key;
+        // For own posts, override stored author weights with current React-state weights
+        // so the poster's BITE score and weight lens always reflect the user's current settings.
+        const post = p.ownerId === user?.id
+          ? { ...p, authorWeightTaste: restaurantWeights?.taste, authorWeightBpb: restaurantWeights?.bpb, authorWeightWait: restaurantWeights?.wait }
+          : p;
         return (
           <div
             key={key}
@@ -395,7 +400,7 @@ export function FeedTab({
           >
             {showDivider && <DateDivider label={bucket} />}
             <FeedPostRow
-              post={p}
+              post={post}
               restaurantWeights={restaurantWeights}
               drinkWeights={drinkWeights}
               sweetWeights={sweetWeights}
