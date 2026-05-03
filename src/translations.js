@@ -118,6 +118,7 @@ export const T = {
     communityHintFeed:"Latest bites from your Taste Buds.",
     communityHintPeople:"Your Taste Buds, who you follow, and find new people.",
     communityHintExplore:"Top picks across your Taste Buds, plus the global leaderboard.",
+    exploreHintTopPicks:"Top picks across your Taste Buds.",
     peopleSectionTasteBuds:"Taste Buds",
     peopleSectionFollowing:"Following",
     peopleSectionDiscover:"Discover",

@@ -535,10 +535,17 @@ function aggregatePlaces(rows, getPlaceKey, makePlaceMeta, topReviewersLimit) {
 export async function fetchAggregatedRestaurantPlaces(client, opts = {}) {
   const minVisits = opts.minVisits ?? 1;
   const topReviewersLimit = opts.topReviewersLimit ?? 3;
-  const { data, error } = await client
+  /** Optional user-id allowlist. `undefined` → global (existing behavior).
+   *  Empty array → short-circuit so a "no buds yet" caller never accidentally
+   *  falls through to a global aggregate. */
+  const userIds = opts.userIds;
+  if (userIds && userIds.length === 0) return [];
+  let query = client
     .from("restaurant_visits")
     .select(RESTAURANT_VISIT_SELECT)
     .order("visited_at", { ascending: false });
+  if (userIds?.length) query = query.in("user_id", userIds);
+  const { data, error } = await query;
   if (error) {
     console.warn("[BITE] fetchAggregatedRestaurantPlaces:", error.message);
     return [];
@@ -567,6 +574,9 @@ export async function fetchAggregatedCafePlaces(client, opts = {}) {
   const topReviewersLimit = opts.topReviewersLimit ?? 3;
   /** "drinks" = Coffee/Tea/Other; "sweets" = Sweets. Omit to aggregate everything. */
   const categoryFilter = opts.categoryFilter ?? null;
+  /** Optional user-id allowlist. See fetchAggregatedRestaurantPlaces. */
+  const userIds = opts.userIds;
+  if (userIds && userIds.length === 0) return [];
   let query = client
     .from("cafe_visits")
     .select(CAFE_VISIT_SELECT)
@@ -576,6 +586,7 @@ export async function fetchAggregatedCafePlaces(client, opts = {}) {
   } else if (categoryFilter === "sweets") {
     query = query.eq("category", "Sweets");
   }
+  if (userIds?.length) query = query.in("user_id", userIds);
   const { data, error } = await query;
   if (error) {
     console.warn("[BITE] fetchAggregatedCafePlaces:", error.message);
@@ -616,4 +627,38 @@ export async function fetchPopularOrdersForPlace(client, placeId, category) {
     return [];
   }
   return (data || []).map((r) => r.order_item).filter(Boolean);
+}
+
+/**
+ * Global leaderboard of users ranked by total log count (restaurants + cafes).
+ * Returns top `limit` users as `{ profile, count }[]`, sorted descending.
+ */
+export async function fetchTopBiters(client, limit = 20) {
+  const [restResult, cafeResult] = await Promise.all([
+    client.from("restaurant_visits").select("user_id"),
+    client.from("cafe_visits").select("user_id"),
+  ]);
+  const allRows = [...(restResult.data || []), ...(cafeResult.data || [])];
+  if (!allRows.length) return [];
+
+  const counts = new Map();
+  for (const r of allRows) {
+    if (r.user_id) counts.set(r.user_id, (counts.get(r.user_id) || 0) + 1);
+  }
+
+  const top = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit);
+  if (!top.length) return [];
+
+  const topIds = top.map(([uid]) => uid);
+  const { data: profs } = await client
+    .from("profiles")
+    .select(PROFILE_FIELDS)
+    .in("id", topIds);
+
+  const profMap = new Map((profs || []).map((p) => [p.id, p]));
+  return top
+    .map(([userId, count]) => ({ profile: profMap.get(userId) ?? null, count }))
+    .filter((r) => r.profile !== null);
 }

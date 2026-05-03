@@ -324,7 +324,11 @@ export function CommunityTab({ user, myEntries, cafes = [], myRestaurantPlaceIds
           );
         })}
       </div>
-      <p style={{ fontSize: 12, color: "#888780", margin: "0 0 12px" }}>{hint}</p>
+      {/* Explore owns its own hint copy so the line can swap between the
+          Top Picks and Global blurbs as the user toggles the section strip. */}
+      {active !== "explore" && (
+        <p style={{ fontSize: 12, color: "#888780", margin: "0 0 12px" }}>{hint}</p>
+      )}
 
       {active === "feed" && !user && (
         <GuestPreview message="Sign in to see your Taste Buds' feed" onSignIn={onSignIn}>

@@ -17,6 +17,18 @@ export const globalCache = {
   userId: undefined, // undefined = never fetched
 };
 
+// ── Taste-Buds-scoped Top Picks ───────────────────────────────────────────────
+// Parallel to globalCache but populated from a userIds-filtered aggregate so
+// Explore › Top Picks can't accidentally share rows with Explore › Global.
+// `budsKey` (sorted bud-id join) flips when the viewer follows / unfollows a
+// bud, invalidating the cache before the TTL would otherwise hide the change.
+export const tasteBudsPicksCache = {
+  restaurants: [], drinks: [], sweets: [],
+  fetchedAt: 0,
+  userId: undefined,
+  budsKey: "",
+};
+
 // ── Follows (friends list) ────────────────────────────────────────────────────
 export const followsCache = {
   following: [], followers: [], tasteBuds: [],

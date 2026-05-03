@@ -21,7 +21,7 @@ const DEFAULT_SECTION = "top-picks";
  *
  * Reserved for future "Trending" sub-section once we have signal density.
  */
-export function ExploreTab({ user, myEntries, restaurantWeights, drinkWeights, sweetWeights }) {
+export function ExploreTab({ user, myEntries, cafes = [], restaurantWeights, drinkWeights, sweetWeights }) {
   const { t } = useLang();
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -41,7 +41,7 @@ export function ExploreTab({ user, myEntries, restaurantWeights, drinkWeights, s
     <div>
       <div style={{
         display: "flex", background: "#252523", borderRadius: 10, padding: 3,
-        gap: 2, marginBottom: 20,
+        gap: 2, marginBottom: 12,
       }}>
         {SECTIONS.map((s) => {
           const on = section === s.key;
@@ -65,7 +65,24 @@ export function ExploreTab({ user, myEntries, restaurantWeights, drinkWeights, s
         })}
       </div>
 
-      {section === "top-picks" && <ExploreTopPicksSection user={user} myEntries={myEntries} restaurantWeights={restaurantWeights} />}
+      {/* Section-aware hint — CommunityTab no longer renders one for /explore
+          so the copy can swap between Top Picks and Global as the user toggles. */}
+      <p style={{ fontSize: 12, color: "#888780", margin: "0 0 12px" }}>
+        {section === "global"
+          ? (t.communityHintGlobal || "Top places by community taste.")
+          : (t.exploreHintTopPicks || "Top picks across your Taste Buds.")}
+      </p>
+
+      {section === "top-picks" && (
+        <ExploreTopPicksSection
+          user={user}
+          myEntries={myEntries}
+          cafes={cafes}
+          restaurantWeights={restaurantWeights}
+          drinkWeights={drinkWeights}
+          sweetWeights={sweetWeights}
+        />
+      )}
       {section === "global" && (
         <ExploreGlobalSection
           user={user}
