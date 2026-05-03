@@ -16,12 +16,12 @@ function devLog(...args) {
 function mapAuthor(row) {
   const a = row.author || row.profiles || {};
   return {
-    authorUsername: a.username ?? "",
+    authorUsername:    a.username    ?? "",
     authorDisplayName: a.display_name ?? "",
-    authorAvatarUrl: a.avatar_url ?? "",
-    authorWeightTaste: a.pref_weight_taste ?? null,
-    authorWeightBpb: a.pref_weight_bpb ?? null,
-    authorWeightWait: a.pref_weight_wait ?? null,
+    authorAvatarUrl:   a.avatar_url  ?? "",
+    authorWeightTaste: row.weight_taste ?? a.pref_weight_taste ?? null,
+    authorWeightBpb:   row.weight_bpb   ?? a.pref_weight_bpb   ?? null,
+    authorWeightWait:  row.weight_wait  ?? a.pref_weight_wait  ?? null,
   };
 }
 
@@ -288,7 +288,7 @@ export async function fetchAllCafePlaces(client) {
   }));
 }
 
-export function restaurantVisitInsertPayload(placeId, userId, e) {
+export function restaurantVisitInsertPayload(placeId, userId, e, weights) {
   return {
     place_id: placeId,
     user_id: userId,
@@ -300,6 +300,9 @@ export function restaurantVisitInsertPayload(placeId, userId, e) {
     repeatability: e.repeatability,
     use_r: e.useR !== false,
     notes: e.notes || "",
+    weight_taste: weights?.taste ?? null,
+    weight_bpb:   weights?.bpb   ?? null,
+    weight_wait:  weights?.wait  ?? null,
   };
 }
 
@@ -317,7 +320,7 @@ export function restaurantVisitUpdatePayload(placeId, e) {
   };
 }
 
-export function cafeVisitInsertPayload(placeId, userId, e) {
+export function cafeVisitInsertPayload(placeId, userId, e, weights) {
   return {
     place_id: placeId,
     user_id: userId,
@@ -337,6 +340,9 @@ export function cafeVisitInsertPayload(placeId, userId, e) {
     repeatability: e.repeatability,
     use_r: e.useR !== false,
     notes: e.notes || "",
+    weight_taste: weights?.taste ?? null,
+    weight_bpb:   weights?.bpb   ?? null,
+    weight_wait:  weights?.wait  ?? null,
   };
 }
 

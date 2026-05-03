@@ -1092,9 +1092,10 @@ export default function App() {
         name: entry.name,
         city: entry.city || "",
       });
+      const cafeWeights = entry.category === "Sweets" ? sweetWeights : drinkWeights;
       const { data, error } = await supabase
         .from("cafe_visits")
-        .insert([cafeVisitInsertPayload(placeId, user.id, entry)])
+        .insert([cafeVisitInsertPayload(placeId, user.id, entry, cafeWeights)])
         .select(CAFE_VISIT_SELECT);
       if (error) console.error("cafe insert error:", error);
       const mapped = (data || []).map((row) => mapCafeVisitRow(row));
@@ -1709,7 +1710,7 @@ export default function App() {
                     });
                     const { data, error } = await supabase
                       .from("restaurant_visits")
-                      .insert([restaurantVisitInsertPayload(placeId, user.id, e)])
+                      .insert([restaurantVisitInsertPayload(placeId, user.id, e, weights)])
                       .select(RESTAURANT_VISIT_SELECT)
                       .single();
                     if (error) {
