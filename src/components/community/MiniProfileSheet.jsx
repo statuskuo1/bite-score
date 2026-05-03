@@ -108,9 +108,20 @@ export function UnfollowConfirmDialog({ profile, isTasteBuds, busy, onConfirm, o
 export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClose, onCompareWith, onUnfollow, onFollow, onViewLog, onWeightTap, t }) {
   const [stats, setStats] = useState(null);
   const [confirmUnfollow, setConfirmUnfollow] = useState(false);
+  const [freshWeights, setFreshWeights] = useState(null);
 
   useEffect(() => {
-    if (!profile?.id) { setStats(null); return; }
+    if (!profile?.id) { setStats(null); setFreshWeights(null); return; }
+    let cancelled = false;
+
+    // Fetch fresh weight values so we always show current weights, not stale feed-load data
+    supabase
+      .from("profiles")
+      .select("pref_weight_taste, pref_weight_bpb, pref_weight_wait")
+      .eq("id", profile.id)
+      .maybeSingle()
+      .then(({ data }) => { if (!cancelled && data) setFreshWeights(data); });
+
     if (cachedVisits) {
       const s = computeFoodStats(cachedVisits);
       setStats(s);
@@ -121,8 +132,8 @@ export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClos
       setStats(profileStatsCache.get(profile.id));
       return;
     }
-    let cancelled = false;
     setStats(null);
+    setFreshWeights(null);
     (async () => {
       const v = await fetchRestaurantVisitsForUser(supabase, profile.id);
       const s = computeFoodStats(v);
@@ -218,10 +229,11 @@ export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClos
           <FoodStatsBlock stats={stats} style={{ marginBottom: 8 }} />
 
           {(() => {
+            const src = freshWeights ?? profile;
             const w = normalizeWeights({
-              taste: profile?.pref_weight_taste,
-              bpb: profile?.pref_weight_bpb,
-              wait: profile?.pref_weight_wait,
+              taste: src?.pref_weight_taste,
+              bpb:   src?.pref_weight_bpb,
+              wait:  src?.pref_weight_wait,
             });
             const p = weightsToPercents(w);
             const isSelf = relation === "self";
