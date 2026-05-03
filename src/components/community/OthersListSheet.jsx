@@ -134,25 +134,22 @@ export function OthersListSheet({ post, profiles, title, loading, onClose, onOpe
               const score = bitesByUser.get(p.id);
               const hasScore = score != null && Number.isFinite(score);
               const col = hasScore ? scoreColor(score) : "#666663";
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => onOpenProfile?.(p)}
-                  style={{
-                    width: "100%",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: "8px 6px",
-                    background: "none",
-                    border: "none",
-                    borderRadius: 8,
-                    cursor: "pointer",
-                    color: "inherit",
-                    textAlign: "left",
-                  }}
-                >
+              const interactive = typeof onOpenProfile === "function";
+              const rowStyle = {
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "8px 6px",
+                background: "none",
+                border: "none",
+                borderRadius: 8,
+                cursor: interactive ? "pointer" : "default",
+                color: "inherit",
+                textAlign: "left",
+              };
+              const inner = (
+                <>
                   <Avatar profile={p} size={32} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{
@@ -187,7 +184,21 @@ export function OthersListSheet({ post, profiles, title, loading, onClose, onOpe
                       BITE
                     </div>
                   </div>
+                </>
+              );
+              return interactive ? (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => onOpenProfile(p)}
+                  style={rowStyle}
+                >
+                  {inner}
                 </button>
+              ) : (
+                <div key={p.id} style={rowStyle}>
+                  {inner}
+                </div>
               );
             })
           )}

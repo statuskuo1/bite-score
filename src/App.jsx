@@ -339,8 +339,21 @@ export default function App() {
       };
     }
     setAddPrefill(prefill);
+    // Always include the tagger when we have a taggerId. taggerProfile may
+    // arrive null (older notifs / partial hydration in notificationsApi),
+    // so fall back to a direct profiles lookup before assembling the
+    // dined-with seed. Falls back to no-tagger if the lookup fails.
+    let resolvedTagger = taggerProfile || null;
+    if (!resolvedTagger && taggerId) {
+      const { data: tProf } = await supabase
+        .from("profiles")
+        .select("id, username, display_name, avatar_url")
+        .eq("id", taggerId)
+        .maybeSingle();
+      if (tProf) resolvedTagger = tProf;
+    }
     // Tagger + co-diners, deduplicated, current user excluded (fetchCoDiners already handles that).
-    const all = [...(taggerProfile ? [taggerProfile] : []), ...coDiners];
+    const all = [...(resolvedTagger ? [resolvedTagger] : []), ...coDiners];
     const seen = new Set();
     setAddInitialDineWith(all.filter(p => p?.id && !seen.has(p.id) && seen.add(p.id)));
     setAddTagTaggerId(taggerId || null);

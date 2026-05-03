@@ -57,6 +57,7 @@ export function CafeGroupRow({ group, cafeSortBy, onEdit, onDelete, user, weight
         visits={group}
         user={user}
         icon={icon}
+        kind="cafe"
         scoreFn={(v) => calcCafeOutOf10(v.taste, v.cost, v.portions, v.wait, v.useR, v.repeatability, weights)}
         scoreColorFn={cafeScoreColor}
         getRows={(v) => [
@@ -91,6 +92,8 @@ export function CafeGroupRow({ group, cafeSortBy, onEdit, onDelete, user, weight
         ]}
         notes={group[group.length - 1].notes}
         diners={visits === 1 ? unionDiners : []}
+        post={{ placeId: group[0]?.placeId || null, kind: "cafe" }}
+        viewerId={user?.id}
         mutable={swipeOk}
         onEdit={() => onEdit(group[group.length - 1])}
         onDelete={() => onDelete(group[group.length - 1].id)}

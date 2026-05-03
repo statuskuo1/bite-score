@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { S } from "../styles/sharedStyles.js";
 import { SwipeRow } from "./SwipeRow.jsx";
 import { ScoreDisplay } from "./ScoreDisplay.jsx";
 import { Avatar } from "./community/Avatar.jsx";
-import { DinersSheet } from "./DinersSheet.jsx";
+import { OthersListSheet } from "./community/OthersListSheet.jsx";
 
 /**
  * Shared row chrome used by RestRow / CafeGroupRow.
@@ -17,6 +18,12 @@ import { DinersSheet } from "./DinersSheet.jsx";
  *   score        { val, label, color } — right-aligned big-number display
  *   expandedRows [[label, value], ...] for the expanded panel grid
  *   notes        free-text shown under the expanded grid
+ *   diners       co-diner profile array — drives the "With" cell + sheet
+ *   post         optional { placeId, kind } so the diners sheet can show
+ *                each co-diner's BITE for this place. Without it the sheet
+ *                still lists names; the BITE column reads "—".
+ *   viewerId     optional — currently unused but reserved for future
+ *                viewer-aware behavior (e.g. "you" labels)
  *   mutable      bool — controls swipe affordance
  *   onEdit       () => void — invoked by swipe "Edit"
  *   onDelete     () => void — invoked by swipe "Delete"
@@ -31,6 +38,9 @@ export function EntryCard({
   expandedRows,
   notes,
   diners,
+  post,
+  // eslint-disable-next-line no-unused-vars
+  viewerId,
   mutable,
   onEdit,
   onDelete,
@@ -38,6 +48,12 @@ export function EntryCard({
 }) {
   const [exp, setExp] = useState(false);
   const [showDiners, setShowDiners] = useState(false);
+
+  /** Collapsing the card must drop the sheet too — otherwise re-expanding
+   *  immediately remounts the diners sheet over the new content. */
+  useEffect(() => {
+    if (!exp) setShowDiners(false);
+  }, [exp]);
   return (
     <SwipeRow mutable={mutable} onEdit={onEdit} onDelete={onDelete}>
       <div style={{
@@ -133,9 +149,6 @@ export function EntryCard({
                 )}
               </div>
             </div>
-            {showDiners && (
-              <DinersSheet diners={diners} onClose={() => setShowDiners(false)} />
-            )}
             {notes && (
               <div style={{ marginTop: 10, fontSize: 11, color: "#888780" }}>
                 <span style={{ fontWeight: 500 }}>Note: </span>{notes}
@@ -144,6 +157,17 @@ export function EntryCard({
           </div>
         )}
       </div>
+      {/* Portal the diners sheet to <body> so SwipeRow's transform/overflow
+          doesn't trap a position:fixed overlay inside this row's box. */}
+      {showDiners && diners?.length > 0 && typeof document !== "undefined" && createPortal(
+        <OthersListSheet
+          post={post || { placeId: null, kind: "rest" }}
+          profiles={diners}
+          title="Dined with"
+          onClose={() => setShowDiners(false)}
+        />,
+        document.body,
+      )}
     </SwipeRow>
   );
 }

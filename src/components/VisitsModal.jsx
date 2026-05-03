@@ -14,6 +14,7 @@ export function VisitsModal({
   getRows,
   getDiners,
   suffix,
+  kind = "rest",
   onEdit,
   onDelete,
 }) {
@@ -71,6 +72,8 @@ export function VisitsModal({
                   expandedRows={getRows(v)}
                   notes={v.notes}
                   diners={getDiners ? getDiners(v.id) : []}
+                  post={{ placeId: v.placeId || null, kind }}
+                  viewerId={user?.id}
                   mutable={canMutateVisit(v, user)}
                   onEdit={() => { onClose(); onEdit(v); }}
                   onDelete={() => { onDelete(v.id); if (total === 1) onClose(); }}

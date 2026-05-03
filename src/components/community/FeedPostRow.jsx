@@ -229,12 +229,25 @@ function reactorSummaryParts(reactors, count) {
 }
 
 /**
+ * Display token for a dined-with profile. The viewer (id matches
+ * `viewerId`) renders as `@username` so they can recognize themselves at
+ * a glance — first names alone get ambiguous when the viewer is in the
+ * pill alongside others. Falls back to firstName for everyone else.
+ */
+function dinedWithName(profile, viewerId) {
+  if (viewerId && profile?.id === viewerId && profile?.username) {
+    return `@${profile.username}`;
+  }
+  return firstName(profile);
+}
+
+/**
  * Dined-with summary as parts. At 3+ co-diners the trailing "N others"
  * token is the click target for the OthersListSheet.
  */
-function dinedWithSummary(profiles) {
+function dinedWithSummary(profiles, viewerId) {
   if (!profiles?.length) return { parts: null, othersToken: null };
-  const names = profiles.map((p) => firstName(p));
+  const names = profiles.map((p) => dinedWithName(p, viewerId));
   if (names.length === 1) return { parts: [names[0]], othersToken: null };
   if (names.length === 2) return { parts: [names[0], "and", names[1]], othersToken: null };
   const tail = `${names.length - 2} others`;
@@ -308,7 +321,7 @@ export function FeedPostRow({
   const tasteVal = Number.isFinite(post.taste) ? post.taste.toFixed(1) : null;
   const wait = Number.isFinite(post.wait) ? post.wait : 0;
 
-  const dinedWith = dinedWithSummary(coDiners);
+  const dinedWith = dinedWithSummary(coDiners, viewerId);
   const heartCount = reactionState?.count || 0;
   const heartMine = !!reactionState?.mine;
   const reactors = reactionState?.reactors || [];

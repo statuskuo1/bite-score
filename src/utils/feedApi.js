@@ -152,8 +152,14 @@ export async function fetchVisitByIdAndType(client, postId, postType) {
  * Resolve "dined with" co-diner profiles for a batch of feed posts.
  *
  * Calls the SECURITY DEFINER `fetch_co_diners_for_entries` RPC (added in
- * 20260514) so the viewer can see co-diners on someone else's post even
- * though `dine_with_tags` per-row RLS would otherwise hide those tags.
+ * 20260514, NULL-tolerant since 20260521) so the viewer can see co-diners
+ * on someone else's post even though `dine_with_tags` per-row RLS would
+ * otherwise hide those tags.
+ *
+ * `viewerId` is accepted for call-site symmetry but no longer forwarded
+ * — we pass `p_exclude_id: null` so the viewer is included in their own
+ * "dined with" pill when someone tagged them. (FeedPostRow renders the
+ * viewer as `@username` to disambiguate from regular co-diner names.)
  *
  * Returns a Map keyed by `${kind}-${postId}` so the row component can do
  * an O(1) lookup against the same key it uses for React `key=`.
@@ -161,6 +167,7 @@ export async function fetchVisitByIdAndType(client, postId, postType) {
  * Fails soft: returns an empty Map on any RPC error (the dined-with row
  * just won't render for affected posts).
  */
+// eslint-disable-next-line no-unused-vars
 export async function fetchCoDinersForPosts(client, posts, viewerId) {
   const out = new Map();
   if (!posts?.length) return out;
@@ -169,7 +176,7 @@ export async function fetchCoDinersForPosts(client, posts, viewerId) {
 
   const { data, error } = await client.rpc("fetch_co_diners_for_entries", {
     p_entry_ids: entryIds,
-    p_exclude_id: viewerId || null,
+    p_exclude_id: null,
   });
   if (error) {
     console.warn("[BITE] fetchCoDinersForPosts:", error.message);

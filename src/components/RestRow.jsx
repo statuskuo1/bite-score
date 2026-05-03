@@ -49,6 +49,7 @@ export function RestRow({ e, display, onEdit, onDelete, user, visits = 1, group,
         visits={grp}
         user={user}
         icon={flag}
+        kind="rest"
         scoreFn={(v) => calcBiteOutOf10(v.taste, v.cost, v.portions, v.wait, v.useR, v.repeatability, weights, v.currency_code || "USD")}
         scoreColorFn={scoreColor}
         getRows={(v) => [
@@ -82,6 +83,8 @@ export function RestRow({ e, display, onEdit, onDelete, user, visits = 1, group,
         ]}
         notes={e.notes}
         diners={visits === 1 ? unionDiners : []}
+        post={{ placeId: e.placeId || null, kind: "rest" }}
+        viewerId={user?.id}
         mutable={swipeOk}
         onEdit={() => {
           if (visits > 1) {

@@ -176,6 +176,7 @@ export function FeedPostSheet({
             restaurantWeights={restaurantWeights}
             drinkWeights={drinkWeights}
             sweetWeights={sweetWeights}
+            viewerId={viewerId}
             coDiners={coDiners || []}
             reactionState={reactionState}
             reactionBusy={heartBusy}
