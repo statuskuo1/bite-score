@@ -707,7 +707,15 @@ export default function App() {
         if (user) {
           try {
             const rw = localStorage.getItem(`bite_restaurantWeights_${user.id}`);
-            if (rw) setWeights(normalizeWeights(JSON.parse(rw)));
+            if (rw) {
+              const parsed = normalizeWeights(JSON.parse(rw));
+              setWeights(parsed);
+              supabase.from("profiles").update({
+                pref_weight_taste: parsed.taste,
+                pref_weight_bpb:   parsed.bpb,
+                pref_weight_wait:  parsed.wait,
+              }).eq("id", user.id);
+            }
           } catch (e) { console.error("restaurant weights load:", e); }
           try {
             const dw = localStorage.getItem(`bite_drinkWeights_${user.id}`);
