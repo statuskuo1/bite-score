@@ -305,7 +305,7 @@ export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClos
             <div style={{ display: "flex", gap: 8 }}>
               <button
                 type="button"
-                onClick={() => { onViewLog?.(profile); onClose?.(); }}
+                onClick={() => { onViewLog?.({ ...profile, ...(freshWeights ?? {}) }); onClose?.(); }}
                 style={{
                   flex: 1, padding: "12px 14px", borderRadius: 10,
                   background: "#3C1F13", border: "1px solid rgba(240,153,123,0.4)",

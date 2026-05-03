@@ -41,6 +41,8 @@ export function UserLogView({ user, targetProfile, restaurantWeights, onBack }) 
   const [search, setSearch] = useState("");
   const [tiers, setTiers] = useState(new Set());
 
+  const [targetWeights, setTargetWeights] = useState(null);
+
   useEffect(() => {
     if (!targetProfile?.id) { setVisits([]); setLoaded(true); return; }
     let cancelled = false;
@@ -54,7 +56,21 @@ export function UserLogView({ user, targetProfile, restaurantWeights, onBack }) 
     return () => { cancelled = true; };
   }, [targetProfile?.id]);
 
-  const weights = restaurantWeights;
+  useEffect(() => {
+    if (!targetProfile?.id) { setTargetWeights(null); return; }
+    supabase
+      .from("profiles")
+      .select("pref_weight_taste, pref_weight_bpb, pref_weight_wait")
+      .eq("id", targetProfile.id)
+      .maybeSingle()
+      .then(({ data }) => { if (data) setTargetWeights(data); });
+  }, [targetProfile?.id]);
+
+  const weights = {
+    taste: (targetWeights ?? targetProfile)?.pref_weight_taste ?? 5,
+    bpb:   (targetWeights ?? targetProfile)?.pref_weight_bpb   ?? 4,
+    wait:  (targetWeights ?? targetProfile)?.pref_weight_wait  ?? 1,
+  };
 
   const tierFilterRows = rating010FilterRows(t);
 
