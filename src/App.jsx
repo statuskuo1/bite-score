@@ -421,9 +421,14 @@ export default function App() {
     navigate("/community/people");
   }
 
-  function handleFollowNotifTap() {
-    setShowNotifPanel(false);
-    navigate("/community/people/discover");
+  function handleFollowNotifTap(notif) {
+    const profile = notif?.fromProfile;
+    if (profile?.id) {
+      handleOpenNotifProfile(profile);
+    } else {
+      setShowNotifPanel(false);
+      navigate("/community/people/discover");
+    }
   }
 
   function handleDineTagAcceptedTap(notif) {

@@ -177,7 +177,7 @@ export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClos
           </div>
 
           <div style={{ textAlign: "center", marginBottom: 12 }}>
-            <div style={{ marginBottom: 8 }}>
+            <div style={{ marginBottom: 8, display: "flex", justifyContent: "center" }}>
               <Avatar profile={profile} size={56} />
             </div>
             <div style={{ fontSize: 16, fontWeight: 600, color: "#F1EFE8", lineHeight: 1.2 }}>
@@ -225,9 +225,24 @@ export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClos
             });
             const p = weightsToPercents(w);
             return (
-              <div style={{ fontSize: 11, color: "#888780", marginBottom: 12, textAlign: "center" }}>
-                Taste {w.taste} · BpB {w.bpb} · Wait {w.wait}
-                <span style={{ color: "#666663" }}> ≈ {p.taste}% / {p.bpb}% / {p.wait}%</span>
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 10, color: "#888780", textTransform: "uppercase", letterSpacing: "0.06em", textAlign: "center", marginBottom: 6 }}>
+                  Their BITE weights
+                </div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <div style={{ flex: 1, textAlign: "center", background: "#252523", borderRadius: 8, padding: "7px 4px" }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: "#F0997B" }}>{p.taste}%</div>
+                    <div style={{ fontSize: 10, color: "#888780", marginTop: 2 }}>Taste</div>
+                  </div>
+                  <div style={{ flex: 1, textAlign: "center", background: "#252523", borderRadius: 8, padding: "7px 4px" }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: "#5B9BD5" }}>{p.bpb}%</div>
+                    <div style={{ fontSize: 10, color: "#888780", marginTop: 2 }}>Value</div>
+                  </div>
+                  <div style={{ flex: 1, textAlign: "center", background: "#252523", borderRadius: 8, padding: "7px 4px" }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: "#97C459" }}>{p.wait}%</div>
+                    <div style={{ fontSize: 10, color: "#888780", marginTop: 2 }}>Wait</div>
+                  </div>
+                </div>
               </div>
             );
           })()}
