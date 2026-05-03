@@ -429,25 +429,32 @@ export function FeedPostRow({
         </div>
       </div>
 
-      {/* Pills */}
+      {/* Pills + viewer's estimated BITE on the same row, est aligned under the score chip */}
       <div style={{
         display: "flex",
-        flexWrap: "wrap",
-        gap: 6,
+        alignItems: "flex-start",
+        gap: 8,
         marginBottom: 8,
       }}>
-        {tasteVal && <Pill icon="✦">{tasteVal} taste</Pill>}
-        {cost && <Pill>{cost}</Pill>}
-        <Pill icon="⏱">{wait} min</Pill>
-        <RepeatPill rating={post.repeatability} useR={post.useR} />
-      </div>
-
-      {/* Viewer's estimated BITE — outside the chip so it doesn't stretch the place row */}
-      {viewerScore != null && (
-        <div style={{ fontSize: 11, color: "#888780", marginBottom: dinedWith || post.notes ? 10 : 0 }}>
-          your est. BITE: {viewerScore.toFixed(1)}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, flex: 1, minWidth: 0 }}>
+          {tasteVal && <Pill icon="✦">{tasteVal} taste</Pill>}
+          {cost && <Pill>{cost}</Pill>}
+          <Pill icon="⏱">{wait} min</Pill>
+          <RepeatPill rating={post.repeatability} useR={post.useR} />
         </div>
-      )}
+        {viewerScore != null && (
+          <div style={{
+            fontSize: 11,
+            color: "#888780",
+            flexShrink: 0,
+            textAlign: "right",
+            paddingTop: 6,
+            lineHeight: 1.2,
+          }}>
+            your est. BITE: {viewerScore.toFixed(1)}
+          </div>
+        )}
+      </div>
 
       {/* Dined with */}
       {dinedWith && (

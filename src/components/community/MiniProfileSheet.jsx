@@ -114,13 +114,16 @@ export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClos
     if (!profile?.id) { setStats(null); setFreshWeights(null); return; }
     let cancelled = false;
 
-    // Fetch fresh weight values so we always show current weights, not stale feed-load data
-    supabase
-      .from("profiles")
-      .select("pref_weight_taste, pref_weight_bpb, pref_weight_wait")
-      .eq("id", profile.id)
-      .maybeSingle()
-      .then(({ data }) => { if (!cancelled && data) setFreshWeights(data); });
+    // For self, caller injects current React-state weights into the profile prop — skip DB fetch.
+    // For others, fetch fresh weights so we always show current values, not stale feed-load data.
+    if (relation !== "self") {
+      supabase
+        .from("profiles")
+        .select("pref_weight_taste, pref_weight_bpb, pref_weight_wait")
+        .eq("id", profile.id)
+        .maybeSingle()
+        .then(({ data }) => { if (!cancelled && data) setFreshWeights(data); });
+    }
 
     if (cachedVisits) {
       const s = computeFoodStats(cachedVisits);
@@ -143,7 +146,7 @@ export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClos
       }
     })();
     return () => { cancelled = true; };
-  }, [profile?.id, cachedVisits]);
+  }, [profile?.id, cachedVisits, relation]);
 
   useEffect(() => {
     document.body.style.overflow = "hidden";

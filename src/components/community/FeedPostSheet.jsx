@@ -4,19 +4,21 @@ import {
   fetchVisitByIdAndType,
   fetchCoDinersForPosts,
 } from "../../utils/feedApi.js";
-import { fetchReactionsForPosts } from "../../utils/feedReactionsApi.js";
+import { fetchReactionsForPosts, toggleHeart } from "../../utils/feedReactionsApi.js";
 import { FeedPostRow } from "./FeedPostRow.jsx";
 
 /**
- * Sheet shown when a heart-reaction notification is tapped — renders the
- * hearted post as a single feed-style card so the recipient can see what
- * their Taste Buds saw and hearted.
+ * Sheet shown for notification deep-links — renders a single visit as a
+ * feed-style card. Used as a fallback for tag-back notifications when the
+ * referenced post isn't in the viewer's Taste Buds feed (non-mutual
+ * follow), and as the primary surface for heart-reaction notifications.
  *
- * The recipient is always the post owner (notifications insert hard-skips
- * self-hearts), so the card is rendered read-only:
- *   - `onToggleHeart={null}`  → no self-hearting; FeedPostRow falls back
- *     to a static heart icon + count + reactor stack.
- *   - `onOpenProfile={null}`  → no profile drilldown into yourself.
+ * Heart behavior:
+ *   - viewer == post owner (heart-reaction case): `onToggleHeart={null}`
+ *     and FeedPostRow renders a static heart icon + count + reactor stack.
+ *     We can't self-heart.
+ *   - viewer != post owner (tag-back fallback): wires a local optimistic
+ *     toggle so the recipient can like the surfaced post.
  *
  * Loads three things in parallel after mount: the visit row itself
  * (`fetchVisitByIdAndType`), co-diners (`fetch_co_diners_for_entries`
@@ -39,6 +41,7 @@ export function FeedPostSheet({
   const [coDiners, setCoDiners] = useState(null);
   const [reactionState, setReactionState] = useState(null);
   const [status, setStatus] = useState("loading"); // loading | ready | missing
+  const [heartBusy, setHeartBusy] = useState(false);
 
   useEffect(() => {
     if (!postId || !postType) {
@@ -76,6 +79,34 @@ export function FeedPostSheet({
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = ""; };
   }, []);
+
+  /** Optimistic heart toggle — mirrors FeedTab.handleToggleHeart but writes
+   *  into the local single-post reaction state. Only wired when the viewer
+   *  is not the post owner (self-hearts are disallowed at the API layer
+   *  anyway). */
+  const canHeart = !!(viewerId && post?.ownerId && viewerId !== post.ownerId);
+  async function handleToggleHeart(p) {
+    if (!canHeart || heartBusy) return;
+    const prev = reactionState || { count: 0, mine: false, reactors: [] };
+    const willHeart = !prev.mine;
+    const viewerProfile = { id: viewerId, username: "", display_name: "", avatar_url: "" };
+    const optimistic = willHeart
+      ? {
+          count: prev.count + 1,
+          mine: true,
+          reactors: [viewerProfile, ...prev.reactors.filter((r) => r.id !== viewerId)],
+        }
+      : {
+          count: Math.max(0, prev.count - 1),
+          mine: false,
+          reactors: prev.reactors.filter((r) => r.id !== viewerId),
+        };
+    setReactionState(optimistic);
+    setHeartBusy(true);
+    const res = await toggleHeart(supabase, viewerId, p, prev.mine);
+    setHeartBusy(false);
+    if (!res) setReactionState(prev);
+  }
 
   return (
     <div
@@ -147,9 +178,9 @@ export function FeedPostSheet({
             sweetWeights={sweetWeights}
             coDiners={coDiners || []}
             reactionState={reactionState}
-            reactionBusy={false}
+            reactionBusy={heartBusy}
             onOpenProfile={null}
-            onToggleHeart={null}
+            onToggleHeart={canHeart ? handleToggleHeart : null}
           />
         )}
       </div>

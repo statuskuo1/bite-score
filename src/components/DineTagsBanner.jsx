@@ -92,7 +92,7 @@ export function DineTagsBanner({ tags, onDismiss, onAddType, entries, cafes, use
         user_id: tag.tagger_id,
         from_user_id: userId,
         type: "dine_tag_back",
-        meta: { restaurant_name: tag.restaurant_name, entry_type: existingEntryType, city: tag.city || "" },
+        meta: { restaurant_name: tag.restaurant_name, entry_type: existingEntryType, city: tag.city || "", entry_id: existingEntry.id },
       }),
     ].filter(Boolean));
 

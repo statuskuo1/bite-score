@@ -39,7 +39,6 @@ import { rating010FilterRows } from "./constants/ratingTiers0to10.js";
 import { BEAN_REGIONS, regionOf } from "./constants/coffeeConstants.js";
 import { S } from "./styles/sharedStyles.js";
 import { MouthLogo } from "./components/MouthLogo.jsx";
-import { InfoBubble } from "./components/InfoBubble.jsx";
 import { RestRow } from "./components/RestRow.jsx";
 import { RestForm } from "./components/RestForm.jsx";
 import { CafeForm } from "./components/CafeForm.jsx";
@@ -61,8 +60,8 @@ import { NotificationPanel } from "./components/NotificationPanel.jsx";
 import { FeedPostSheet } from "./components/community/FeedPostSheet.jsx";
 import { insertDineTag, fetchUnloggedDineTags, countUnloggedDineTags, dismissDineTag, fetchCoDiners, fetchDinedWithByEntry } from "./utils/dineWithApi.js";
 import { DineTagsBanner } from "./components/DineTagsBanner.jsx";
-import { getCurrencyForCity, toUSD, fromUSD, CURRENCY_SYMBOLS } from "./utils/currency.js";
-import { CityInput, resolveCity } from "./components/CityInput.jsx";
+import { toUSD, fromUSD, CURRENCY_SYMBOLS } from "./utils/currency.js";
+import { resolveCity } from "./components/CityInput.jsx";
 import { CategoryTabs } from "./components/CategoryTabs.jsx";
 import { ConfirmSheet } from "./components/ConfirmSheet.jsx";
 import { OnboardingModal } from "./components/OnboardingModal.jsx";
@@ -94,16 +93,6 @@ function GuestPreview({ message, onSignIn, children }) {
   );
 }
 
-/** Drops optional paragraphs from welcome body (DB or defaults): play-mode aside; sign-in/cloud disclaimer (EN+ZH) so languages stay aligned when overrides differ. */
-function omitPlayWelcomeAside(body) {
-  if (!body) return body;
-  const drop = (p) =>
-    p.includes("Play around! Nothing saves permanently") ||
-    p.includes("Sign in to sync your ratings to the cloud") ||
-    p.includes("登入後，你的評分會同步到雲端");
-  return body.split("\n\n").filter((p) => !drop(p)).join("\n\n");
-}
-
 export default function App() {
   const { user, authReady, username, profile } = useAuth();
   const navigate = useNavigate();
@@ -119,9 +108,7 @@ export default function App() {
   const [cafePlaces, setCafePlaces] = useState([]);
   const [dbLoaded, setDbLoaded] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [showWelcome, setShowWelcome] = useState(true);
-  const [welcomeOverride, setWelcomeOverride] = useState({});
-  const [welcomeCity, setWelcomeCity] = useState("");
+  const [showSelfSheet, setShowSelfSheet] = useState(false);
   /** Unseen-followers count drives the red badge on the Community tab in the
    *  bottom nav. Refreshed on auth + after every follow/unfollow action; the
    *  Friends sub-tab additionally calls markFollowersSeen on mount to clear it. */
@@ -538,46 +525,16 @@ export default function App() {
 
   useEffect(() => { refreshDineTags(); }, [refreshDineTags]);
 
-  /** Bundled `translations.js` by default. Supabase `welcome_*` only when hosting sets `VITE_WELCOME_USE_SUPABASE=true` (opt-in). */
-  const welcomeUseDbCopy = import.meta.env.VITE_WELCOME_USE_SUPABASE === 'true';
-  const welcomeTitleDisplay = (welcomeUseDbCopy && welcomeOverride[lang+"_title"]) || t.welcome1;
-  const welcomeBodyDisplay = omitPlayWelcomeAside((welcomeUseDbCopy && welcomeOverride[lang+"_body"]) || t.welcome2);
-
-  useEffect(() => {
-    if (!authReady || !user?.id) return;
-    try {
-      const dismissed = localStorage.getItem(`bite_welcomeDismissed_${user.id}`);
-      setShowWelcome(!dismissed);
-    } catch (e) { /* ignore */ }
-  }, [authReady, user?.id]);
-
-
-
-  function dismissWelcome() {
-    setShowWelcome(false);
-    if (user?.id) {
-      try { localStorage.setItem(`bite_welcomeDismissed_${user.id}`, "1"); }
-      catch (e) { console.error("welcome dismissed save:", e); }
-      const inferredCurrency = getCurrencyForCity(welcomeCity) || "USD";
-      setHomeCurrency(inferredCurrency);
-      const patch = { home_currency: inferredCurrency };
-      if (welcomeCity.trim()) patch.home_city = welcomeCity.trim();
-      supabase.from("profiles").update(patch).eq("id", user.id);
-    }
-  }
-
   function dismissGuestOnboarding(openSignIn) {
     setShowGuestOnboarding(false);
     if (openSignIn) {
       guestReachedSignIn.current = true;
-      setShowWelcome(false);
       setShowAuthModal(true);
     }
   }
 
   function completeOnboarding(navigateTo) {
     setOnboardingDone(true);
-    setShowWelcome(false);
     if (user?.id) {
       supabase.from("profiles").update({ has_completed_onboarding: true }).eq("id", user.id);
       try { localStorage.setItem(`bite_welcomeDismissed_${user.id}`, "1"); } catch {}
@@ -786,11 +743,6 @@ export default function App() {
             const ql = sData.find((s) => s.key === "questLetters");
             if (ql) setQuestL(new Set(JSON.parse(ql.value)));
           }
-          const wo = {};
-          sData.filter((s) => s.key.startsWith("welcome_")).forEach((s) => {
-            wo[s.key.replace("welcome_", "")] = s.value;
-          });
-          if (Object.keys(wo).length > 0) setWelcomeOverride(wo);
         }
       } catch (err) {
         console.error("Supabase load error:", err);
@@ -1215,7 +1167,7 @@ export default function App() {
               )}
             </div>
           )}
-          <button type="button" onClick={()=>setShowAuthModal(true)} style={{fontSize:11,fontWeight:500,padding:"5px 12px",borderRadius:20,border:"1.5px solid rgba(255,255,255,0.2)",background:user?"#3C1F13":"transparent",color:user?"#F0997B":"#888780",cursor:"pointer",letterSpacing:"0.03em",flexShrink:0,maxWidth:120,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={user?.email||t.signIn}>{user?(username||user.email?.split("@")[0]||t.account):t.signIn}</button>
+          <button type="button" onClick={()=>user?setShowSelfSheet(true):setShowAuthModal(true)} style={{fontSize:11,fontWeight:500,padding:"5px 12px",borderRadius:20,border:"1.5px solid rgba(255,255,255,0.2)",background:user?"#3C1F13":"transparent",color:user?"#F0997B":"#888780",cursor:"pointer",letterSpacing:"0.03em",flexShrink:0,maxWidth:120,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={user?.email||t.signIn}>{user?(username||user.email?.split("@")[0]||t.account):t.signIn}</button>
         </div>
       </div>
 
@@ -1223,30 +1175,6 @@ export default function App() {
         <p style={{ fontSize: 14, color: "#888780", margin: "8px 0 0" }}>
           Connecting…
         </p>
-      )}
-
-      {authReady && user && showWelcome && dbLoaded && onboardingDone === true && (
-        <div onClick={()=>dismissWelcome()} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:"1.5rem"}}>
-          <div onClick={e=>e.stopPropagation()} style={{background:"#1E1E1C",borderRadius:16,padding:"1.5rem",maxWidth:360,width:"100%",border:"0.5px solid rgba(255,255,255,0.15)"}}>
-            <div style={{fontSize:24,marginBottom:12,textAlign:"center",cursor:"default",userSelect:"none"}}>👋</div>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:16}}>
-              <p style={{fontSize:16,fontWeight:600,color:"#F1EFE8",margin:0,lineHeight:1.5,textAlign:"center"}}>{welcomeTitleDisplay}</p>
-              <InfoBubble content={welcomeBodyDisplay.split("\n\n")[0]||""}/>
-            </div>
-            <div style={{marginBottom:14}}>
-              <div style={{fontSize:13,color:"#C4C2BA",marginBottom:6,fontWeight:500}}>Location</div>
-              <CityInput value={welcomeCity} onChange={setWelcomeCity} existingCities={existingCities}/>
-              {(()=>{const cc=getCurrencyForCity(welcomeCity);const sym=CURRENCY_SYMBOLS[cc]||cc;return(<div style={{fontSize:12,color:"#666663",marginTop:6}}>{welcomeCity.trim()?`Currency: ${sym} ${cc}`:"Currency: $ USD (default)"}</div>);})()}
-            </div>
-            <div style={{borderTop:"0.5px solid rgba(255,255,255,0.08)",paddingTop:14,marginBottom:14}}>
-              <WeightSliders weights={weights} labels={[[t.taste,"taste"],[t.bangBuck,"bpb"],[t.wait,"wait"]]} onUpdate={updW} onReset={resetWeights} defaults={RESTAURANT_WEIGHT_DEFAULTS} careHeadingPx={15}/>
-            </div>
-            {welcomeBodyDisplay.split("\n\n").slice(1).map((para,i)=>(
-              <p key={i} style={{fontSize:13,color:"#F1EFE8",margin:"0 0 12px",lineHeight:1.7,textAlign:"center",whiteSpace:"pre-line"}}>{para}</p>
-            ))}
-            <button type="button" onClick={dismissWelcome} style={{width:"100%",padding:"12px",background:"#F0997B",color:"#141413",border:"none",borderRadius:10,fontSize:14,fontWeight:500,cursor:"pointer"}}>{t.welcomeBtn}</button>
-          </div>
-        </div>
       )}
 
       {authReady && (
@@ -2032,6 +1960,20 @@ export default function App() {
           setExtCompareTarget(profile);
           navigate(`/community/compare/${profile.username}`);
         }}
+        t={t}
+      />
+    )}
+    {showSelfSheet && profile && (
+      <MiniProfileSheet
+        profile={{
+          ...profile,
+          pref_weight_taste: weights?.taste,
+          pref_weight_bpb:   weights?.bpb,
+          pref_weight_wait:  weights?.wait,
+        }}
+        relation="self"
+        onClose={() => setShowSelfSheet(false)}
+        onWeightTap={() => { setShowSelfSheet(false); navigate("/taste"); }}
         t={t}
       />
     )}

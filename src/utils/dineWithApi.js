@@ -49,24 +49,31 @@ export async function insertDineTag(client, { taggerId, taggedId, entryId, entry
       return null;
     }
 
-    if (notify) {
-      // If the tagged user already has an outgoing tag back to us, this is a mutual
-      // confirmation — use dine_tag_back so they don't see "all bark no bite" again.
-      const since8h = new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString();
-      const { data: reverseRow } = await client
-        .from("dine_with_tags")
-        .select("id")
-        .eq("tagger_id", taggedId)
-        .eq("tagged_id", taggerId)
-        .ilike("restaurant_name", restaurantName)
-        .eq("dismissed", false)
-        .gte("created_at", since8h)
-        .maybeSingle();
+    // Loop closure: if the tagged user has ANY existing tag pointed back at us
+    // (any time, any dismissed status), this save closes the ping-pong. Mark
+    // both rows dismissed (banners on both sides clear) and skip the
+    // notification — A already knows the tag exists since A initiated it.
+    const { data: reverseRow } = await client
+      .from("dine_with_tags")
+      .select("id, dismissed")
+      .eq("tagger_id", taggedId)
+      .eq("tagged_id", taggerId)
+      .ilike("restaurant_name", restaurantName)
+      .maybeSingle();
 
+    if (reverseRow) {
+      await Promise.all([
+        data?.id && client.from("dine_with_tags").update({ dismissed: true }).eq("id", data.id),
+        !reverseRow.dismissed && client.from("dine_with_tags").update({ dismissed: true }).eq("id", reverseRow.id),
+      ].filter(Boolean));
+      return data?.id ?? null;
+    }
+
+    if (notify) {
       const { error: nErr } = await client.from("notifications").insert({
         user_id: taggedId,
         from_user_id: taggerId,
-        type: reverseRow ? "dine_tag_mutual" : "dine_tag",
+        type: "dine_tag",
         meta: { restaurant_name: restaurantName, entry_type: entryType, city, cuisine, entry_id: entryId || null },
       });
       if (nErr) console.warn("[BITE] insertDineTag notification:", nErr.message);

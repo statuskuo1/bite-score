@@ -272,7 +272,12 @@ export function FeedTab({
   async function openProfileSheet(author) {
     if (!author?.id) return;
     if (author.id === user?.id) {
-      setSheetProfile(author);
+      setSheetProfile({
+        ...author,
+        pref_weight_taste: restaurantWeights?.taste,
+        pref_weight_bpb:   restaurantWeights?.bpb,
+        pref_weight_wait:  restaurantWeights?.wait,
+      });
       setSheetRelation("self");
       return;
     }

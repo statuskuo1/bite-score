@@ -150,6 +150,9 @@ export function OnboardingModal({ restaurantWeights, onWeightSave, onComplete, i
           >
             Looks good →
           </button>
+          <p style={{ fontSize: 12, color: "#888780", textAlign: "center", margin: "10px 0 0" }}>
+            You can change this later in My Taste.
+          </p>
           <ProgressDots card={1} onGoTo={setCard} />
         </div>
       </div>
