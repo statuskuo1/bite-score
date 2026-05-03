@@ -271,7 +271,11 @@ export function FeedTab({
 
   async function openProfileSheet(author) {
     if (!author?.id) return;
-    if (author.id === user?.id) return;
+    if (author.id === user?.id) {
+      setSheetProfile(author);
+      setSheetRelation("self");
+      return;
+    }
     setSheetProfile(author);
     setSheetRelation("taste_buds");
     if (!user?.id) return;
@@ -433,6 +437,7 @@ export function FeedTab({
           onUnfollow={handleUnfollow}
           onFollow={handleFollow}
           onViewLog={(p) => { closeSheet(); onViewLog?.(p); }}
+          onWeightTap={sheetRelation === "self" ? () => { closeSheet(); navigate("/taste"); } : undefined}
           t={t}
         />
       )}

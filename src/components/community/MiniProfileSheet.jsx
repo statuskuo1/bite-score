@@ -105,7 +105,7 @@ export function UnfollowConfirmDialog({ profile, isTasteBuds, busy, onConfirm, o
  *   onViewLog    — (profile) => void
  *   t            — translations object
  */
-export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClose, onCompareWith, onUnfollow, onFollow, onViewLog, t }) {
+export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClose, onCompareWith, onUnfollow, onFollow, onViewLog, onWeightTap, t }) {
   const [stats, setStats] = useState(null);
   const [confirmUnfollow, setConfirmUnfollow] = useState(false);
 
@@ -186,7 +186,7 @@ export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClos
             <div style={{ fontSize: 13, color: "#C4C2BA", marginTop: 3 }}>
               @{profile.username || "–"}
             </div>
-            {(relation === "taste_buds" || relation === "i_follow") && (
+            {relation !== "self" && (relation === "taste_buds" || relation === "i_follow") && (
               <div style={{ marginTop: 8, display: "flex", gap: 6, alignItems: "center", justifyContent: "center" }}>
                 {relation === "taste_buds" && (
                   <StatusBadge
@@ -208,7 +208,7 @@ export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClos
                 </button>
               </div>
             )}
-            {relation === "they_follow" && (
+            {relation !== "self" && relation === "they_follow" && (
               <div style={{ marginTop: 8 }}>
                 <StatusBadge label="Follows you" bg="#252523" color="#888780" border="rgba(255,255,255,0.15)" />
               </div>
@@ -224,30 +224,44 @@ export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClos
               wait: profile?.pref_weight_wait,
             });
             const p = weightsToPercents(w);
+            const isSelf = relation === "self";
+            const label = isSelf ? "Your BITE weights" : "Their BITE weights";
+            const cells = [
+              { pct: p.taste, key: "taste", name: "Taste",  color: "#F0997B" },
+              { pct: p.bpb,   key: "bpb",   name: "Value",  color: "#5B9BD5" },
+              { pct: p.wait,  key: "wait",   name: "Wait",   color: "#97C459" },
+            ];
             return (
               <div style={{ marginBottom: 14 }}>
                 <div style={{ fontSize: 10, color: "#888780", textTransform: "uppercase", letterSpacing: "0.06em", textAlign: "center", marginBottom: 6 }}>
-                  Their BITE weights
+                  {label}
                 </div>
                 <div style={{ display: "flex", gap: 6 }}>
-                  <div style={{ flex: 1, textAlign: "center", background: "#252523", borderRadius: 8, padding: "7px 4px" }}>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: "#F0997B" }}>{p.taste}%</div>
-                    <div style={{ fontSize: 10, color: "#888780", marginTop: 2 }}>Taste</div>
-                  </div>
-                  <div style={{ flex: 1, textAlign: "center", background: "#252523", borderRadius: 8, padding: "7px 4px" }}>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: "#5B9BD5" }}>{p.bpb}%</div>
-                    <div style={{ fontSize: 10, color: "#888780", marginTop: 2 }}>Value</div>
-                  </div>
-                  <div style={{ flex: 1, textAlign: "center", background: "#252523", borderRadius: 8, padding: "7px 4px" }}>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: "#97C459" }}>{p.wait}%</div>
-                    <div style={{ fontSize: 10, color: "#888780", marginTop: 2 }}>Wait</div>
-                  </div>
+                  {cells.map(({ pct, key, name, color }) => (
+                    <div
+                      key={key}
+                      onClick={onWeightTap || undefined}
+                      style={{
+                        flex: 1, textAlign: "center", background: "#252523", borderRadius: 8, padding: "7px 4px",
+                        cursor: onWeightTap ? "pointer" : "default",
+                        transition: "background 0.15s",
+                      }}
+                    >
+                      <div style={{ fontSize: 15, fontWeight: 700, color }}>{pct}%</div>
+                      <div style={{ fontSize: 10, color: "#888780", marginTop: 2 }}>{name}</div>
+                    </div>
+                  ))}
                 </div>
+                {onWeightTap && (
+                  <div style={{ fontSize: 10, color: "#666663", textAlign: "center", marginTop: 5 }}>
+                    tap any weight to adjust
+                  </div>
+                )}
               </div>
             );
           })()}
 
-          {(relation === "i_follow" || relation === "taste_buds") ? (
+          {relation === "self" ? null : (relation === "i_follow" || relation === "taste_buds") ? (
             <div style={{ display: "flex", gap: 8 }}>
               <button
                 type="button"
