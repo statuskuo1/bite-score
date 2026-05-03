@@ -231,7 +231,7 @@ export function resolveCity(input) {
  *
  * On blur or selection, the value is normalized to the canonical name.
  */
-export function CityInput({ value, onChange, placeholder, existingCities = [] }) {
+export function CityInput({ value, onChange, placeholder, existingCities = [], dropUp = false }) {
   const [show, setShow] = useState(false);
   const ref = useRef(null);
   
@@ -279,9 +279,9 @@ export function CityInput({ value, onChange, placeholder, existingCities = [] })
       />
       {show && (filtered.length > 0 || q.length > 0) && (
         <div style={{
-          position: "absolute", top: "100%", left: 0, right: 0,
+          position: "absolute", ...(dropUp ? { bottom: "100%", marginBottom: 4 } : { top: "100%", marginTop: 4 }), left: 0, right: 0,
           background: "#1E1E1C", border: "0.5px solid rgba(255,255,255,0.15)",
-          borderRadius: 8, zIndex: 100, maxHeight: 200, overflowY: "auto", marginTop: 4
+          borderRadius: 8, zIndex: 100, maxHeight: 200, overflowY: "auto"
         }}>
           {filtered.map(city => (
             <div

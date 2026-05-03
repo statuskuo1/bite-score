@@ -65,12 +65,15 @@ export function DineTagsBanner({ tags, onDismiss, onAddType, entries, cafes, use
     setTaggedConfirm(msg);
 
     // Check for existing outgoing link — prevents duplicate rows in scenarios where
-    // both users already independently tagged each other (scenarios 2 & 4).
+    // both users already independently tagged each other (scenarios 2 & 4). Scope by
+    // entry_id when we have it so we don't false-match an unrelated past visit at a
+    // place with the same name.
     const { data: existingOutgoing } = await supabase
       .from("dine_with_tags")
       .select("id")
       .eq("tagger_id", userId)
       .eq("tagged_id", tag.tagger_id)
+      .eq("entry_id", existingEntry.id)
       .ilike("restaurant_name", tag.restaurant_name)
       .maybeSingle();
 

@@ -14,7 +14,7 @@ function relativeTime(ts) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile, onDineTagTap, onDineTagBackTap, onFollowTap, onDineTagAcceptedTap, onHeartTap, onTagMutualBack, alreadyFollowed, onMarkFollowed, followingIds }) {
+function NotifRow({ notif, isResolvedDineTag, onFollowBack, onRefetch, onOpenProfile, onDineTagTap, onDineTagBackTap, onFollowTap, onDineTagAcceptedTap, onHeartTap, onTagMutualBack, alreadyFollowed, onMarkFollowed, followingIds }) {
   const [followed, setFollowed] = useState(false);
   const [isTasteBuds, setIsTasteBuds] = useState(notif.type === "taste_buds");
   const [busy, setBusy] = useState(false);
@@ -53,36 +53,43 @@ function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile, onDineTagTap,
   const isDineTagAccepted = notif.type === "dine_tag_accepted";
   const isDineTagMutual = notif.type === "dine_tag_mutual";
   const isHeartReaction = notif.type === "heart_reaction";
+  // A dine_tag whose underlying dine_with_tags row is gone (dismissed or tagged back).
+  // Render past-tense with no action prompt — the prior round-trip is already done.
+  const isResolved = isDineTag && isResolvedDineTag;
   const restaurantName = notif.meta?.restaurant_name || notif.meta?.place_name || "a place";
-  const message = isDineTag
-    ? `All bark no BITE 🐶 @${p?.username || "someone"} tagged you at ${restaurantName}. Log your BITE?`
-    : isDineTagMutual
-      ? `@${p?.username || "someone"} tagged you at ${restaurantName}. Looks like you already logged! Tag them back?`
-      : isDineTagBack
-        ? `@${p?.username || "someone"} tagged you back at ${restaurantName}. see their BITE Score`
-        : isDineTagAccepted
-          ? `@${p?.username || "someone"} tagged you back at ${restaurantName}. see their BITE Score`
-          : isHeartReaction
-            ? `@${p?.username || "someone"} hearted your BITE at ${restaurantName} ❤️`
-            : isTasteBuds
-              ? `You and @${p?.username || "someone"} are now Taste Buds! 🎉`
-              : `@${p?.username || "someone"} followed you`;
-
-  const handleRowTap = isDineTag
-    ? () => onDineTagTap?.(notif)
-    : isDineTagMutual
-      ? () => { if (!taggedBack) setShowConfirm((v) => !v); }
-      : isHeartReaction
-        ? () => onHeartTap?.(notif)
+  const message = isResolved
+    ? `@${p?.username || "someone"} tagged you at ${restaurantName}`
+    : isDineTag
+      ? `All bark no BITE 🐶 @${p?.username || "someone"} tagged you at ${restaurantName}. Log your BITE?`
+      : isDineTagMutual
+        ? `@${p?.username || "someone"} tagged you at ${restaurantName}. Looks like you already logged! Tag them back?`
         : isDineTagBack
-          ? () => onDineTagBackTap?.(notif)
+          ? `@${p?.username || "someone"} tagged you back at ${restaurantName}. see their BITE Score`
           : isDineTagAccepted
-            ? () => (notif.meta?.entry_id && notif.meta?.entry_type)
-                ? onDineTagAcceptedTap?.(notif)
-                : p && onOpenProfile(p)
-            : notif.type === "follow"
-              ? () => onFollowTap?.(notif)
-              : () => p && onOpenProfile(p);
+            ? `@${p?.username || "someone"} tagged you back at ${restaurantName}. see their BITE Score`
+            : isHeartReaction
+              ? `@${p?.username || "someone"} hearted your BITE at ${restaurantName} ❤️`
+              : isTasteBuds
+                ? `You and @${p?.username || "someone"} are now Taste Buds! 🎉`
+                : `@${p?.username || "someone"} followed you`;
+
+  const handleRowTap = isResolved
+    ? () => p && onOpenProfile(p)
+    : isDineTag
+      ? () => onDineTagTap?.(notif)
+      : isDineTagMutual
+        ? () => { if (!taggedBack) setShowConfirm((v) => !v); }
+        : isHeartReaction
+          ? () => onHeartTap?.(notif)
+          : isDineTagBack
+            ? () => onDineTagBackTap?.(notif)
+            : isDineTagAccepted
+              ? () => (notif.meta?.entry_id && notif.meta?.entry_type)
+                  ? onDineTagAcceptedTap?.(notif)
+                  : p && onOpenProfile(p)
+              : notif.type === "follow"
+                ? () => onFollowTap?.(notif)
+                : () => p && onOpenProfile(p);
 
   return (
     <div style={{
@@ -105,7 +112,7 @@ function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile, onDineTagTap,
             <button
               type="button"
               onClick={handleRowTap}
-              style={{ background: "none", border: "none", padding: 0, cursor: isDineTagMutual || isDineTag || isHeartReaction ? "pointer" : "default", color: "inherit", fontSize: "inherit", textAlign: "left" }}
+              style={{ background: "none", border: "none", padding: 0, cursor: !isResolved && (isDineTagMutual || isDineTag || isHeartReaction) ? "pointer" : "default", color: isResolved ? "#888780" : "inherit", fontSize: "inherit", textAlign: "left" }}
             >
               {message}
             </button>
@@ -163,7 +170,7 @@ function NotifRow({ notif, onFollowBack, onRefetch, onOpenProfile, onDineTagTap,
 }
 
 export function NotificationPanel({
-  notifications, loading, onClose, onFollowBack, onRefetch,
+  notifications, resolvedDineTagIds, loading, onClose, onFollowBack, onRefetch,
   onOpenProfile, onDineTagTap, onDineTagBackTap, onFollowTap, onDineTagAcceptedTap,
   onHeartTap, onTagMutualBack, sheetOpen, anchorPos, followingIds,
 }) {
@@ -228,6 +235,7 @@ export function NotificationPanel({
           <NotifRow
             key={n.id}
             notif={n}
+            isResolvedDineTag={resolvedDineTagIds?.has(n.id) ?? false}
             onFollowBack={onFollowBack}
             onRefetch={onRefetch}
             onOpenProfile={onOpenProfile}

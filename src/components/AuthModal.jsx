@@ -144,11 +144,12 @@ export function AuthModal({ open, onClose }) {
     if (!open || !user) return;
     setUsernameDraft(profile?.username ?? username ?? "");
     setDisplayNameDraft(profile?.display_name ?? "");
+    setHomeCityDraft(profile?.home_city ?? "");
     setSaveError(null);
     setSaveOk(false);
     setSuggestions([]);
     setEditMode(false);
-  }, [open, user?.id, profile?.username, profile?.display_name, username]);
+  }, [open, user?.id, profile?.username, profile?.display_name, profile?.home_city, username]);
 
   // Reset auth form when modal opens or mode switches
   useEffect(() => {

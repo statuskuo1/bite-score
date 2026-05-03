@@ -676,11 +676,22 @@ export function PeopleTab({ user, myWeights, onCompareWith, onMarkFollowersSeen,
             </p>
           )}
           {followingOnly.length > 0 && followingVisibleSource.length === 0 && (
-            <p style={{ fontSize: 12, color: "#888780", margin: "0 0 16px" }}>
-              {budsOnly && followingFiltered.length > 0
-                ? (t.noTasteBudsYet || "No Taste Buds match — when someone you follow follows you back, they'll show up here.")
-                : (t.noSearchResults || "No matches.")}
-            </p>
+            <div style={{ marginBottom: 16 }}>
+              <p style={{ fontSize: 12, color: "#888780", margin: "0 0 10px" }}>
+                {budsOnly && followingFiltered.length > 0
+                  ? (t.noTasteBudsYet || "No Taste Buds match — when someone you follow follows you back, they'll show up here.")
+                  : "No user found in following."}
+              </p>
+              {!(budsOnly && followingFiltered.length > 0) && (
+                <button
+                  type="button"
+                  onClick={() => navigate("/community/people/discover")}
+                  style={{ fontSize: 12, color: "#F0997B", background: "none", border: "1px solid rgba(240,153,123,0.4)", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}
+                >
+                  Search Discover →
+                </button>
+              )}
+            </div>
           )}
           {followingPage.visible.map((f) => (
             <FollowRow

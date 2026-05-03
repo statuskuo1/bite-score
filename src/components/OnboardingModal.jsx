@@ -3,6 +3,7 @@ import { MouthLogo } from "./MouthLogo.jsx";
 import { WeightSliders } from "./WeightSliders.jsx";
 import { useLang } from "../contexts/LangContext.jsx";
 import { RESTAURANT_WEIGHT_DEFAULTS, normalizeWeights } from "../utils/scoring.js";
+import { CityInput, resolveCity } from "./CityInput.jsx";
 
 const WEIGHT_DEFAULTS = RESTAURANT_WEIGHT_DEFAULTS;
 
@@ -49,11 +50,10 @@ const SKIP_LINK = {
   width: "100%",
 };
 
-// Dots are clickable — can navigate back to any previously visited card.
-function ProgressDots({ card, onGoTo }) {
+function ProgressDots({ card, total, onGoTo }) {
   return (
     <div style={{ display: "flex", justifyContent: "center", gap: 6, marginTop: 20 }}>
-      {[0, 1, 2].map((i) => (
+      {Array.from({ length: total }, (_, i) => (
         <button
           key={i}
           type="button"
@@ -69,16 +69,71 @@ function ProgressDots({ card, onGoTo }) {
   );
 }
 
-export function OnboardingModal({ restaurantWeights, onWeightSave, onComplete, isGuest, startAtCard = 0 }) {
+export function OnboardingModal({ restaurantWeights, onWeightSave, onComplete, isGuest, onHomeCitySave, startAtCard = 0 }) {
   const { t } = useLang();
   const [card, setCard] = useState(startAtCard);
   const [draftW, setDraftW] = useState(() => normalizeWeights(restaurantWeights));
+  const [city, setCity] = useState("");
 
   function draftUpd(k, v) {
     const nv = Math.round(Math.min(10, Math.max(1, +v)));
     setDraftW((w) => ({ ...w, [k]: nv }));
   }
 
+  // Signed-in flow: 2 cards
+  if (!isGuest && card === 0) {
+    return (
+      <div style={OVERLAY}>
+        <div style={CARD}>
+          <h2 style={{ fontSize: 20, fontWeight: 700, color: "#F1EFE8", margin: "0 0 8px", textAlign: "center", lineHeight: 1.3 }}>
+            Where are you based?
+          </h2>
+          <p style={{ fontSize: 13, color: "#C4C2BA", margin: "0 0 20px", textAlign: "center", lineHeight: 1.5 }}>
+            We'll pre-fill this in your add forms.
+          </p>
+          <div style={{ marginBottom: 16 }}>
+            <CityInput value={city} onChange={setCity} placeholder="e.g. New York City" dropUp />
+          </div>
+          <button
+            type="button"
+            style={CTA_BTN}
+            onClick={() => {
+              const resolved = resolveCity(city);
+              if (resolved) onHomeCitySave(resolved);
+              setCard(1);
+            }}
+          >
+            Save & continue →
+          </button>
+          <ProgressDots card={0} total={2} onGoTo={setCard} />
+        </div>
+      </div>
+    );
+  }
+
+  if (!isGuest && card === 1) {
+    return (
+      <div style={OVERLAY}>
+        <div style={CARD}>
+          <h2 style={{ fontSize: 20, fontWeight: 700, color: "#F1EFE8", margin: "0 0 10px", textAlign: "center" }}>
+            Where did you last eat out?
+          </h2>
+          <p style={{ fontSize: 13, color: "#C4C2BA", margin: "0 0 20px", lineHeight: 1.65, textAlign: "center" }}>
+            Log your first BITE.
+          </p>
+          <button type="button" style={CTA_BTN} onClick={() => onComplete("/add")}>
+            + Add Rating
+          </button>
+          <button type="button" style={SKIP_LINK} onClick={() => onComplete()}>
+            I'll do it later
+          </button>
+          <ProgressDots card={1} total={2} onGoTo={setCard} />
+        </div>
+      </div>
+    );
+  }
+
+  // Guest flow: 3 cards
   if (card === 0) {
     return (
       <div style={OVERLAY}>
@@ -115,10 +170,7 @@ export function OnboardingModal({ restaurantWeights, onWeightSave, onComplete, i
           <button type="button" style={CTA_BTN} onClick={() => setCard(1)}>
             Show me →
           </button>
-          <button type="button" style={{ ...SKIP_LINK, color: "#555553" }} onClick={() => onComplete()}>
-            Skip for now
-          </button>
-          <ProgressDots card={0} onGoTo={setCard} />
+          <ProgressDots card={0} total={3} onGoTo={setCard} />
         </div>
       </div>
     );
@@ -128,9 +180,12 @@ export function OnboardingModal({ restaurantWeights, onWeightSave, onComplete, i
     return (
       <div style={OVERLAY}>
         <div style={CARD}>
-          <h2 style={{ fontSize: 20, fontWeight: 700, color: "#F1EFE8", margin: "0 0 18px", lineHeight: 1.3, textAlign: "center" }}>
-            How much do you care about...
+          <h2 style={{ fontSize: 20, fontWeight: 700, color: "#F1EFE8", margin: "16px 0 6px", lineHeight: 1.3, textAlign: "center" }}>
+            a <span style={{ color: "#F0997B" }}>satisfaction</span> score
           </h2>
+          <p style={{ fontSize: 13, fontStyle: "italic", color: "#F1EFE8", margin: "0 0 10px", textAlign: "center" }}>
+            based on what you care about
+          </p>
           <WeightSliders
             weights={draftW}
             labels={[
@@ -153,7 +208,7 @@ export function OnboardingModal({ restaurantWeights, onWeightSave, onComplete, i
           <p style={{ fontSize: 12, color: "#888780", textAlign: "center", margin: "10px 0 0" }}>
             You can change this later in My Taste.
           </p>
-          <ProgressDots card={1} onGoTo={setCard} />
+          <ProgressDots card={1} total={3} onGoTo={setCard} />
         </div>
       </div>
     );
@@ -172,29 +227,11 @@ export function OnboardingModal({ restaurantWeights, onWeightSave, onComplete, i
           <button type="button" style={{ ...SKIP_LINK, color: "#555553" }} onClick={() => onComplete()}>
             Maybe later
           </button>
-          <ProgressDots card={2} onGoTo={setCard} />
+          <ProgressDots card={2} total={3} onGoTo={setCard} />
         </div>
       </div>
     );
   }
 
-  return (
-    <div style={OVERLAY}>
-      <div style={CARD}>
-        <h2 style={{ fontSize: 20, fontWeight: 700, color: "#F1EFE8", margin: "0 0 10px", textAlign: "center" }}>
-          Where did you last eat out?
-        </h2>
-        <p style={{ fontSize: 13, color: "#C4C2BA", margin: "0 0 20px", lineHeight: 1.65, textAlign: "center" }}>
-          Log your first BITE.
-        </p>
-        <button type="button" style={CTA_BTN} onClick={() => onComplete("/add")}>
-          + Add Rating
-        </button>
-        <button type="button" style={SKIP_LINK} onClick={() => onComplete()}>
-          I'll do it later
-        </button>
-        <ProgressDots card={2} onGoTo={setCard} />
-      </div>
-    </div>
-  );
+  return null;
 }

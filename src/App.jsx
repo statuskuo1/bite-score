@@ -113,7 +113,7 @@ function GuestPreview({ message, onSignIn, children }) {
 }
 
 export default function App() {
-  const { user, authReady, username, profile } = useAuth();
+  const { user, authReady, username, profile, refreshProfile } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [st, dispatch] = useReducer(reducer, { entries: [] });
@@ -137,21 +137,6 @@ export default function App() {
   const [notifAnchorPos, setNotifAnchorPos] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [notifFollowingIds, setNotifFollowingIds] = useState(() => new Set());
-  // Re-type dine_tag → dine_tag_mutual when the current user already has a logged entry
-  // for that restaurant. This handles the case where A tags B but B already logged the
-  // place (no reverse dine_with_tags row exists yet, so insertDineTag can't detect it).
-  const annotatedNotifications = useMemo(() => {
-    if (!notifications.length) return notifications;
-    return notifications.map((n) => {
-      if (n.type !== "dine_tag") return n;
-      const name = (n.meta?.restaurant_name || "").trim().toLowerCase();
-      if (!name) return n;
-      const found =
-        (st.entries || []).some((e) => (e.name || "").trim().toLowerCase() === name) ||
-        (cafes || []).some((e) => (e.name || "").trim().toLowerCase() === name);
-      return found ? { ...n, type: "dine_tag_mutual" } : n;
-    });
-  }, [notifications, st.entries, cafes]);
   const [notifLoading, setNotifLoading] = useState(false);
   const notifContainerRef = useRef(null);
   const [notifSheetProfile, setNotifSheetProfile] = useState(null);
@@ -170,6 +155,38 @@ export default function App() {
   const [dineTagCount, setDineTagCount] = useState(0);
   const [dineTagsReady, setDineTagsReady] = useState(false);
   const [dinedWithMap, setDinedWithMap] = useState(new Map());
+  // Re-type dine_tag → dine_tag_mutual when the current user already has a logged entry
+  // for that restaurant AND the underlying dine_with_tags row is still un-dismissed.
+  // The un-dismissed check (via dineTags, which is filtered to dismissed=false) is what
+  // breaks the re-prompt loop: once the user taps Tag them back from either entry point,
+  // the row is dismissed and removed from dineTags, so this annotation no longer fires
+  // on subsequent renders even though the underlying notification row stays in the DB.
+  // resolvedDineTagIds collects dine_tag notif ids whose underlying row is gone — the
+  // panel renders these as past-tense (no action prompt, no row tap target). We only
+  // mark rows resolved once dineTagsReady is true; before then dineTags is empty by
+  // default and would falsely flag every dine_tag as resolved.
+  const { annotatedNotifications, resolvedDineTagIds } = useMemo(() => {
+    const resolved = new Set();
+    if (!notifications.length) return { annotatedNotifications: notifications, resolvedDineTagIds: resolved };
+    const annotated = notifications.map((n) => {
+      if (n.type !== "dine_tag") return n;
+      const name = (n.meta?.restaurant_name || "").trim().toLowerCase();
+      if (!name) return n;
+      const stillUnDismissed = dineTags.some(
+        (t) => t.tagger_id === n.from_user_id
+            && (t.restaurant_name || "").trim().toLowerCase() === name
+      );
+      if (!stillUnDismissed) {
+        if (dineTagsReady) resolved.add(n.id);
+        return n;
+      }
+      const found =
+        (st.entries || []).some((e) => (e.name || "").trim().toLowerCase() === name) ||
+        (cafes || []).some((e) => (e.name || "").trim().toLowerCase() === name);
+      return found ? { ...n, type: "dine_tag_mutual" } : n;
+    });
+    return { annotatedNotifications: annotated, resolvedDineTagIds: resolved };
+  }, [notifications, st.entries, cafes, dineTags, dineTagsReady]);
   const [addPrefill, setAddPrefill] = useState(null);
   const [addInitialDineWith, setAddInitialDineWith] = useState([]);
   const [addFormKey, setAddFormKey] = useState(0);
@@ -462,12 +479,25 @@ export default function App() {
     if (!user?.id) return;
     const fromUserId = notif.from_user_id;
     const restaurantName = notif.meta?.restaurant_name || "";
+    const restaurantCity = (notif.meta?.city || "").trim();
+    let outgoingQ = supabase.from("dine_with_tags")
+      .select("id, entry_id, entry_type")
+      .eq("tagger_id", user.id).eq("tagged_id", fromUserId)
+      .ilike("restaurant_name", restaurantName);
+    if (restaurantCity) outgoingQ = outgoingQ.ilike("city", restaurantCity);
     const [{ data: incomingTag }, { data: outgoingTag }] = await Promise.all([
       supabase.from("dine_with_tags").select("id").eq("tagger_id", fromUserId).eq("tagged_id", user.id).ilike("restaurant_name", restaurantName).eq("dismissed", false).maybeSingle(),
-      supabase.from("dine_with_tags").select("id, entry_id, entry_type").eq("tagger_id", user.id).eq("tagged_id", fromUserId).ilike("restaurant_name", restaurantName).maybeSingle(),
+      outgoingQ.maybeSingle(),
     ]);
+    // Idempotence: if incomingTag is null, the user already tagged back (or the row
+    // was dismissed some other way). Skip the tag_back notification insert so repeat
+    // taps from a stale notification don't keep spamming the original tagger.
+    if (!incomingTag) {
+      setDineTags((prev) => prev.filter((t) => t.tagger_id !== fromUserId || (t.restaurant_name || "").toLowerCase() !== restaurantName.toLowerCase()));
+      return;
+    }
     await Promise.all([
-      incomingTag && dismissDineTag(supabase, incomingTag.id),
+      dismissDineTag(supabase, incomingTag.id),
       outgoingTag && dismissDineTag(supabase, outgoingTag.id),
       supabase.from("notifications").insert({
         user_id: fromUserId, from_user_id: user.id,
@@ -571,7 +601,14 @@ export default function App() {
       supabase.from("profiles").update({ has_completed_onboarding: true }).eq("id", user.id);
       try { localStorage.setItem(`bite_welcomeDismissed_${user.id}`, "1"); } catch {}
     }
-    if (navigateTo) navigate(navigateTo);
+    refreshProfile();
+    navigate(navigateTo || "/log");
+  }
+
+  function handleHomeCitySave(city) {
+    lastCity.current = city;
+    supabase.from("profiles").update({ home_city: city }).eq("id", user.id)
+      .then(({ error }) => { if (error) console.warn("[BITE] save home_city:", error.message); });
   }
 
   function dismissTasteBudsPrompt(navigateTo) {
@@ -1190,6 +1227,7 @@ export default function App() {
               {showNotifPanel && (
                 <NotificationPanel
                   notifications={annotatedNotifications}
+                  resolvedDineTagIds={resolvedDineTagIds}
                   loading={notifLoading}
                   onClose={() => setShowNotifPanel(false)}
                   onFollowBack={handleNotifFollowBack}
@@ -1318,7 +1356,7 @@ export default function App() {
                 sortAsc={sortAsc}
                 onToggleSortAsc={()=>setSortAsc(a=>!a)}
               />
-              {entries.length===0&&(
+              {st.entries.length===0&&(
                 <div style={{position:"relative",marginBottom:8}}>
                   <div style={{opacity:0.45,pointerEvents:"none"}}>
                     <RestRow
@@ -1991,7 +2029,7 @@ export default function App() {
         restaurantWeights={weights}
         onWeightSave={replaceRestaurantWeights}
         onComplete={completeOnboarding}
-        startAtCard={guestReachedSignIn.current ? 2 : 0}
+        onHomeCitySave={handleHomeCitySave}
       />
     )}
     {showTasteBudsPrompt && (
