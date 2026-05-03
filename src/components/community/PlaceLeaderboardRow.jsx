@@ -3,6 +3,7 @@ import { useLang } from "../../contexts/LangContext.jsx";
 import { FLAGS } from "../../constants/cuisineConstants.js";
 import { scoreColor, scoreLabel } from "../../utils/scoring.js";
 import { S } from "../../styles/sharedStyles.js";
+import { PlaceStatsSheet } from "./PlaceStatsSheet.jsx";
 
 /**
  * One aggregated place row for Global tab (restaurants / drinks / sweets).
@@ -20,9 +21,10 @@ import { S } from "../../styles/sharedStyles.js";
  * answers "what does this place look like, on average, to the community?"
  * before the viewer's weights are applied.
  */
-export function PlaceLeaderboardRow({ place, bite, display, rank }) {
+export function PlaceLeaderboardRow({ place, bite, display, rank, restaurantWeights, drinkWeights, sweetWeights, placeKind }) {
   const { t } = useLang();
   const [exp, setExp] = useState(false);
+  const [showStats, setShowStats] = useState(false);
   const isCafe = "category" in place;
   const icon = isCafe
     ? (place.category === "Sweets" ? "🥐" : place.category === "Tea" ? "🍵" : place.category === "Other" ? "☕" : "☕")
@@ -62,6 +64,7 @@ export function PlaceLeaderboardRow({ place, bite, display, rank }) {
   ];
 
   return (
+    <>
     <div style={{
       background: "#1E1E1C", border: "0.5px solid rgba(255,255,255,0.1)",
       borderRadius: 12, marginBottom: 8,
@@ -85,7 +88,16 @@ export function PlaceLeaderboardRow({ place, bite, display, rank }) {
         }}>{icon}</div>
 
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 500, color: "#F1EFE8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <div
+            onClick={(e) => { e.stopPropagation(); if (place.placeId) setShowStats(true); }}
+            style={{
+              fontSize: 14, fontWeight: 500, color: "#F1EFE8",
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              cursor: place.placeId ? "pointer" : undefined,
+              textDecoration: place.placeId ? "underline" : undefined,
+              textDecorationColor: "rgba(255,255,255,0.2)",
+            }}
+          >
             {place.name}
           </div>
           <div style={{ fontSize: 11, color: "#888780", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -127,5 +139,23 @@ export function PlaceLeaderboardRow({ place, bite, display, rank }) {
         </div>
       )}
     </div>
+
+    {showStats && (
+      <PlaceStatsSheet
+        post={{
+          placeId: place.placeId,
+          kind: placeKind || "rest",
+          name: place.name,
+          cuisine: place.cuisine,
+          city: place.city,
+          category: place.category,
+        }}
+        restaurantWeights={restaurantWeights}
+        drinkWeights={drinkWeights}
+        sweetWeights={sweetWeights}
+        onClose={() => setShowStats(false)}
+      />
+    )}
+  </>
   );
 }

@@ -5,6 +5,7 @@ import { fetchAggregatedRestaurantPlaces } from "../../utils/visitPlacesApi.js";
 import { globalCache, GLOBAL_TTL_MS } from "../../utils/sessionCache.js";
 import { calcBiteOutOf10, scoreLabel, tasteColor } from "../../utils/scoring.js";
 import { FLAGS } from "../../constants/cuisineConstants.js";
+import { PlaceStatsSheet } from "./PlaceStatsSheet.jsx";
 
 const ROW_STYLE = {
   display: "flex",
@@ -68,6 +69,7 @@ function roundedRepeat(avgRepeat) {
 
 function TopPickRow({ pick, restaurantWeights, rank }) {
   const { t } = useLang();
+  const [showStats, setShowStats] = useState(false);
   const bite = calcBiteOutOf10(
     pick.avgTaste, pick.avgCost, pick.avgPortions, pick.avgWait,
     pick.useRMajority, roundedRepeat(pick.avgRepeat),
@@ -75,6 +77,7 @@ function TopPickRow({ pick, restaurantWeights, rank }) {
   );
   const col = tasteColor(pick.avgTaste);
   return (
+    <>
     <div style={ROW_STYLE}>
       {rank != null && (
         <div style={{ width: 22, textAlign: "right", fontSize: 11, fontWeight: 700, color: "#666663", flexShrink: 0, lineHeight: 1 }}>
@@ -83,10 +86,16 @@ function TopPickRow({ pick, restaurantWeights, rank }) {
       )}
       <div style={FLAG_BOX_STYLE}>{flagFor(pick.cuisine, pick.name)}</div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{
-          fontSize: 14, fontWeight: 500, color: "#F1EFE8",
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-        }}>{pick.name}</div>
+        <div
+          onClick={() => { if (pick.placeId) setShowStats(true); }}
+          style={{
+            fontSize: 14, fontWeight: 500, color: "#F1EFE8",
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            cursor: pick.placeId ? "pointer" : undefined,
+            textDecoration: pick.placeId ? "underline" : undefined,
+            textDecorationColor: "rgba(255,255,255,0.2)",
+          }}
+        >{pick.name}</div>
         <div style={{ fontSize: 11, color: "#888780", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {[pick.cuisine || null, pick.city || null, `${pick.visitCount} log${pick.visitCount === 1 ? "" : "s"}`].filter(Boolean).join(" · ")}
         </div>
@@ -100,6 +109,20 @@ function TopPickRow({ pick, restaurantWeights, rank }) {
         </div>
       </div>
     </div>
+    {showStats && (
+      <PlaceStatsSheet
+        post={{
+          placeId: pick.placeId,
+          kind: "rest",
+          name: pick.name,
+          cuisine: pick.cuisine,
+          city: pick.city,
+        }}
+        restaurantWeights={restaurantWeights}
+        onClose={() => setShowStats(false)}
+      />
+    )}
+    </>
   );
 }
 

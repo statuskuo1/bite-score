@@ -4,37 +4,24 @@ import { PlaceStatsSheet } from "./PlaceStatsSheet.jsx";
 import {
   calcBiteOutOf10,
   calcCafeOutOf10,
+  normalizeWeights,
+  weightsToPercents,
   scoreColor,
   scoreLabel,
 } from "../../utils/scoring.js";
 import { CURRENCY_SYMBOLS } from "../../utils/currency.js";
 import { FLAGS } from "../../constants/cuisineConstants.js";
 import { Avatar } from "./Avatar.jsx";
+import { addWantToGo } from "../../utils/wantToGoApi.js";
+import { supabase } from "../../config/supabaseClient.js";
 
 /**
  * Single feed card — a unified post for restaurant + cafe visits.
  *
- * Top-down layout (every row is optional except header / place / pills):
- *   1. Header  : avatar + display name (bold) over relative date subtitle.
- *                Tapping the header opens MiniProfileSheet.
- *   2. Place   : big flag + place name on the left, score chip on the
- *                right. Subtitle is `cuisine · city` (rest) or
- *                `category · city` (cafe).
- *   3. Pills   : compact stat pills — taste, cost, wait, repeatability.
- *                Wrap to a second line on narrow widths so the row never
- *                overflows.
- *   4. Dined-w : translucent banner with co-diner avatar stack +
- *                "dined with X and Y". Only renders when `coDiners` is
- *                non-empty (RLS-bypassing RPC may return [] for posts
- *                with no `dine_with_tags`).
- *   5. Notes   : italic gray quote, only when `post.notes` is set.
- *   6. Reactions: heart toggle on the left (filled red when `mine`),
- *                count next to it; reactor avatar stack + summary text on
- *                the right.
- *
- * BITE score is computed through the viewer's own weights — same
- * "score it through my lens" pattern used by Compare and Global. Cafes
- * route to `drinkWeights` or `sweetWeights` by `category`.
+ * Score display:
+ *   - Primary chip: poster's own BITE (computed from their stored weights)
+ *   - Below chip:   "You scored X.X" (if viewer has logged this place)
+ *                   "You'd score X.X" (otherwise — poster's inputs through viewer's weights)
  */
 
 const HEART_RED = "#E85A5A";
@@ -46,8 +33,6 @@ const BORDER = "0.5px solid rgba(255,255,255,0.08)";
 const REACTOR_AVATAR_LIMIT = 3;
 const COD_INER_AVATAR_LIMIT = 3;
 
-/** Currencies whose smallest unit is whole (no fractional cents). Same set
- *  used by `formatCost` in `currency.js`. */
 const NO_DECIMALS = new Set(["JPY", "KRW", "VND", "IDR"]);
 
 const REPEAT_LABEL_BY_RATING = {
@@ -97,6 +82,9 @@ function authorProfile(post) {
     username: post.authorUsername,
     display_name: post.authorDisplayName,
     avatar_url: post.authorAvatarUrl,
+    pref_weight_taste: post.authorWeightTaste,
+    pref_weight_bpb: post.authorWeightBpb,
+    pref_weight_wait: post.authorWeightWait,
   };
 }
 
@@ -114,6 +102,14 @@ function computeScore(post, restaurantWeights, drinkWeights, sweetWeights) {
     post.useR, post.repeatability,
     wts, post.currency_code,
   );
+}
+
+/** Short description of a weight distribution for the lens label. */
+function weightLens(pcts) {
+  if (pcts.taste >= 60) return "taste-heavy";
+  if (pcts.bpb >= 40) return "value-focused";
+  if (pcts.wait >= 25) return "wait-sensitive";
+  return "balanced";
 }
 
 function Pill({ icon, children, color }) {
@@ -256,6 +252,8 @@ export function FeedPostRow({
   restaurantWeights,
   drinkWeights,
   sweetWeights,
+  viewerVisitedIds,
+  viewerId,
   coDiners,
   reactionState,
   reactionBusy,
@@ -264,10 +262,29 @@ export function FeedPostRow({
 }) {
   const { t } = useLang();
   const [showStats, setShowStats] = useState(false);
+  const [wantedToGo, setWantedToGo] = useState(false);
+
   const author = authorProfile(post);
-  const score = computeScore(post, restaurantWeights, drinkWeights, sweetWeights);
-  const col = score == null ? "#888780" : scoreColor(score);
-  const tier = score == null ? "" : scoreLabel(score, t);
+
+  // Poster's weights (falls back to defaults when not set)
+  const posterWeights = normalizeWeights({
+    taste: post.authorWeightTaste,
+    bpb: post.authorWeightBpb,
+    wait: post.authorWeightWait,
+  });
+  const posterPcts = weightsToPercents(posterWeights);
+
+  // Primary score: poster's BITE using their own weights
+  const posterScore = computeScore(post, posterWeights, posterWeights, posterWeights);
+
+  // Secondary score: poster's raw inputs through viewer's weights
+  const viewerScore = computeScore(post, restaurantWeights, drinkWeights, sweetWeights);
+
+  const primaryScore = posterScore ?? viewerScore;
+  const primaryCol = primaryScore == null ? "#888780" : scoreColor(primaryScore);
+  const primaryTier = primaryScore == null ? "" : scoreLabel(primaryScore, t);
+
+  const hasBeenHere = !!(post.placeId && viewerVisitedIds?.has(post.placeId));
 
   const cost = formatCostInline(post.cost, post.currency_code);
   const tasteVal = Number.isFinite(post.taste) ? post.taste.toFixed(1) : null;
@@ -278,11 +295,6 @@ export function FeedPostRow({
   const heartMine = !!reactionState?.mine;
   const reactors = reactionState?.reactors || [];
 
-  /** Read-only flags. The single-post sheet (FeedPostSheet) renders the
-   *  recipient's own card after a heart-reaction notif tap; in that mode
-   *  there's no profile to drill into and no self-hearting allowed, so
-   *  the callbacks are passed as null and we render those affordances
-   *  as plain non-interactive elements. */
   const headerInteractive = typeof onOpenProfile === "function";
   const heartInteractive = typeof onToggleHeart === "function";
 
@@ -297,6 +309,7 @@ export function FeedPostRow({
       boxSizing: "border-box",
       overflow: "hidden",
     }}>
+      {/* Header */}
       {headerInteractive ? (
         <button
           type="button"
@@ -326,12 +339,11 @@ export function FeedPostRow({
             }}>
               {author.display_name || author.username || "—"}
             </div>
-            <div style={{
-              fontSize: 11,
-              color: "#888780",
-              marginTop: 2,
-            }}>
+            <div style={{ fontSize: 11, color: "#888780", marginTop: 1 }}>
               {relativeDate(post.visitedAt)}
+            </div>
+            <div style={{ fontSize: 10, color: "#666663", marginTop: 1 }}>
+              {weightLens(posterPcts)} · T {posterPcts.taste}% · BpB {posterPcts.bpb}%
             </div>
           </div>
         </button>
@@ -354,17 +366,17 @@ export function FeedPostRow({
             }}>
               {author.display_name || author.username || "—"}
             </div>
-            <div style={{
-              fontSize: 11,
-              color: "#888780",
-              marginTop: 2,
-            }}>
+            <div style={{ fontSize: 11, color: "#888780", marginTop: 1 }}>
               {relativeDate(post.visitedAt)}
+            </div>
+            <div style={{ fontSize: 10, color: "#666663", marginTop: 1 }}>
+              {weightLens(posterPcts)} · T {posterPcts.taste}% · BpB {posterPcts.bpb}%
             </div>
           </div>
         </div>
       )}
 
+      {/* Place row */}
       <div style={{
         display: "flex",
         alignItems: "flex-start",
@@ -402,6 +414,8 @@ export function FeedPostRow({
             {subtitle(post)}
           </div>
         </div>
+
+        {/* Score chip: poster's BITE primary, viewer's score secondary */}
         <div style={{
           flexShrink: 0,
           padding: "8px 12px",
@@ -410,15 +424,21 @@ export function FeedPostRow({
           textAlign: "center",
           minWidth: 64,
         }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: col, lineHeight: 1 }}>
-            {score == null ? "—" : score.toFixed(2)}
+          <div style={{ fontSize: 18, fontWeight: 700, color: primaryCol, lineHeight: 1 }}>
+            {primaryScore == null ? "—" : primaryScore.toFixed(2)}
           </div>
-          <div style={{ fontSize: 10, fontWeight: 500, color: col, marginTop: 4, opacity: 0.9 }}>
-            {tier || "BITE"}
+          <div style={{ fontSize: 10, fontWeight: 500, color: primaryCol, marginTop: 4, opacity: 0.9 }}>
+            {primaryTier || "BITE"}
           </div>
+          {viewerScore != null && (
+            <div style={{ fontSize: 11, color: "#888780", marginTop: 3, lineHeight: 1.2 }}>
+              {hasBeenHere ? "You scored" : "You'd score"} {viewerScore.toFixed(1)}
+            </div>
+          )}
         </div>
       </div>
 
+      {/* Pills */}
       <div style={{
         display: "flex",
         flexWrap: "wrap",
@@ -431,6 +451,42 @@ export function FeedPostRow({
         <RepeatPill rating={post.repeatability} useR={post.useR} />
       </div>
 
+      {/* Been / Want to go */}
+      {post.placeId && (
+        <div style={{ marginTop: 8, marginBottom: dinedWith || post.notes ? 8 : 0 }}>
+          {hasBeenHere ? (
+            <span style={{ fontSize: 11, color: "#7DBF8E", fontWeight: 500 }}>✓ You've been</span>
+          ) : (
+            <button
+              type="button"
+              onClick={async () => {
+                if (!viewerId || wantedToGo) return;
+                setWantedToGo(true);
+                await addWantToGo(supabase, viewerId, {
+                  placeId: post.placeId,
+                  kind: post.kind,
+                  name: post.name,
+                  cuisine: post.cuisine || post.category,
+                  city: post.city,
+                });
+              }}
+              style={{
+                fontSize: 11,
+                color: wantedToGo ? "#7DBF8E" : ACCENT_ORANGE,
+                background: "none",
+                border: "none",
+                cursor: wantedToGo ? "default" : "pointer",
+                padding: 0,
+                fontWeight: 500,
+              }}
+            >
+              {wantedToGo ? "✓ Saved to Want to Go" : "＋ Want to go"}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Dined with */}
       {dinedWith && (
         <div style={{
           display: "flex",
@@ -478,10 +534,11 @@ export function FeedPostRow({
           marginTop: 4,
           wordBreak: "break-word",
         }}>
-          “{post.notes}”
+          "{post.notes}"
         </div>
       )}
 
+      {/* Reactions */}
       <div style={{
         marginTop: 12,
         paddingTop: 10,
@@ -551,6 +608,7 @@ export function FeedPostRow({
           </div>
         )}
       </div>
+
       {showStats && post.placeId && (
         <PlaceStatsSheet
           post={post}

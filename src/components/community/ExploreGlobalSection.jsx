@@ -284,6 +284,10 @@ export function ExploreGlobalSection({ user, restaurantWeights, drinkWeights, sw
           place={p}
           bite={p.bite}
           display={getDisplay(p)}
+          restaurantWeights={restaurantWeights}
+          drinkWeights={drinkWeights}
+          sweetWeights={sweetWeights}
+          placeKind={cat === "restaurants" ? "rest" : "cafe"}
         />
       ))}
       {!loading && (

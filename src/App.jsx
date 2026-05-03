@@ -1031,6 +1031,11 @@ export default function App() {
     [restaurantGroupsAll],
   );
 
+  const myRestaurantPlaceIds = useMemo(
+    () => new Set(st.entries.map((e) => e.placeId).filter(Boolean)),
+    [st.entries],
+  );
+
   const drinkGroups = useMemo(() => {
     const groups = {};
     sortedDrinks.forEach((e) => { const k = e.name; if (!groups[k]) groups[k] = []; groups[k].push(e); });
@@ -1523,6 +1528,7 @@ export default function App() {
         <CommunityTab
           user={user}
           myEntries={st.entries}
+          myRestaurantPlaceIds={myRestaurantPlaceIds}
           restaurantWeights={weights}
           drinkWeights={drinkWeights}
           sweetWeights={sweetWeights}

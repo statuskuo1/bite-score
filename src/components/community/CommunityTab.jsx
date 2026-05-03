@@ -174,7 +174,7 @@ function FeedMockup() {
  * Explore > Global so its mean-then-BITE leaderboard reflects the viewer's
  * own My Taste sliders.
  */
-export function CommunityTab({ user, myEntries, restaurantWeights, drinkWeights, sweetWeights, unseenFollowers = 0, onMarkFollowersSeen, onFollowChange, externalUserLogTarget, onExternalUserLogConsumed, externalCompareTarget, onExternalCompareConsumed, onSignIn, myDisplayName = "" }) {
+export function CommunityTab({ user, myEntries, myRestaurantPlaceIds, restaurantWeights, drinkWeights, sweetWeights, unseenFollowers = 0, onMarkFollowersSeen, onFollowChange, externalUserLogTarget, onExternalUserLogConsumed, externalCompareTarget, onExternalCompareConsumed, externalFeedScrollTarget, onExternalFeedScrollConsumed, onSignIn, myDisplayName = "" }) {
   const { t } = useLang();
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -209,6 +209,19 @@ export function CommunityTab({ user, myEntries, restaurantWeights, drinkWeights,
       onExternalCompareConsumed?.();
     }
   }, [externalCompareTarget]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Notification handoff: tag-back / tag-accepted notifs route here so
+   *  the recipient lands on the feed with the relevant post scrolled into
+   *  view. Hold the target locally until FeedTab consumes it. */
+  const [feedScrollTarget, setFeedScrollTarget] = useState(null);
+  useEffect(() => {
+    if (externalFeedScrollTarget) {
+      setFeedScrollTarget(externalFeedScrollTarget);
+      onExternalFeedScrollConsumed?.();
+      // Drop any stale UserLogView so the feed is what renders.
+      setUserLogTarget(null);
+    }
+  }, [externalFeedScrollTarget]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Bounce signed-in users away from a bare /community/compare with no username.
   // Declared after the externalCompareTarget consumer so the prop-sync runs first;
@@ -324,9 +337,12 @@ export function CommunityTab({ user, myEntries, restaurantWeights, drinkWeights,
           restaurantWeights={restaurantWeights}
           drinkWeights={drinkWeights}
           sweetWeights={sweetWeights}
+          myRestaurantPlaceIds={myRestaurantPlaceIds}
           onCompareWith={jumpToCompare}
           onViewLog={setUserLogTarget}
           onFollowChange={onFollowChange}
+          scrollTarget={feedScrollTarget}
+          onScrollTargetConsumed={() => setFeedScrollTarget(null)}
         />
       )}
 

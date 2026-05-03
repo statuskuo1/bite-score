@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLang } from "../../contexts/LangContext.jsx";
 import { supabase } from "../../config/supabaseClient.js";
@@ -17,6 +17,7 @@ import {
 } from "../../utils/followsApi.js";
 import { FeedPostRow } from "./FeedPostRow.jsx";
 import { MiniProfileSheet } from "./MiniProfileSheet.jsx";
+import { FeedPostSheet } from "./FeedPostSheet.jsx";
 
 const PAGE_SIZE = 30;
 
@@ -81,9 +82,12 @@ export function FeedTab({
   restaurantWeights,
   drinkWeights,
   sweetWeights,
+  myRestaurantPlaceIds,
   onCompareWith,
   onViewLog,
   onFollowChange,
+  scrollTarget,
+  onScrollTargetConsumed,
 }) {
   const { t } = useLang();
   const navigate = useNavigate();
@@ -107,6 +111,20 @@ export function FeedTab({
   const [sheetRelation, setSheetRelation] = useState(null);
   const [sheetBusy, setSheetBusy] = useState(false);
 
+  /** Scroll-into-view for notification deep-links (`scrollTarget`). Refs
+   *  are stored by post key so we can call scrollIntoView once posts
+   *  render. `pendingScroll` is a one-shot key the post effect consumes;
+   *  `highlightKey` toggles the temporary outline glow on the matched
+   *  card. */
+  const rowRefs = useRef(new Map());
+  const [pendingScroll, setPendingScroll] = useState(null);
+  const [highlightKey, setHighlightKey] = useState(null);
+  const [paginatedForScroll, setPaginatedForScroll] = useState(false);
+  /** Fallback sheet for when the targeted post isn't in this viewer's
+   *  Taste Buds feed (e.g., one-way follow). Shown over the feed with
+   *  hearts enabled (FeedPostSheet does the viewer != owner gating). */
+  const [fallbackSheet, setFallbackSheet] = useState(null);
+
   useEffect(() => {
     if (!user?.id) {
       setPosts([]);
@@ -129,6 +147,47 @@ export function FeedTab({
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
+
+  /** When a notification deep-link sets `scrollTarget`, queue the key.
+   *  The dedicated effect below picks it up once posts populate. Reset
+   *  pagination/fallback bookkeeping on each new target. */
+  useEffect(() => {
+    if (!scrollTarget) return;
+    const key = `${scrollTarget.kind}-${scrollTarget.postId}`;
+    setPendingScroll(key);
+    setPaginatedForScroll(false);
+    setFallbackSheet(null);
+    onScrollTargetConsumed?.();
+  }, [scrollTarget]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Resolve `pendingScroll`: if the post is on the page, scroll + glow.
+   *  If not, paginate ONCE more; if still missing, fall back to a sheet. */
+  useEffect(() => {
+    if (!pendingScroll || loading) return;
+    const node = rowRefs.current.get(pendingScroll);
+    if (node) {
+      node.scrollIntoView({ behavior: "smooth", block: "center" });
+      setHighlightKey(pendingScroll);
+      setPendingScroll(null);
+      const tid = setTimeout(() => setHighlightKey(null), 1800);
+      return () => clearTimeout(tid);
+    }
+    if (cursor && !paginatedForScroll && !loadingMore) {
+      setPaginatedForScroll(true);
+      showMore();
+      return;
+    }
+    if (!loadingMore) {
+      const [kind, ...idParts] = pendingScroll.split("-");
+      const postId = idParts.join("-");
+      setFallbackSheet({
+        postId,
+        postType: kind === "cafe" ? "cafe" : "restaurant",
+      });
+      setPendingScroll(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingScroll, posts, loading, loadingMore, cursor, paginatedForScroll]);
 
   /**
    * Fire-and-forget enrichment for a slice of posts (initial page or
@@ -246,37 +305,10 @@ export function FeedTab({
     closeSheet();
   }
 
-  if (!loading && posts.length === 0) {
-    return (
-      <div style={{
-        padding: "32px 16px",
-        textAlign: "center",
-        background: "#1E1E1C",
-        border: "0.5px solid rgba(255,255,255,0.08)",
-        borderRadius: 12,
-      }}>
-        <div style={{ fontSize: 32, marginBottom: 12 }}>🦗</div>
-        <div style={{ fontSize: 15, fontWeight: 600, color: "#F1EFE8", marginBottom: 6 }}>
-          {t.feedEmptyTitle || "Hmm, crickets."}
-        </div>
-        <p style={{ fontSize: 12, color: "#888780", margin: "0 0 16px", lineHeight: 1.5 }}>
-          {t.feedEmptyBody
-            || "Your Taste Buds aren't dining out yet. When they log a bite, you'll see it here."}
-        </p>
-        <button
-          type="button"
-          onClick={() => navigate("/community/people/discover")}
-          style={{
-            padding: "8px 18px", borderRadius: 10,
-            background: "#F0997B", color: "#141413",
-            border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer",
-          }}
-        >
-          {t.feedEmptyCta || "Find more Taste Buds"}
-        </button>
-      </div>
-    );
-  }
+  /** Empty-state placeholder — same wrapper shape as the main return so
+   *  the fallback FeedPostSheet (rendered below) can mount over it when a
+   *  notification deep-link references a non-Taste-Bud's post. */
+  const isEmpty = !loading && posts.length === 0;
 
   /** Walk posts in order, emitting a date divider whenever the bucket
    *  changes. The very first divider (above the first post) is omitted so
@@ -302,19 +334,64 @@ export function FeedTab({
         </div>
       )}
 
-      {!loading && posts.map((p) => {
+      {isEmpty && (
+        <div style={{
+          padding: "32px 16px",
+          textAlign: "center",
+          background: "#1E1E1C",
+          border: "0.5px solid rgba(255,255,255,0.08)",
+          borderRadius: 12,
+        }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>🦗</div>
+          <div style={{ fontSize: 15, fontWeight: 600, color: "#F1EFE8", marginBottom: 6 }}>
+            {t.feedEmptyTitle || "Hmm, crickets."}
+          </div>
+          <p style={{ fontSize: 12, color: "#888780", margin: "0 0 16px", lineHeight: 1.5 }}>
+            {t.feedEmptyBody
+              || "Your Taste Buds aren't dining out yet. When they log a bite, you'll see it here."}
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate("/community/people/discover")}
+            style={{
+              padding: "8px 18px", borderRadius: 10,
+              background: "#F0997B", color: "#141413",
+              border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer",
+            }}
+          >
+            {t.feedEmptyCta || "Find more Taste Buds"}
+          </button>
+        </div>
+      )}
+
+      {!loading && !isEmpty && posts.map((p) => {
         const key = postKey(p);
         const bucket = dateBucket(p.visitedAt);
         const showDivider = lastBucket !== null && bucket !== lastBucket;
         lastBucket = bucket;
+        const isHighlighted = highlightKey === key;
         return (
-          <div key={key}>
+          <div
+            key={key}
+            ref={(el) => {
+              if (el) rowRefs.current.set(key, el);
+              else rowRefs.current.delete(key);
+            }}
+            style={isHighlighted ? {
+              outline: "2px solid #F0997B",
+              outlineOffset: 2,
+              borderRadius: 16,
+              transition: "outline-color 0.4s ease",
+            } : undefined}
+          >
             {showDivider && <DateDivider label={bucket} />}
             <FeedPostRow
               post={p}
               restaurantWeights={restaurantWeights}
               drinkWeights={drinkWeights}
               sweetWeights={sweetWeights}
+              viewerVisitedIds={myRestaurantPlaceIds}
+              viewerId={user?.id}
               coDiners={coDinersByKey.get(key)}
               reactionState={reactionsByKey.get(key)}
               reactionBusy={busyHeartKey === key}
@@ -357,6 +434,18 @@ export function FeedTab({
           onFollow={handleFollow}
           onViewLog={(p) => { closeSheet(); onViewLog?.(p); }}
           t={t}
+        />
+      )}
+
+      {fallbackSheet && (
+        <FeedPostSheet
+          postId={fallbackSheet.postId}
+          postType={fallbackSheet.postType}
+          viewerId={user?.id}
+          restaurantWeights={restaurantWeights}
+          drinkWeights={drinkWeights}
+          sweetWeights={sweetWeights}
+          onClose={() => setFallbackSheet(null)}
         />
       )}
     </div>

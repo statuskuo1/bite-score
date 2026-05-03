@@ -5,6 +5,8 @@ import { FLAGS } from "../../constants/cuisineConstants.js";
 import { Avatar } from "./Avatar.jsx";
 import { useLang } from "../../contexts/LangContext.jsx";
 import { useAuth } from "../../contexts/AuthContext.jsx";
+import { listTasteBuds } from "../../utils/followsApi.js";
+import { addWantToGo } from "../../utils/wantToGoApi.js";
 
 const STOP_WORDS = new Set([
   "the","a","an","and","or","but","it","its","is","was","were","are","be","been","being",
@@ -92,8 +94,10 @@ function StatCell({ label, value, sub, type, min, max }) {
 export function PlaceStatsSheet({ post, restaurantWeights, drinkWeights, sweetWeights, onClose }) {
   const { t } = useLang();
   const { user } = useAuth();
-  const [visits, setVisits] = useState(null);      // null = loading
-  const [profiles, setProfiles] = useState({});    // userId → profile
+  const [visits, setVisits] = useState(null);
+  const [profiles, setProfiles] = useState({});
+  const [tasteBudsIds, setTasteBudsIds] = useState(null);
+  const [wantedToGo, setWantedToGo] = useState(false);
 
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -106,6 +110,14 @@ export function PlaceStatsSheet({ post, restaurantWeights, drinkWeights, sweetWe
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  // Fetch taste buds for the "who's been" section
+  useEffect(() => {
+    if (!user?.id) return;
+    listTasteBuds(supabase, user.id).then((buds) => {
+      setTasteBudsIds(new Set(buds.map((b) => b.otherUserId).filter(Boolean)));
+    });
+  }, [user?.id]);
 
   useEffect(() => {
     if (!post.placeId) return;
@@ -134,7 +146,6 @@ export function PlaceStatsSheet({ post, restaurantWeights, drinkWeights, sweetWe
     return () => { cancelled = true; };
   }, [post.placeId, post.kind]);
 
-  // Aggregated stats
   const stats = useMemo(() => {
     if (!visits) return null;
     const valid = visits.filter(v =>
@@ -160,10 +171,8 @@ export function PlaceStatsSheet({ post, restaurantWeights, drinkWeights, sweetWe
     return { avgTaste, avgCost, avgWait, avgPortions, minTaste, maxTaste, useRMajority, repeatMode, validCount: valid.length };
   }, [visits]);
 
-  // "You've been here" indicator
   const hasBeenHere = user?.id && visits ? visits.some(v => v.user_id === user.id) : false;
 
-  // BITE score
   const biteScore = useMemo(() => {
     if (!stats || stats.avgTaste == null) return null;
     if (post.kind === "rest") {
@@ -173,22 +182,21 @@ export function PlaceStatsSheet({ post, restaurantWeights, drinkWeights, sweetWe
     return calcCafeOutOf10(stats.avgTaste, stats.avgCost, stats.avgPortions, stats.avgWait || 0, stats.useRMajority, rr(stats.repeatMode), wts, "USD");
   }, [stats, post.kind, post.category, restaurantWeights, drinkWeights, sweetWeights]);
 
-  // Top reviewers — highest taste per user, top 3
-  const topReviewers = useMemo(() => {
-    if (!visits || !Object.keys(profiles).length) return [];
+  // Taste Buds who've been (replaces "Top Logs")
+  const tasteBudReviewers = useMemo(() => {
+    if (!visits || !tasteBudsIds || !Object.keys(profiles).length) return [];
     const best = {};
     for (const v of visits) {
-      if (!v.user_id || !Number.isFinite(+v.taste)) continue;
+      if (!v.user_id || !tasteBudsIds.has(v.user_id)) continue;
+      if (!Number.isFinite(+v.taste)) continue;
       if (best[v.user_id] == null || +v.taste > best[v.user_id]) best[v.user_id] = +v.taste;
     }
     return Object.entries(best)
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 3)
       .map(([uid, taste]) => ({ profile: profiles[uid], taste }))
       .filter(r => r.profile);
-  }, [visits, profiles]);
+  }, [visits, tasteBudsIds, profiles]);
 
-  // Common words
   const words = useMemo(() => {
     if (!visits) return [];
     return topWords(visits.map(v => v.notes).filter(Boolean));
@@ -202,6 +210,10 @@ export function PlaceStatsSheet({ post, restaurantWeights, drinkWeights, sweetWe
   const biteTier = biteScore != null ? scoreLabel(biteScore, t) : null;
   const visitCount = visits?.length ?? 0;
 
+  const costPerPortion = (stats?.avgCost != null && stats?.avgPortions != null && stats.avgPortions > 0)
+    ? stats.avgCost / stats.avgPortions
+    : null;
+
   const statCells = stats ? [
     stats.avgTaste != null && { label: "Avg Taste", value: stats.avgTaste.toFixed(1) },
     stats.minTaste != null && stats.maxTaste != null && {
@@ -210,7 +222,7 @@ export function PlaceStatsSheet({ post, restaurantWeights, drinkWeights, sweetWe
       min: stats.minTaste,
       max: stats.maxTaste,
     },
-    stats.avgCost != null && { label: "Avg Cost", value: `$${Math.round(stats.avgCost)}` },
+    costPerPortion != null && { label: "Cost / portion", value: `$${costPerPortion.toFixed(2)}` },
     stats.avgWait != null && { label: "Avg Wait", value: `${Math.round(stats.avgWait)} min` },
     stats.repeatMode != null && {
       label: "Come Back?",
@@ -265,7 +277,6 @@ export function PlaceStatsSheet({ post, restaurantWeights, drinkWeights, sweetWe
           >✕</button>
         </div>
 
-        {/* Loading */}
         {visits === null && (
           <div style={{ fontSize: 13, color: "#888780", textAlign: "center", padding: "20px 0" }}>
             Loading…
@@ -276,28 +287,57 @@ export function PlaceStatsSheet({ post, restaurantWeights, drinkWeights, sweetWe
         {biteScore != null && (
           <div style={{
             background: "#252523", borderRadius: 12, padding: "14px 16px",
-            marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "space-between",
+            marginBottom: 14,
           }}>
-            <div>
-              <div style={{ fontSize: 10, color: "#888780", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>
-                Avg BITE Score
-              </div>
-              <div style={{ fontSize: 28, fontWeight: 700, color: biteColor, lineHeight: 1 }}>
-                {biteScore.toFixed(2)}
-              </div>
-              {biteTier && (
-                <div style={{ fontSize: 11, color: biteColor, marginTop: 4, fontWeight: 500 }}>
-                  {biteTier}
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+              <div>
+                <div style={{ fontSize: 10, color: "#888780", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>
+                  Avg BITE · your weights
                 </div>
-              )}
-            </div>
-            <div style={{ fontSize: 12, color: "#888780", textAlign: "right" }}>
-              {visitCount} {visitCount === 1 ? "log" : "logs"}
-              {hasBeenHere && (
-                <div style={{ fontSize: 11, color: "#7DBF8E", marginTop: 4, fontWeight: 500 }}>
-                  ✓ you've been
+                <div style={{ fontSize: 28, fontWeight: 700, color: biteColor, lineHeight: 1 }}>
+                  {biteScore.toFixed(2)}
                 </div>
-              )}
+                {biteTier && (
+                  <div style={{ fontSize: 11, color: biteColor, marginTop: 4, fontWeight: 500 }}>
+                    {biteTier}
+                  </div>
+                )}
+              </div>
+              <div style={{ fontSize: 12, color: "#888780", textAlign: "right" }}>
+                {visitCount} {visitCount === 1 ? "log" : "logs"}
+                {hasBeenHere && (
+                  <div style={{ fontSize: 11, color: "#7DBF8E", marginTop: 4, fontWeight: 500 }}>
+                    ✓ you've been
+                  </div>
+                )}
+                {!hasBeenHere && post.placeId && (
+                  <div style={{ marginTop: 6 }}>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!user?.id || wantedToGo) return;
+                        setWantedToGo(true);
+                        await addWantToGo(supabase, user.id, {
+                          placeId: post.placeId,
+                          kind: post.kind || "rest",
+                          name: post.name,
+                          cuisine: post.cuisine || post.category,
+                          city: post.city,
+                        });
+                      }}
+                      style={{
+                        fontSize: 11,
+                        color: wantedToGo ? "#7DBF8E" : "#F0997B",
+                        background: "none", border: "none",
+                        cursor: wantedToGo ? "default" : "pointer",
+                        padding: 0, fontWeight: 500,
+                      }}
+                    >
+                      {wantedToGo ? "✓ Saved" : "＋ Want to go"}
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -311,13 +351,13 @@ export function PlaceStatsSheet({ post, restaurantWeights, drinkWeights, sweetWe
           </div>
         )}
 
-        {/* Top Logs */}
-        {topReviewers.length > 0 && (
+        {/* Taste Buds who've been */}
+        {tasteBudReviewers.length > 0 && (
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 10, color: "#888780", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
-              Top Logs
+              Your Taste Buds who've been
             </div>
-            {topReviewers.map(({ profile, taste }) => (
+            {tasteBudReviewers.map(({ profile, taste }) => (
               <div key={profile.id} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
                 <Avatar profile={profile} size={26} />
                 <div style={{ flex: 1, fontSize: 13, color: "#C4C2BA", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -331,8 +371,8 @@ export function PlaceStatsSheet({ post, restaurantWeights, drinkWeights, sweetWe
           </div>
         )}
 
-        {/* People say */}
-        {words.length > 0 && (
+        {/* Vibe words */}
+        {words.length >= 3 && (
           <div>
             <div style={{ fontSize: 10, color: "#888780", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
               People say

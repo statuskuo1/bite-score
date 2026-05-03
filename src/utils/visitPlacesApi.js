@@ -5,7 +5,7 @@
 
 import { REGION_MAP } from "../constants/cuisineConstants.js";
 
-const PROFILE_FIELDS = "id, username, display_name, avatar_url";
+const PROFILE_FIELDS = "id, username, display_name, avatar_url, pref_weight_taste, pref_weight_bpb, pref_weight_wait";
 
 /** Gated debug log — silent in production builds (Vite drops the call site). */
 const isDev = typeof import.meta !== "undefined" && !!import.meta.env?.DEV;
@@ -19,6 +19,9 @@ function mapAuthor(row) {
     authorUsername: a.username ?? "",
     authorDisplayName: a.display_name ?? "",
     authorAvatarUrl: a.avatar_url ?? "",
+    authorWeightTaste: a.pref_weight_taste ?? null,
+    authorWeightBpb: a.pref_weight_bpb ?? null,
+    authorWeightWait: a.pref_weight_wait ?? null,
   };
 }
 

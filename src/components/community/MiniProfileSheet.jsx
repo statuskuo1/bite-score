@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../../config/supabaseClient.js";
 import { fetchRestaurantVisitsForUser, computeFoodStats } from "../../utils/visitPlacesApi.js";
 import { profileStatsCache } from "../../utils/sessionCache.js";
+import { normalizeWeights, weightsToPercents } from "../../utils/scoring.js";
 import { Avatar } from "./Avatar.jsx";
 import { FoodStatsBlock } from "../FoodStatsBlock.jsx";
 
@@ -214,7 +215,22 @@ export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClos
             )}
           </div>
 
-          <FoodStatsBlock stats={stats} style={{ marginBottom: 14 }} />
+          <FoodStatsBlock stats={stats} style={{ marginBottom: 8 }} />
+
+          {(() => {
+            const w = normalizeWeights({
+              taste: profile?.pref_weight_taste,
+              bpb: profile?.pref_weight_bpb,
+              wait: profile?.pref_weight_wait,
+            });
+            const p = weightsToPercents(w);
+            return (
+              <div style={{ fontSize: 11, color: "#888780", marginBottom: 12, textAlign: "center" }}>
+                Taste {w.taste} · BpB {w.bpb} · Wait {w.wait}
+                <span style={{ color: "#666663" }}> ≈ {p.taste}% / {p.bpb}% / {p.wait}%</span>
+              </div>
+            );
+          })()}
 
           {(relation === "i_follow" || relation === "taste_buds") ? (
             <div style={{ display: "flex", gap: 8 }}>
