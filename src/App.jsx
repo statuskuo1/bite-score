@@ -727,7 +727,7 @@ export default function App() {
                 pref_weight_taste: parsed.taste,
                 pref_weight_bpb:   parsed.bpb,
                 pref_weight_wait:  parsed.wait,
-              }).eq("id", user.id);
+              }).eq("id", user.id).then(({ error }) => { if (error) console.warn("[BITE] weight sync:", error); });
             }
           } catch (e) { console.error("restaurant weights load:", e); }
           try {
@@ -790,7 +790,7 @@ export default function App() {
         pref_weight_taste: next.taste,
         pref_weight_bpb: next.bpb,
         pref_weight_wait: next.wait,
-      }).eq("id", user.id);
+      }).eq("id", user.id).then(({ error }) => { if (error) console.warn("[BITE] weight sync:", error); });
     }
   }
 
@@ -804,7 +804,7 @@ export default function App() {
         pref_weight_taste: next.taste,
         pref_weight_bpb: next.bpb,
         pref_weight_wait: next.wait,
-      }).eq("id", user.id);
+      }).eq("id", user.id).then(({ error }) => { if (error) console.warn("[BITE] weight sync:", error); });
     }
   }
 
@@ -818,7 +818,7 @@ export default function App() {
         pref_weight_taste: clamped.taste,
         pref_weight_bpb: clamped.bpb,
         pref_weight_wait: clamped.wait,
-      }).eq("id", user.id);
+      }).eq("id", user.id).then(({ error }) => { if (error) console.warn("[BITE] weight sync:", error); });
     }
   }
 
@@ -827,7 +827,7 @@ export default function App() {
     if (user?.id) {
       try { localStorage.setItem(`bite_tasteHalfStep_${user.id}`, JSON.stringify(half)); }
       catch (e) { console.error("taste step save:", e); }
-      supabase.from("profiles").update({ pref_taste_half_step: half }).eq("id", user.id);
+      supabase.from("profiles").update({ pref_taste_half_step: half }).eq("id", user.id).then(({ error }) => { if (error) console.warn("[BITE] weight sync:", error); });
     }
   }
 
@@ -1483,6 +1483,7 @@ export default function App() {
         <CommunityTab
           user={user}
           myEntries={st.entries}
+          cafes={cafes}
           myRestaurantPlaceIds={myRestaurantPlaceIds}
           restaurantWeights={weights}
           drinkWeights={drinkWeights}
