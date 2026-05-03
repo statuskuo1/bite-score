@@ -229,29 +229,97 @@ function reactorSummaryParts(reactors, count) {
 }
 
 /**
- * Display token for a dined-with profile. The viewer (id matches
- * `viewerId`) renders as `@username` so they can recognize themselves at
- * a glance — first names alone get ambiguous when the viewer is in the
- * pill alongside others. Falls back to firstName for everyone else.
+ * Hoist the viewer to index 0 in a co-diner list when present, so the
+ * AvatarStack and the dined-with text both read "you first". Returns the
+ * input untouched when the viewer isn't tagged.
  */
-function dinedWithName(profile, viewerId) {
-  if (viewerId && profile?.id === viewerId && profile?.username) {
-    return `@${profile.username}`;
-  }
-  return firstName(profile);
+function viewerFirst(profiles, viewerId) {
+  if (!viewerId || !profiles?.length) return profiles || [];
+  const idx = profiles.findIndex((p) => p?.id === viewerId);
+  if (idx <= 0) return profiles;
+  const reordered = [...profiles];
+  const [self] = reordered.splice(idx, 1);
+  reordered.unshift(self);
+  return reordered;
 }
 
 /**
- * Dined-with summary as parts. At 3+ co-diners the trailing "N others"
- * token is the click target for the OthersListSheet.
+ * Dined-with summary as discrete parts so the renderer can choose
+ * affordances per token. Each part is one of:
+ *
+ *   { kind: "name",   text, profile }   — tappable, opens MiniProfileSheet
+ *   { kind: "you",    text: "you" }     — plain accent (viewer self; not tappable)
+ *   { kind: "and",    text: "and" }     — grey literal separator
+ *   { kind: "others", text: "N others" } — tappable, opens OthersListSheet
+ *
+ * Viewer-included rules:
+ *   1 (just viewer)        → "you"
+ *   2 (viewer + 1 other)   → "you and Name"
+ *   3+ (viewer + 2+ others)→ "you and N others"   (N = profiles.length - 1)
+ *
+ * Viewer-not-included rules (existing behavior):
+ *   1 → "Name"
+ *   2 → "Name1 and Name2"
+ *   3+→ "Name1 Name2 and N others"
  */
 function dinedWithSummary(profiles, viewerId) {
   if (!profiles?.length) return { parts: null, othersToken: null };
-  const names = profiles.map((p) => dinedWithName(p, viewerId));
-  if (names.length === 1) return { parts: [names[0]], othersToken: null };
-  if (names.length === 2) return { parts: [names[0], "and", names[1]], othersToken: null };
-  const tail = `${names.length - 2} others`;
-  return { parts: [names[0], names[1], "and", tail], othersToken: tail };
+  const youIdx = viewerId ? profiles.findIndex((p) => p?.id === viewerId) : -1;
+  const others = youIdx >= 0
+    ? profiles.filter((_, i) => i !== youIdx)
+    : profiles;
+
+  if (youIdx >= 0) {
+    if (others.length === 0) {
+      return { parts: [{ kind: "you", text: "you" }], othersToken: null };
+    }
+    if (others.length === 1) {
+      return {
+        parts: [
+          { kind: "you", text: "you" },
+          { kind: "and", text: "and" },
+          { kind: "name", text: firstName(others[0]), profile: others[0] },
+        ],
+        othersToken: null,
+      };
+    }
+    const tail = `${others.length} others`;
+    return {
+      parts: [
+        { kind: "you", text: "you" },
+        { kind: "and", text: "and" },
+        { kind: "others", text: tail },
+      ],
+      othersToken: tail,
+    };
+  }
+
+  if (others.length === 1) {
+    return {
+      parts: [{ kind: "name", text: firstName(others[0]), profile: others[0] }],
+      othersToken: null,
+    };
+  }
+  if (others.length === 2) {
+    return {
+      parts: [
+        { kind: "name", text: firstName(others[0]), profile: others[0] },
+        { kind: "and", text: "and" },
+        { kind: "name", text: firstName(others[1]), profile: others[1] },
+      ],
+      othersToken: null,
+    };
+  }
+  const tail = `${others.length - 2} others`;
+  return {
+    parts: [
+      { kind: "name", text: firstName(others[0]), profile: others[0] },
+      { kind: "name", text: firstName(others[1]), profile: others[1] },
+      { kind: "and", text: "and" },
+      { kind: "others", text: tail },
+    ],
+    othersToken: tail,
+  };
 }
 
 function HeartIcon({ filled, size = 16 }) {
@@ -321,7 +389,11 @@ export function FeedPostRow({
   const tasteVal = Number.isFinite(post.taste) ? post.taste.toFixed(1) : null;
   const wait = Number.isFinite(post.wait) ? post.wait : 0;
 
-  const dinedWith = dinedWithSummary(coDiners, viewerId);
+  /** Reorder co-diners so the viewer is first when tagged — both the
+   *  AvatarStack (slices [0..3]) and the dined-with text read "you" up
+   *  front, matching the new copy rules. */
+  const orderedDiners = viewerFirst(coDiners, viewerId);
+  const dinedWith = dinedWithSummary(orderedDiners, viewerId);
   const heartCount = reactionState?.count || 0;
   const heartMine = !!reactionState?.mine;
   const reactors = reactionState?.reactors || [];
@@ -330,11 +402,13 @@ export function FeedPostRow({
   const headerInteractive = typeof onOpenProfile === "function";
   const heartInteractive = typeof onToggleHeart === "function";
   const othersInteractive = typeof onOpenOthers === "function";
+  const profileInteractive = typeof onOpenProfile === "function";
 
-  /** Inline accent style for the clickable "N others" tokens — mirrors the
-   *  existing accent-orange copy but with a dotted underline + pointer to
-   *  signal interactivity. */
-  const othersTokenStyle = {
+  /** Inline accent style for the clickable "N others" tokens — accent-orange
+   *  with a dotted underline + pointer to signal interactivity. The named
+   *  tappable tokens reuse this so all interactive copy in the row shares
+   *  one affordance. */
+  const tappableAccentStyle = {
     color: ACCENT_ORANGE,
     fontWeight: 500,
     cursor: "pointer",
@@ -513,7 +587,7 @@ export function FeedPostRow({
           border: BORDER,
           marginBottom: post.notes ? 12 : 0,
         }}>
-          <AvatarStack profiles={coDiners} size={20} max={COD_INER_AVATAR_LIMIT} />
+          <AvatarStack profiles={orderedDiners} size={20} max={COD_INER_AVATAR_LIMIT} />
           <div style={{
             fontSize: 12,
             color: "#C4C2BA",
@@ -525,27 +599,61 @@ export function FeedPostRow({
           }}>
             <span style={{ color: "#888780" }}>dined with </span>
             {dinedWith.parts.map((part, i) => {
-              const isOthersToken = othersInteractive && part === dinedWith.othersToken;
-              const isAnd = part === "and";
-              const baseStyle = isAnd
-                ? { color: "#888780", fontWeight: 400 }
-                : { color: ACCENT_ORANGE, fontWeight: 500 };
+              const trailing = i < dinedWith.parts.length - 1 ? " " : "";
+
+              if (part.kind === "name") {
+                const tappable = profileInteractive && !!part.profile;
+                return (
+                  <span
+                    key={i}
+                    onClick={tappable ? (e) => {
+                      e.stopPropagation();
+                      onOpenProfile(part.profile);
+                    } : undefined}
+                    style={tappable
+                      ? tappableAccentStyle
+                      : { color: ACCENT_ORANGE, fontWeight: 500 }}
+                  >
+                    {part.text}{trailing}
+                  </span>
+                );
+              }
+
+              if (part.kind === "others") {
+                const tappable = othersInteractive;
+                return (
+                  <span
+                    key={i}
+                    onClick={tappable ? (e) => {
+                      e.stopPropagation();
+                      onOpenOthers({
+                        kind: "co_diners",
+                        post,
+                        profiles: orderedDiners,
+                        title: "Dined with",
+                      });
+                    } : undefined}
+                    style={tappable
+                      ? tappableAccentStyle
+                      : { color: ACCENT_ORANGE, fontWeight: 500 }}
+                  >
+                    {part.text}{trailing}
+                  </span>
+                );
+              }
+
+              if (part.kind === "and") {
+                return (
+                  <span key={i} style={{ color: "#888780", fontWeight: 400 }}>
+                    {part.text}{trailing}
+                  </span>
+                );
+              }
+
+              // "you" — plain accent text, not tappable (it's the viewer)
               return (
-                <span
-                  key={i}
-                  onClick={isOthersToken ? (e) => {
-                    e.stopPropagation();
-                    onOpenOthers({
-                      kind: "co_diners",
-                      post,
-                      profiles: coDiners,
-                      title: "Dined with",
-                    });
-                  } : undefined}
-                  style={isOthersToken ? othersTokenStyle : baseStyle}
-                >
-                  {part}
-                  {i < dinedWith.parts.length - 1 ? " " : ""}
+                <span key={i} style={{ color: ACCENT_ORANGE, fontWeight: 500 }}>
+                  {part.text}{trailing}
                 </span>
               );
             })}
@@ -645,7 +753,7 @@ export function FeedPostRow({
                         title: "Hearts",
                       });
                     } : undefined}
-                    style={isOthersToken ? othersTokenStyle : undefined}
+                    style={isOthersToken ? tappableAccentStyle : undefined}
                   >
                     {part}
                     {i < reactorSum.parts.length - 1 ? " " : ""}
