@@ -309,60 +309,21 @@ export function FeedPostRow({
       boxSizing: "border-box",
       overflow: "hidden",
     }}>
-      {/* Header */}
-      {headerInteractive ? (
-        <button
-          type="button"
-          onClick={() => onOpenProfile(author)}
+      {/* Header: author (clickable) + been/want badge on the right */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+        <div
+          onClick={headerInteractive ? () => onOpenProfile(author) : undefined}
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            width: "100%",
-            padding: 0,
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            textAlign: "left",
-            marginBottom: 12,
+            display: "flex", alignItems: "center", gap: 10,
+            flex: 1, minWidth: 0,
+            cursor: headerInteractive ? "pointer" : "default",
           }}
         >
           <Avatar profile={author} size={36} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{
-              fontSize: 14,
-              fontWeight: 600,
-              color: "#F1EFE8",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}>
-              {author.display_name || author.username || "—"}
-            </div>
-            <div style={{ fontSize: 11, color: "#888780", marginTop: 1 }}>
-              {relativeDate(post.visitedAt)}
-            </div>
-            <div style={{ fontSize: 10, color: "#666663", marginTop: 1 }}>
-              {weightLens(posterPcts)} · T {posterPcts.taste}% · BpB {posterPcts.bpb}%
-            </div>
-          </div>
-        </button>
-      ) : (
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          marginBottom: 12,
-        }}>
-          <Avatar profile={author} size={36} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{
-              fontSize: 14,
-              fontWeight: 600,
-              color: "#F1EFE8",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
+              fontSize: 14, fontWeight: 600, color: "#F1EFE8",
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
             }}>
               {author.display_name || author.username || "—"}
             </div>
@@ -374,7 +335,40 @@ export function FeedPostRow({
             </div>
           </div>
         </div>
-      )}
+
+        {/* Been / want-to-go badge */}
+        {post.placeId && (
+          hasBeenHere ? (
+            <span style={{ fontSize: 11, color: "#7DBF8E", fontWeight: 500, flexShrink: 0 }}>
+              ✓ been
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={async () => {
+                if (!viewerId || wantedToGo) return;
+                setWantedToGo(true);
+                await addWantToGo(supabase, viewerId, {
+                  placeId: post.placeId,
+                  kind: post.kind,
+                  name: post.name,
+                  cuisine: post.cuisine || post.category,
+                  city: post.city,
+                });
+              }}
+              style={{
+                fontSize: 11,
+                color: wantedToGo ? "#7DBF8E" : ACCENT_ORANGE,
+                background: "none", border: "none",
+                cursor: wantedToGo ? "default" : "pointer",
+                padding: 0, fontWeight: 500, flexShrink: 0,
+              }}
+            >
+              {wantedToGo ? "✓ saved" : "＋ want to go"}
+            </button>
+          )
+        )}
+      </div>
 
       {/* Place row */}
       <div style={{
@@ -432,7 +426,7 @@ export function FeedPostRow({
           </div>
           {viewerScore != null && (
             <div style={{ fontSize: 11, color: "#888780", marginTop: 3, lineHeight: 1.2 }}>
-              {hasBeenHere ? "You scored" : "You'd score"} {viewerScore.toFixed(1)}
+              your est. BITE: {viewerScore.toFixed(1)}
             </div>
           )}
         </div>
@@ -450,41 +444,6 @@ export function FeedPostRow({
         <Pill icon="⏱">{wait} min</Pill>
         <RepeatPill rating={post.repeatability} useR={post.useR} />
       </div>
-
-      {/* Been / Want to go */}
-      {post.placeId && (
-        <div style={{ marginTop: 8, marginBottom: dinedWith || post.notes ? 8 : 0 }}>
-          {hasBeenHere ? (
-            <span style={{ fontSize: 11, color: "#7DBF8E", fontWeight: 500 }}>✓ You've been</span>
-          ) : (
-            <button
-              type="button"
-              onClick={async () => {
-                if (!viewerId || wantedToGo) return;
-                setWantedToGo(true);
-                await addWantToGo(supabase, viewerId, {
-                  placeId: post.placeId,
-                  kind: post.kind,
-                  name: post.name,
-                  cuisine: post.cuisine || post.category,
-                  city: post.city,
-                });
-              }}
-              style={{
-                fontSize: 11,
-                color: wantedToGo ? "#7DBF8E" : ACCENT_ORANGE,
-                background: "none",
-                border: "none",
-                cursor: wantedToGo ? "default" : "pointer",
-                padding: 0,
-                fontWeight: 500,
-              }}
-            >
-              {wantedToGo ? "✓ Saved to Want to Go" : "＋ Want to go"}
-            </button>
-          )}
-        </div>
-      )}
 
       {/* Dined with */}
       {dinedWith && (
