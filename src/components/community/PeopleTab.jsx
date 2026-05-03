@@ -33,13 +33,12 @@ const ROW_STYLE = {
 };
 
 const SECTIONS = [
-  { key: "taste-buds", labelKey: "peopleSectionTasteBuds", icon: "🤝" },
   { key: "following",  labelKey: "peopleSectionFollowing",  icon: "👤" },
   { key: "discover",   labelKey: "peopleSectionDiscover",   icon: "🔍" },
   { key: "groups",     labelKey: "peopleSectionGroups",     icon: "🎉" },
 ];
 
-const DEFAULT_SECTION = "taste-buds";
+const DEFAULT_SECTION = "following";
 
 /** Alphabetical sort by display_name (fallback to username). Used by every
  *  people-list in this tab so ordering is predictable as the corpus grows. */
@@ -277,9 +276,14 @@ export function PeopleTab({ user, myWeights, onCompareWith, onMarkFollowersSeen,
    *  current count (expanded if there are unseen followers, collapsed if 0).
    *  Tracked here so the user can manually collapse a non-empty list. */
   const [newFollowersExpanded, setNewFollowersExpanded] = useState(true);
+  /** Following sub-filter: when on, narrows the list to mutual follows
+   *  (Taste Buds) and renders them with compatibility stats + Compare. */
+  const [budsOnly, setBudsOnly] = useState(false);
   const debounceRef = useRef(null);
 
-  // Normalize unknown sub-paths back to the default.
+  // Normalize unknown sub-paths back to the default. Old `taste-buds` deep
+  // links land here too — they redirect to Following (where the buds-only
+  // toggle lives now).
   useEffect(() => {
     const parts = pathname.split("/");
     if (parts[2] !== "people") return;
@@ -437,12 +441,6 @@ export function PeopleTab({ user, myWeights, onCompareWith, onMarkFollowersSeen,
     if (section === "discover") setSeenPendingCount(pendingFollowers.length);
   }, [section, pendingFollowers.length]);
 
-  /** Taste Buds (mutual) sorted alphabetically. */
-  const tasteBudsSorted = useMemo(
-    () => [...tasteBuds].sort(byDisplayName),
-    [tasteBuds],
-  );
-
   /** Everyone I follow, sorted alphabetically (one-way + taste buds combined). */
   const followingOnly = useMemo(
     () => [...following].sort(byDisplayName),
@@ -458,19 +456,19 @@ export function PeopleTab({ user, myWeights, onCompareWith, onMarkFollowersSeen,
     return name.includes(q) || handle.includes(q);
   }
 
-  /** Client-side filtered Taste Buds for the search input on the Taste Buds tab. */
-  const tasteBudsFiltered = useMemo(() => {
-    const q = query.trim();
-    if (!q) return tasteBudsSorted;
-    return tasteBudsSorted.filter((f) => matchesQuery(f.otherProfile, q));
-  }, [tasteBudsSorted, query]);
-
   /** Client-side filtered Following for the search input on the Following tab. */
   const followingFiltered = useMemo(() => {
     const q = query.trim();
     if (!q) return followingOnly;
     return followingOnly.filter((f) => matchesQuery(f.otherProfile, q));
   }, [followingOnly, query]);
+
+  /** Final source for the Following tab body: optionally narrowed to mutuals
+   *  (Taste Buds) when the toggle is on. */
+  const followingVisibleSource = useMemo(
+    () => (budsOnly ? followingFiltered.filter((f) => f.isMutual) : followingFiltered),
+    [followingFiltered, budsOnly],
+  );
 
   /** Auto-collapse when the count flips to 0 / auto-expand when it returns.
    *  Manual toggles still win for the rest of the session. */
@@ -483,8 +481,10 @@ export function PeopleTab({ user, myWeights, onCompareWith, onMarkFollowersSeen,
     }
   }, [pendingFollowers.length]);
 
-  const tasteBudsPage = usePaginatedList(tasteBudsFiltered, `${tasteBudsFiltered.length}|${query}`);
-  const followingPage = usePaginatedList(followingFiltered, `${followingFiltered.length}|${query}`);
+  const followingPage = usePaginatedList(
+    followingVisibleSource,
+    `${followingVisibleSource.length}|${query}|${budsOnly ? "buds" : "all"}`,
+  );
   const pendingFollowersPage = usePaginatedList(pendingFollowers, String(pendingFollowers.length));
 
   function setBusy(id, on) {
@@ -542,11 +542,9 @@ export function PeopleTab({ user, myWeights, onCompareWith, onMarkFollowersSeen,
   // Search input placeholder varies per sub-section. Groups handles its
   // own search, so the shared input above the body is hidden when groups
   // is active.
-  const searchPlaceholder = section === "taste-buds"
-    ? (t.searchTasteBuds || "Search Taste Buds")
-    : section === "following"
-      ? (t.searchFollowing || "Search Following")
-      : (t.searchByUsername || "Search by @username");
+  const searchPlaceholder = section === "following"
+    ? (t.searchFollowing || "Search Following")
+    : (t.searchByUsername || "Search by @username");
 
   return (
     <div>
@@ -604,59 +602,65 @@ export function PeopleTab({ user, myWeights, onCompareWith, onMarkFollowersSeen,
         </div>
       )}
 
-      {/* Taste Buds (mutual) */}
-      {section === "taste-buds" && (
-        <div>
-          {tasteBudsSorted.length === 0 && (
-            <p style={{ fontSize: 12, color: "#888780", margin: "0 0 16px" }}>
-              {t.noTasteBudsYet || "No Taste Buds yet — when someone you follow follows you back, they'll show up here."}
-            </p>
-          )}
-          {tasteBudsSorted.length > 0 && tasteBudsFiltered.length === 0 && (
-            <p style={{ fontSize: 12, color: "#888780", margin: "0 0 16px" }}>
-              {t.noSearchResults || "No matches."}
-            </p>
-          )}
-          {tasteBudsPage.visible.map((f) => (
-            <FollowRow
-              key={f.id}
-              entry={f}
-              stats={budStats[f.otherUserId]}
-              onOpen={openProfileSheet}
-              onUnfollowConfirm={(profile, isMutual) => setInlineUnfollowTarget({ profile, isMutual })}
-              onCompare={() => onCompareWith?.(f.otherProfile)}
-              t={t}
-              hideTasteBudsBadge
-            />
-          ))}
-          <ShowMoreButton
-            remaining={tasteBudsPage.remaining}
-            pageSize={tasteBudsPage.pageSize}
-            onClick={tasteBudsPage.showMore}
-          />
-        </div>
-      )}
-
-      {/* Following (one-way) */}
+      {/* Following (one-way + Taste Buds), with optional buds-only toggle */}
       {section === "following" && (
         <div>
+          {followingOnly.length > 0 && (
+            <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+              <button
+                type="button"
+                onClick={() => setBudsOnly(false)}
+                style={{
+                  padding: "5px 12px", borderRadius: 999,
+                  border: budsOnly ? "0.5px solid rgba(255,255,255,0.15)" : "1px solid #F0997B",
+                  background: budsOnly ? "transparent" : "rgba(240,153,123,0.08)",
+                  color: budsOnly ? "#888780" : "#F0997B",
+                  fontSize: 12, fontWeight: budsOnly ? 400 : 600,
+                  cursor: "pointer",
+                }}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                onClick={() => setBudsOnly(true)}
+                style={{
+                  padding: "5px 12px", borderRadius: 999,
+                  border: budsOnly ? "1px solid #F0997B" : "0.5px solid rgba(255,255,255,0.15)",
+                  background: budsOnly ? "rgba(240,153,123,0.08)" : "transparent",
+                  color: budsOnly ? "#F0997B" : "#888780",
+                  fontSize: 12, fontWeight: budsOnly ? 600 : 400,
+                  cursor: "pointer",
+                  display: "inline-flex", alignItems: "center", gap: 4,
+                }}
+              >
+                🤝 {t.tasteBuds || "Taste Buds"}
+              </button>
+            </div>
+          )}
+
           {followingOnly.length === 0 && (
             <p style={{ fontSize: 12, color: "#888780", margin: "0 0 16px" }}>
               {t.noFollowingYet || "Not following anyone yet. Find people under Discover."}
             </p>
           )}
-          {followingOnly.length > 0 && followingFiltered.length === 0 && (
+          {followingOnly.length > 0 && followingVisibleSource.length === 0 && (
             <p style={{ fontSize: 12, color: "#888780", margin: "0 0 16px" }}>
-              {t.noSearchResults || "No matches."}
+              {budsOnly && followingFiltered.length > 0
+                ? (t.noTasteBudsYet || "No Taste Buds match — when someone you follow follows you back, they'll show up here.")
+                : (t.noSearchResults || "No matches.")}
             </p>
           )}
           {followingPage.visible.map((f) => (
             <FollowRow
               key={f.id}
               entry={f}
+              stats={budsOnly && f.isMutual ? budStats[f.otherUserId] : undefined}
               onOpen={openProfileSheet}
               onUnfollowConfirm={(profile, isMutual) => setInlineUnfollowTarget({ profile, isMutual })}
+              onCompare={budsOnly && f.isMutual ? () => onCompareWith?.(f.otherProfile) : undefined}
               t={t}
+              hideTasteBudsBadge={budsOnly}
             />
           ))}
           <ShowMoreButton

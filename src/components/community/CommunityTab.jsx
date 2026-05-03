@@ -44,8 +44,8 @@ function PeopleMockup() {
   return (
     <div>
       <div style={{ display:"flex", background:"#252523", borderRadius:10, padding:3, gap:2, marginBottom:12 }}>
-        {[["taste-buds","🤝 Taste Buds"],["following","👤 Following"],["discover","🔍 Discover"],["groups","🎉 Groups"]].map(([v,l])=>(
-          <button key={v} style={{ flex:1, padding:"6px 0", textAlign:"center", borderRadius:8, border:"none", background:v==="taste-buds"?"#3C1F13":"transparent", color:v==="taste-buds"?"#F0997B":"#888780", fontSize:11, fontWeight:v==="taste-buds"?700:500, cursor:"pointer" }}>{l}</button>
+        {[["following","👤 Following"],["discover","🔍 Discover"],["groups","🎉 Groups"]].map(([v,l])=>(
+          <button key={v} style={{ flex:1, padding:"6px 0", textAlign:"center", borderRadius:8, border:"none", background:v==="following"?"#3C1F13":"transparent", color:v==="following"?"#F0997B":"#888780", fontSize:11, fontWeight:v==="following"?700:500, cursor:"pointer" }}>{l}</button>
         ))}
       </div>
       <div style={sectionLabel}>Taste Buds · 3</div>
@@ -161,7 +161,7 @@ function FeedMockup() {
  * `/community/compare/:username` (URL is the source of truth for who you're
  * comparing against) and is reached by tapping any user → MiniProfileSheet
  * → Compare button, which calls `jumpToCompare`. A bare `/community/compare`
- * with no username bounces signed-in users to `/community/people/taste-buds`.
+ * with no username bounces signed-in users to `/community/people/following`.
  *
  * `primedCompareTarget` is an instant-render hint for CompareTab so the click
  * path doesn't flash a loading state while the resolved profile is fetched
@@ -174,7 +174,7 @@ function FeedMockup() {
  * Explore > Global so its mean-then-BITE leaderboard reflects the viewer's
  * own My Taste sliders.
  */
-export function CommunityTab({ user, myEntries, myRestaurantPlaceIds, restaurantWeights, drinkWeights, sweetWeights, unseenFollowers = 0, onMarkFollowersSeen, onFollowChange, externalUserLogTarget, onExternalUserLogConsumed, externalCompareTarget, onExternalCompareConsumed, externalFeedScrollTarget, onExternalFeedScrollConsumed, onSignIn, myDisplayName = "" }) {
+export function CommunityTab({ user, myEntries, cafes = [], myRestaurantPlaceIds, restaurantWeights, drinkWeights, sweetWeights, unseenFollowers = 0, onMarkFollowersSeen, onFollowChange, externalUserLogTarget, onExternalUserLogConsumed, externalCompareTarget, onExternalCompareConsumed, externalFeedScrollTarget, onExternalFeedScrollConsumed, onSignIn, myDisplayName = "" }) {
   const { t } = useLang();
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -182,7 +182,7 @@ export function CommunityTab({ user, myEntries, myRestaurantPlaceIds, restaurant
   const topSeg = segs[2] || DEFAULT_TAB;
   // Compare's target identity now lives in the URL: /community/compare/:username.
   // The third segment is the username we're comparing against; null means the
-  // signed-in user hit /community/compare bare and should bounce to Taste Buds.
+  // signed-in user hit /community/compare bare and should bounce to People.
   const compareUsername = topSeg === "compare" ? (segs[3] || null) : null;
   // Compare renders at /community/compare but isn't in the strip; resolve
   // strip highlight to the default tab so nothing lights up while comparing.
@@ -230,7 +230,7 @@ export function CommunityTab({ user, myEntries, myRestaurantPlaceIds, restaurant
     if (topSeg !== "compare") return;
     if (!user) return;
     if (compareUsername) return;
-    navigate("/community/people/taste-buds", { replace: true });
+    navigate("/community/people/following", { replace: true });
   }, [topSeg, compareUsername, user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function jumpToCompare(friendProfile) {
@@ -371,6 +371,7 @@ export function CommunityTab({ user, myEntries, myRestaurantPlaceIds, restaurant
         <ExploreTab
           user={user}
           myEntries={myEntries}
+          cafes={cafes}
           restaurantWeights={restaurantWeights}
           drinkWeights={drinkWeights}
           sweetWeights={sweetWeights}
