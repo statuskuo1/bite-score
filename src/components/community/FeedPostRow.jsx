@@ -375,10 +375,16 @@ export function FeedPostRow({
     bpb: post.authorWeightBpb,
     wait: post.authorWeightWait,
   });
+  const posterDrinkWeights = post.authorDrinkWeightTaste != null
+    ? normalizeWeights({ taste: post.authorDrinkWeightTaste, bpb: post.authorDrinkWeightBpb, wait: post.authorDrinkWeightWait })
+    : posterWeights;
+  const posterSweetWeights = post.authorSweetWeightTaste != null
+    ? normalizeWeights({ taste: post.authorSweetWeightTaste, bpb: post.authorSweetWeightBpb, wait: post.authorSweetWeightWait })
+    : posterDrinkWeights;
   const posterPcts = weightsToPercents(posterWeights);
 
-  // Primary score: poster's BITE using their own weights
-  const posterScore = computeScore(post, posterWeights, posterWeights, posterWeights);
+  // Primary score: poster's BITE using their own weights (drink/sweet for cafe entries)
+  const posterScore = computeScore(post, posterWeights, posterDrinkWeights, posterSweetWeights);
 
   // Secondary score: poster's raw inputs through viewer's weights
   const viewerScore = computeScore(post, restaurantWeights, drinkWeights, sweetWeights);

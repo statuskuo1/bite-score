@@ -271,6 +271,28 @@ export default function App() {
   }, [profile?.pref_weight_taste, profile?.pref_weight_bpb, profile?.pref_weight_wait]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    if (!profile || !user?.id) return;
+    if (profile.pref_weight_drink_taste) {
+      let hasLocal = false;
+      try { hasLocal = !!localStorage.getItem(`bite_drinkWeights_${user.id}`); } catch {}
+      if (!hasLocal) {
+        const w = normalizeWeights({ taste: profile.pref_weight_drink_taste, bpb: profile.pref_weight_drink_bpb, wait: profile.pref_weight_drink_wait });
+        setDrinkWeights(w);
+        try { localStorage.setItem(`bite_drinkWeights_${user.id}`, JSON.stringify(w)); localStorage.setItem("bite_drinkWeights_bootstrap", JSON.stringify(w)); } catch {}
+      }
+    }
+    if (profile.pref_weight_sweet_taste) {
+      let hasLocal = false;
+      try { hasLocal = !!localStorage.getItem(`bite_sweetWeights_${user.id}`); } catch {}
+      if (!hasLocal) {
+        const w = normalizeWeights({ taste: profile.pref_weight_sweet_taste, bpb: profile.pref_weight_sweet_bpb, wait: profile.pref_weight_sweet_wait });
+        setSweetWeights(w);
+        try { localStorage.setItem(`bite_sweetWeights_${user.id}`, JSON.stringify(w)); localStorage.setItem("bite_sweetWeights_bootstrap", JSON.stringify(w)); } catch {}
+      }
+    }
+  }, [profile?.pref_weight_drink_taste, profile?.pref_weight_drink_bpb, profile?.pref_weight_drink_wait, profile?.pref_weight_sweet_taste, profile?.pref_weight_sweet_bpb, profile?.pref_weight_sweet_wait]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
     if (!profile) return;
     // localStorage acts as a fast synchronous override: if the user has ever
     // dismissed/completed onboarding on this device, skip the modal even if
@@ -1246,6 +1268,8 @@ export default function App() {
     if (user?.id) {
       try { localStorage.setItem(`bite_drinkWeights_${user.id}`, JSON.stringify(clamped)); localStorage.setItem("bite_drinkWeights_bootstrap", JSON.stringify(clamped)); }
       catch (e) { console.error("drink weights save:", e); }
+      supabase.from("profiles").update({ pref_weight_drink_taste: clamped.taste, pref_weight_drink_bpb: clamped.bpb, pref_weight_drink_wait: clamped.wait }).eq("id", user.id)
+        .then(({ error }) => { if (error) console.warn("[BITE] drink weight sync:", error); });
     }
   }
   function replaceSweetWeights(next) {
@@ -1254,6 +1278,8 @@ export default function App() {
     if (user?.id) {
       try { localStorage.setItem(`bite_sweetWeights_${user.id}`, JSON.stringify(clamped)); localStorage.setItem("bite_sweetWeights_bootstrap", JSON.stringify(clamped)); }
       catch (e) { console.error("sweet weights save:", e); }
+      supabase.from("profiles").update({ pref_weight_sweet_taste: clamped.taste, pref_weight_sweet_bpb: clamped.bpb, pref_weight_sweet_wait: clamped.wait }).eq("id", user.id)
+        .then(({ error }) => { if (error) console.warn("[BITE] sweet weight sync:", error); });
     }
   }
 

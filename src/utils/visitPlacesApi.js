@@ -5,7 +5,7 @@
 
 import { REGION_MAP } from "../constants/cuisineConstants.js";
 
-const PROFILE_FIELDS = "id, username, display_name, avatar_url, pref_weight_taste, pref_weight_bpb, pref_weight_wait";
+const PROFILE_FIELDS = "id, username, display_name, avatar_url, pref_weight_taste, pref_weight_bpb, pref_weight_wait, pref_weight_drink_taste, pref_weight_drink_bpb, pref_weight_drink_wait, pref_weight_sweet_taste, pref_weight_sweet_bpb, pref_weight_sweet_wait";
 
 /** Gated debug log — silent in production builds (Vite drops the call site). */
 const isDev = typeof import.meta !== "undefined" && !!import.meta.env?.DEV;
@@ -22,6 +22,12 @@ function mapAuthor(row) {
     authorWeightTaste: row.weight_taste ?? a.pref_weight_taste ?? null,
     authorWeightBpb:   row.weight_bpb   ?? a.pref_weight_bpb   ?? null,
     authorWeightWait:  row.weight_wait  ?? a.pref_weight_wait  ?? null,
+    authorDrinkWeightTaste: a.pref_weight_drink_taste ?? null,
+    authorDrinkWeightBpb:   a.pref_weight_drink_bpb   ?? null,
+    authorDrinkWeightWait:  a.pref_weight_drink_wait  ?? null,
+    authorSweetWeightTaste: a.pref_weight_sweet_taste ?? null,
+    authorSweetWeightBpb:   a.pref_weight_sweet_bpb   ?? null,
+    authorSweetWeightWait:  a.pref_weight_sweet_wait  ?? null,
   };
 }
 
