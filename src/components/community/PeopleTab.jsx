@@ -186,7 +186,7 @@ function FollowRow({ entry, stats, onOpen, onUnfollowConfirm, onCompare, t, hide
       <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
         {isMutual && !hideTasteBudsBadge && (
           <StatusBadge
-            label={t.tasteBuds || "Taste Buds"}
+            label="🤝"
             bg="#1A2E0A" color="#97C459" border="rgba(151,196,89,0.4)"
           />
         )}
