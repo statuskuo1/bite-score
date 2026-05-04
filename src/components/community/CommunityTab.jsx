@@ -66,66 +66,6 @@ function PeopleMockup() {
   );
 }
 
-function CompareMockup() {
-  const BOTH = [
-    { flag:"🇯🇵", name:"Soogil",           mine:"8.41", theirs:"8.64" },
-    { flag:"🇰🇷", name:"Cho Dang Gol",     mine:"7.72", theirs:"8.01" },
-    { flag:"🇺🇸", name:"Gramercy Tavern",  mine:"7.95", theirs:"8.22" },
-  ];
-  const THEIRS = [
-    { flag:"🇮🇹", name:"Lilia",      sub:"Italian · NYC",   badge:"Try it" },
-    { flag:"🇫🇷", name:"Le Bernadin", sub:"French · NYC",    badge:"Try it" },
-  ];
-  const scoreStyle = (col) => ({ fontSize:14, fontWeight:700, color:col, minWidth:32, textAlign:"right" });
-  return (
-    <div>
-      <p style={{ fontSize:12, color:"#888780", margin:"0 0 12px", padding:0, lineHeight:1.5 }}>← Back to Buds</p>
-      <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:14 }}>
-        <div style={{ width:48, height:48, borderRadius:"50%", background:"#5B9BD5", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, fontWeight:700, color:"#141413", flexShrink:0 }}>A</div>
-        <div>
-          <div style={{ fontSize:18, fontWeight:600, color:"#F1EFE8" }}>Alex</div>
-          <div style={{ fontSize:12, color:"#888780" }}>@alex_bites · New York City</div>
-        </div>
-      </div>
-      <div style={{ display:"flex", alignItems:"center", gap:14, background:"rgba(151,196,89,0.08)", border:"1px solid rgba(151,196,89,0.33)", borderRadius:12, padding:"14px 16px", marginBottom:14 }}>
-        <div style={{ fontSize:32, fontWeight:800, color:"#97C459", lineHeight:1, flexShrink:0 }}>72%</div>
-        <div>
-          <div style={{ fontSize:14, fontWeight:600, color:"#F1EFE8" }}>Taste compatibility</div>
-          <div style={{ fontSize:12, color:"#888780", marginTop:2 }}>You both love Japanese — you're a bit more value-driven</div>
-        </div>
-      </div>
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:6, width:"100%", padding:"11px", background:"#F0997B", border:"none", borderRadius:10, color:"#141413", fontSize:14, fontWeight:600, marginBottom:16 }}>
-        🍽 Pick a place for us
-      </div>
-      <div style={{ fontSize:12, fontWeight:700, color:"#888780", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:8 }}>Both visited</div>
-      <div style={{ background:"#1E1E1C", border:"0.5px solid rgba(255,255,255,0.1)", borderRadius:12, overflow:"hidden", marginBottom:16 }}>
-        {BOTH.map((r, i) => (
-          <div key={r.name} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 12px", borderBottom:i<BOTH.length-1?"0.5px solid rgba(255,255,255,0.06)":"none" }}>
-            <div style={{ width:36, height:36, borderRadius:8, background:"#252523", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 }}>{r.flag}</div>
-            <div style={{ flex:1, minWidth:0, fontSize:14, fontWeight:500, color:"#F1EFE8", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.name}</div>
-            <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
-              <span style={scoreStyle("#F0997B")}>{r.mine}</span>
-              <span style={{ fontSize:11, color:"#666663" }}>vs</span>
-              <span style={scoreStyle("#5B9BD5")}>{r.theirs}</span>
-            </div>
-          </div>
-        ))}
-      </div>
-      <div style={{ fontSize:12, fontWeight:700, color:"#888780", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:8 }}>Alex's picks you haven't tried</div>
-      {THEIRS.map(r => (
-        <div key={r.name} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 12px", marginBottom:6, background:"#1E1E1C", border:"0.5px solid rgba(255,255,255,0.08)", borderRadius:10 }}>
-          <div style={{ width:36, height:36, borderRadius:8, background:"#252523", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 }}>{r.flag}</div>
-          <div style={{ flex:1, minWidth:0 }}>
-            <div style={{ fontSize:14, fontWeight:500, color:"#F1EFE8", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.name}</div>
-            <div style={{ fontSize:11, color:"#888780" }}>{r.sub}</div>
-          </div>
-          <span style={{ fontSize:11, fontWeight:600, padding:"5px 12px", borderRadius:999, background:"rgba(91,155,213,0.14)", color:"#5B9BD5", border:"1px solid rgba(91,155,213,0.4)", whiteSpace:"nowrap", flexShrink:0 }}>{r.badge}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function ExploreMockup() {
   const ROWS = [
     { flag:"🇮🇹", name:"Lilia",             cuisine:"Italian",        city:"New York City", bite:"9.14", label:"Exceptional",  color:"#97C459" },
@@ -318,7 +258,7 @@ export function CommunityTab({ user, myEntries, cafes = [], cafePlaces = [], myR
     if (!user) {
       return (
         <GuestPreview message="Sign in to compare your taste with friends" onSignIn={onSignIn}>
-          <CompareMockup />
+          <PeopleMockup />
         </GuestPreview>
       );
     }
