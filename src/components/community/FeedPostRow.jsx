@@ -13,7 +13,13 @@ import { CURRENCY_SYMBOLS } from "../../utils/currency.js";
 import { FLAGS } from "../../constants/cuisineConstants.js";
 import { Avatar } from "./Avatar.jsx";
 import { MapsLink } from "./MapsLink.jsx";
-import { addWantToGo, removeWantToGo } from "../../utils/wantToGoApi.js";
+import {
+  addWantToGo,
+  removeWantToGo,
+  optimisticAddWantToGo,
+  optimisticRemoveWantToGo,
+} from "../../utils/wantToGoApi.js";
+import { useWantToGoSaved } from "../../utils/useWantToGoSaved.js";
 import { supabase } from "../../config/supabaseClient.js";
 
 /**
@@ -366,7 +372,7 @@ export function FeedPostRow({
 }) {
   const { t } = useLang();
   const [showStats, setShowStats] = useState(false);
-  const [wantedToGo, setWantedToGo] = useState(false);
+  const wantedToGo = useWantToGoSaved(post.placeId, post.kind);
 
   const author = authorProfile(post);
 
@@ -476,15 +482,31 @@ export function FeedPostRow({
               type="button"
               onClick={async () => {
                 if (!viewerId) return;
+                const kind = post.kind;
+                const category = kind === "cafe" ? (post.category || null) : null;
                 if (wantedToGo) {
-                  setWantedToGo(false);
-                  await removeWantToGo(supabase, viewerId, { placeId: post.placeId, kind: post.kind });
+                  optimisticRemoveWantToGo({ placeId: post.placeId, kind });
+                  const res = await removeWantToGo(supabase, viewerId, { placeId: post.placeId, kind });
+                  // Rollback on failure: re-add so the button snaps back to saved.
+                  if (!res.ok) {
+                    optimisticAddWantToGo(viewerId, {
+                      placeId: post.placeId, kind,
+                      name: post.name, cuisine: post.cuisine || post.category, city: post.city,
+                      category,
+                    });
+                  }
                 } else {
-                  setWantedToGo(true);
-                  await addWantToGo(supabase, viewerId, {
-                    placeId: post.placeId, kind: post.kind,
+                  optimisticAddWantToGo(viewerId, {
+                    placeId: post.placeId, kind,
                     name: post.name, cuisine: post.cuisine || post.category, city: post.city,
+                    category,
                   });
+                  const res = await addWantToGo(supabase, viewerId, {
+                    placeId: post.placeId, kind,
+                    name: post.name, cuisine: post.cuisine || post.category, city: post.city,
+                    category,
+                  });
+                  if (!res.ok) optimisticRemoveWantToGo({ placeId: post.placeId, kind });
                 }
               }}
               style={{

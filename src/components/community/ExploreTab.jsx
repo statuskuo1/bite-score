@@ -3,10 +3,12 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useLang } from "../../contexts/LangContext.jsx";
 import { ExploreTopPicksSection } from "./ExploreTopPicksSection.jsx";
 import { ExploreGlobalSection } from "./ExploreGlobalSection.jsx";
+import { ExploreWantToGoSection } from "./ExploreWantToGoSection.jsx";
 
 const SECTIONS = [
   { key: "top-picks", labelKey: "exploreSectionTopPicks", icon: "⭐" },
   { key: "global", labelKey: "exploreSectionGlobal", icon: "🌐" },
+  { key: "want-to-go", labelKey: "exploreSectionWantToGo", icon: "🔖" },
 ];
 
 const DEFAULT_SECTION = "top-picks";
@@ -21,7 +23,7 @@ const DEFAULT_SECTION = "top-picks";
  *
  * Reserved for future "Trending" sub-section once we have signal density.
  */
-export function ExploreTab({ user, myEntries, cafes = [], restaurantWeights, drinkWeights, sweetWeights }) {
+export function ExploreTab({ user, myEntries, cafes = [], cafePlaces = [], restaurantWeights, drinkWeights, sweetWeights }) {
   const { t } = useLang();
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -66,10 +68,13 @@ export function ExploreTab({ user, myEntries, cafes = [], restaurantWeights, dri
       </div>
 
       {/* Section-aware hint — CommunityTab no longer renders one for /explore
-          so the copy can swap between Top Picks and Global as the user toggles. */}
+          so the copy can swap between Top Picks, Global, and Want to Go as
+          the user toggles. */}
       <p style={{ fontSize: 12, color: "#888780", margin: "0 0 12px" }}>
         {section === "global"
           ? (t.communityHintGlobal || "Top places by community taste.")
+          : section === "want-to-go"
+          ? (t.exploreHintWantToGo || "Places you've saved to try.")
           : (t.exploreHintTopPicks || "Top picks across your Taste Buds.")}
       </p>
 
@@ -86,6 +91,15 @@ export function ExploreTab({ user, myEntries, cafes = [], restaurantWeights, dri
       {section === "global" && (
         <ExploreGlobalSection
           user={user}
+          restaurantWeights={restaurantWeights}
+          drinkWeights={drinkWeights}
+          sweetWeights={sweetWeights}
+        />
+      )}
+      {section === "want-to-go" && (
+        <ExploreWantToGoSection
+          user={user}
+          cafePlaces={cafePlaces}
           restaurantWeights={restaurantWeights}
           drinkWeights={drinkWeights}
           sweetWeights={sweetWeights}

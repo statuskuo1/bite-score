@@ -8,7 +8,13 @@ import { MapsLink } from "./MapsLink.jsx";
 import { useLang } from "../../contexts/LangContext.jsx";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 import { listTasteBuds } from "../../utils/followsApi.js";
-import { addWantToGo, removeWantToGo } from "../../utils/wantToGoApi.js";
+import {
+  addWantToGo,
+  removeWantToGo,
+  optimisticAddWantToGo,
+  optimisticRemoveWantToGo,
+} from "../../utils/wantToGoApi.js";
+import { useWantToGoSaved } from "../../utils/useWantToGoSaved.js";
 
 const STOP_WORDS = new Set([
   "the","a","an","and","or","but","it","its","is","was","were","are","be","been","being",
@@ -102,7 +108,7 @@ export function PlaceStatsSheet({ post, restaurantWeights, drinkWeights, sweetWe
   const [visits, setVisits] = useState(null);
   const [profiles, setProfiles] = useState({});
   const [tasteBudsIds, setTasteBudsIds] = useState(null);
-  const [wantedToGo, setWantedToGo] = useState(false);
+  const wantedToGo = useWantToGoSaved(post.placeId, post.kind || "rest");
 
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -352,15 +358,30 @@ export function PlaceStatsSheet({ post, restaurantWeights, drinkWeights, sweetWe
                       type="button"
                       onClick={async () => {
                         if (!user?.id) return;
+                        const kind = post.kind || "rest";
+                        const category = kind === "cafe" ? (post.category || null) : null;
                         if (wantedToGo) {
-                          setWantedToGo(false);
-                          await removeWantToGo(supabase, user.id, { placeId: post.placeId, kind: post.kind || "rest" });
+                          optimisticRemoveWantToGo({ placeId: post.placeId, kind });
+                          const res = await removeWantToGo(supabase, user.id, { placeId: post.placeId, kind });
+                          if (!res.ok) {
+                            optimisticAddWantToGo(user.id, {
+                              placeId: post.placeId, kind,
+                              name: post.name, cuisine: post.cuisine || post.category, city: post.city,
+                              category,
+                            });
+                          }
                         } else {
-                          setWantedToGo(true);
-                          await addWantToGo(supabase, user.id, {
-                            placeId: post.placeId, kind: post.kind || "rest",
+                          optimisticAddWantToGo(user.id, {
+                            placeId: post.placeId, kind,
                             name: post.name, cuisine: post.cuisine || post.category, city: post.city,
+                            category,
                           });
+                          const res = await addWantToGo(supabase, user.id, {
+                            placeId: post.placeId, kind,
+                            name: post.name, cuisine: post.cuisine || post.category, city: post.city,
+                            category,
+                          });
+                          if (!res.ok) optimisticRemoveWantToGo({ placeId: post.placeId, kind });
                         }
                       }}
                       style={{

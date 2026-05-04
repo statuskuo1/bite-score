@@ -174,7 +174,7 @@ function FeedMockup() {
  * Explore > Global so its mean-then-BITE leaderboard reflects the viewer's
  * own My Taste sliders.
  */
-export function CommunityTab({ user, myEntries, cafes = [], myRestaurantPlaceIds, restaurantWeights, drinkWeights, sweetWeights, unseenFollowers = 0, onMarkFollowersSeen, onFollowChange, externalUserLogTarget, onExternalUserLogConsumed, externalCompareTarget, onExternalCompareConsumed, externalFeedScrollTarget, onExternalFeedScrollConsumed, coDinersRefreshKey = 0, onSignIn, myDisplayName = "" }) {
+export function CommunityTab({ user, myEntries, cafes = [], cafePlaces = [], myRestaurantPlaceIds, restaurantWeights, drinkWeights, sweetWeights, unseenFollowers = 0, onMarkFollowersSeen, onFollowChange, externalUserLogTarget, onExternalUserLogConsumed, externalCompareTarget, onExternalCompareConsumed, externalFeedScrollTarget, onExternalFeedScrollConsumed, coDinersRefreshKey = 0, onSignIn, myDisplayName = "", guestTasteBud = null, guestTasteBudCompat = null }) {
   const { t } = useLang();
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -351,12 +351,7 @@ export function CommunityTab({ user, myEntries, cafes = [], myRestaurantPlaceIds
         />
       )}
 
-      {active === "people" && !user && (
-        <GuestPreview message="Sign in to follow friends and see who's eating where" onSignIn={onSignIn}>
-          <PeopleMockup />
-        </GuestPreview>
-      )}
-      {active === "people" && user && (
+      {active === "people" && (
         <PeopleTab
           user={user}
           myWeights={restaurantWeights}
@@ -364,6 +359,9 @@ export function CommunityTab({ user, myEntries, cafes = [], myRestaurantPlaceIds
           onMarkFollowersSeen={onMarkFollowersSeen}
           onFollowChange={onFollowChange}
           onViewLog={setUserLogTarget}
+          guestTasteBud={guestTasteBud}
+          guestTasteBudCompat={guestTasteBudCompat}
+          onSignIn={onSignIn}
         />
       )}
 
@@ -377,6 +375,7 @@ export function CommunityTab({ user, myEntries, cafes = [], myRestaurantPlaceIds
           user={user}
           myEntries={myEntries}
           cafes={cafes}
+          cafePlaces={cafePlaces}
           restaurantWeights={restaurantWeights}
           drinkWeights={drinkWeights}
           sweetWeights={sweetWeights}

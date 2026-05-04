@@ -23,7 +23,9 @@ export function PlaceLeaderboardRow({ place, bite, display, rank, restaurantWeig
   const subtitleParts = [
     isCafe ? (place.category || null) : (place.cuisine || null),
     place.city || null,
-    `${place.visitCount} log${place.visitCount === 1 ? "" : "s"}`,
+    place.visitCount != null && place.visitCount > 0
+      ? `${place.visitCount} log${place.visitCount === 1 ? "" : "s"}`
+      : null,
   ].filter(Boolean);
 
   return (

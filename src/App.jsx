@@ -22,6 +22,7 @@ import {
   CAFE_VISIT_SELECT,
 } from "./utils/visitPlacesApi.js";
 import { INIT_REST, INIT_CAFE } from "./data/initialData.js";
+import { GUEST_USER, GUEST_REST_ENTRIES, GUEST_CAFE_ENTRIES, GUEST_TASTE_BUD, GUEST_TASTE_BUD_COMPAT } from "./data/guestData.js";
 import { reducer } from "./state/logReducer.js";
 import {
   calcBiteOutOf10,
@@ -77,6 +78,8 @@ import { SameDinnerSheet } from "./components/SameDinnerSheet.jsx";
 import { PickVisitSheet } from "./components/PickVisitSheet.jsx";
 import { OnboardingModal } from "./components/OnboardingModal.jsx";
 import { TasteBudsPromptSheet } from "./components/TasteBudsPromptSheet.jsx";
+import { removeWantToGo, listWantToGo } from "./utils/wantToGoApi.js";
+import { setWantToGoRows } from "./utils/sessionCache.js";
 const GUEST_PALETTE_ENTRIES = [
   {id:"gp1",name:"Lilia",             cuisine:"Italian",        letter:"I",city:"New York City",taste:9.2,cost:120,portions:2,wait:20,repeatability:3,useR:true,notes:""},
   {id:"gp2",name:"Don Angie",         cuisine:"Italian",        letter:"I",city:"New York City",taste:8.8,cost:95, portions:2,wait:15,repeatability:3,useR:true,notes:""},
@@ -230,6 +233,8 @@ export default function App() {
   const [showTasteBudsPrompt, setShowTasteBudsPrompt] = useState(false);
   const [showGuestOnboarding, setShowGuestOnboarding] = useState(true);
   const guestReachedSignIn = useRef(false);
+  const [guestEntries, setGuestEntries] = useState(() => GUEST_REST_ENTRIES);
+  const [guestCafes,   setGuestCafes]   = useState(() => GUEST_CAFE_ENTRIES);
   const [extUserLogTarget, setExtUserLogTarget] = useState(null);
   const [extCompareTarget, setExtCompareTarget] = useState(null);
   const lastLogPath = useRef("/log");
@@ -1101,6 +1106,9 @@ export default function App() {
           setCafes([]);
           setRestaurantPlaces([]);
           setCafePlaces([]);
+          // Clear any stale cache left over from a prior signed-in session so
+          // the "+ Want to go" button doesn't inherit another user's saves.
+          setWantToGoRows(null, []);
         } else {
           if (import.meta.env.DEV) {
             console.log("[BITE] AuthContext user at load()", {
@@ -1113,12 +1121,13 @@ export default function App() {
           // Profile sync is owned by AuthContext; we just read visits here.
           // Shared `*_places` catalog is read in parallel for the PlacePicker
           // typeahead — RLS allows authenticated SELECT on all rows.
-          const [entries, cafeRows, rPlaces, cPlaces, dwMap] = await Promise.all([
+          const [entries, cafeRows, rPlaces, cPlaces, dwMap, wtgRows] = await Promise.all([
             fetchRestaurantVisitsJoined(supabase, user.id),
             fetchCafeVisitsJoined(supabase, user.id),
             fetchAllRestaurantPlaces(supabase),
             fetchAllCafePlaces(supabase),
             fetchDinedWithByEntry(supabase, user.id),
+            listWantToGo(supabase, user.id),
           ]);
           if (import.meta.env.DEV) {
             console.log("[BITE] load() fetched rows", {
@@ -1135,6 +1144,10 @@ export default function App() {
           setRestaurantPlaces(rPlaces);
           setCafePlaces(cPlaces);
           setDinedWithMap(dwMap);
+          // Seed the shared Want-to-Go cache so "+ Want to go" / "✓ saved"
+          // buttons on feed posts + the stats sheet reflect DB truth on first
+          // paint (not just after opening the Explore > Want to Go tab).
+          setWantToGoRows(user.id, wtgRows);
           if (import.meta.env.DEV) {
             console.log("[BITE] reducer LOAD applied", { entriesLength: entries.length });
           }
@@ -1543,6 +1556,9 @@ export default function App() {
       if (error) console.error("cafe insert error:", error);
       const mapped = (data || []).map((row) => mapCafeVisitRow(row));
       setCafes((p) => [...p, ...mapped]);
+      // Auto-remove from Want to Go now that the viewer has actually been.
+      // Fire-and-forget; removeWantToGo no-ops if the row doesn't exist.
+      if (mapped.length) removeWantToGo(supabase, user.id, { placeId, kind: "cafe" });
       return mapped[0] || null;
     } catch (err) {
       console.error("cafe insert threw:", err);
@@ -1667,20 +1683,49 @@ export default function App() {
 
       {/* ── My Log ── */}
       {pathname.startsWith("/log")&&!editR&&!editC&&!user&&(
-        <GuestPreview message="Sign in to start logging your own restaurant ratings" onSignIn={() => setShowAuthModal(true)}>
-          <div>
-            <div style={{marginBottom:8}}>
-              <CategoryTabs active="restaurants" onChange={() => {}} />
-            </div>
-            <div style={{borderBottom:"0.5px solid rgba(255,255,255,0.08)",marginBottom:12}}/>
-            {GUEST_PALETTE_ENTRIES.map(e=>{
-              const sc=calcBiteOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,weights,e.currency_code||"USD");
-              return(
-                <RestRow key={e.id} e={e} display={{val:sc!=null?sc.toFixed(2):"—",label:scoreLabel(sc,t),color:scoreColor(sc)}} user={null} weights={weights}/>
-              );
-            })}
+        <div>
+          <div style={{ fontSize:11, color:"#888780", background:"rgba(255,255,255,0.04)",
+            border:"0.5px solid rgba(255,255,255,0.08)", borderRadius:7,
+            padding:"5px 10px", marginBottom:12, display:"flex", alignItems:"center",
+            justifyContent:"space-between", flexWrap:"wrap", gap:4 }}>
+            <span>Preview — entries only last this session.</span>
+            <button type="button" onClick={() => setShowAuthModal(true)}
+              style={{ background:"none", border:"none", padding:0,
+                color:"#F0997B", fontSize:11, cursor:"pointer", fontWeight:500 }}>
+              Sign in to save
+            </button>
           </div>
-        </GuestPreview>
+          <div style={{ marginBottom:8 }}>
+            <CategoryTabs active={logTab}
+              onChange={v => navigate(v === "restaurants" ? "/log" : "/log/" + v)} />
+          </div>
+          <div style={{ borderBottom:"0.5px solid rgba(255,255,255,0.08)", marginBottom:12 }} />
+          {logTab === "restaurants" && guestEntries.map(e => {
+            const sc = calcBiteOutOf10(e.taste, e.cost, e.portions, e.wait, e.useR, e.repeatability, weights, e.currency_code||"USD");
+            return (
+              <RestRow key={e.id} e={e}
+                display={{ val: sc!=null ? sc.toFixed(2) : "—", label: scoreLabel(sc,t), color: scoreColor(sc) }}
+                user={GUEST_USER} visits={1} group={[e]} weights={weights}
+                onEdit={entry => { setEditR(entry); setEditDineWith([]); window.scrollTo({top:0,behavior:"smooth"}); }}
+                onDelete={id => setGuestEntries(p => p.filter(x => x.id !== id))}
+              />
+            );
+          })}
+          {logTab === "drinks" && guestCafes.filter(e => e.category !== "Sweets").map(e => (
+            <CafeGroupRow key={e.id} group={[e]} cafeSortBy="bite" weights={drinkWeights}
+              user={GUEST_USER}
+              onEdit={entry => { setEditC(entry); setEditDineWith([]); window.scrollTo({top:0,behavior:"smooth"}); }}
+              onDelete={id => setGuestCafes(p => p.filter(x => x.id !== id))}
+            />
+          ))}
+          {logTab === "sweets" && guestCafes.filter(e => e.category === "Sweets").map(e => (
+            <CafeGroupRow key={e.id} group={[e]} cafeSortBy="bite" weights={sweetWeights}
+              user={GUEST_USER}
+              onEdit={entry => { setEditC(entry); setEditDineWith([]); window.scrollTo({top:0,behavior:"smooth"}); }}
+              onDelete={id => setGuestCafes(p => p.filter(x => x.id !== id))}
+            />
+          ))}
+        </div>
       )}
       {pathname.startsWith("/log")&&!editR&&!editC&&user&&!dbLoaded&&(
         <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:8}}>
@@ -1937,6 +1982,7 @@ export default function App() {
           user={user}
           myEntries={st.entries}
           cafes={cafes}
+          cafePlaces={cafePlaces}
           myRestaurantPlaceIds={myRestaurantPlaceIds}
           restaurantWeights={weights}
           drinkWeights={drinkWeights}
@@ -1953,13 +1999,21 @@ export default function App() {
           coDinersRefreshKey={coDinersRefreshKey}
           onSignIn={() => setShowAuthModal(true)}
           myDisplayName={profile?.display_name || ""}
+          guestTasteBud={!user ? GUEST_TASTE_BUD : null}
+          guestTasteBudCompat={!user ? GUEST_TASTE_BUD_COMPAT : null}
         />
       )}
 
-      {pathname.startsWith("/log")&&editR&&<RestForm initial={editR} initialDineWith={editDineWith} weights={weights} existingEntries={st.entries} existingCities={existingCities} places={restaurantPlaces}
+      {pathname.startsWith("/log")&&editR&&<RestForm initial={editR} initialDineWith={editDineWith} weights={weights} existingEntries={!user ? guestEntries : st.entries} existingCities={!user ? [...new Set(guestEntries.map(e=>e.city).filter(Boolean))] : existingCities} places={!user ? [] : restaurantPlaces}
         user={user} tasteBudIds={tasteBudIds}
-        onPlaceCreated={(p)=>upsertPlace(setRestaurantPlaces, p.id, p)}
+        onPlaceCreated={(p)=>{ if (user) upsertPlace(setRestaurantPlaces, p.id, p); }}
         onSave={async e=>{
+        if (!user) {
+          setGuestEntries(p => p.map(x => x.id === editR.id ? { ...x, ...e } : x));
+          setEditR(null); setEditDineWith([]);
+          window.scrollTo({ top:0, behavior:"smooth" });
+          return;
+        }
         let resolvedPlaceId = e.placeId;
         if(canMutateVisit(e,user)) {
           try {
@@ -2012,8 +2066,15 @@ export default function App() {
       }} onCancel={()=>{setEditR(null);setEditDineWith([]);window.scrollTo({top:0,behavior:"smooth"});}} tasteStep={tasteHalfStep?0.5:0.1} onTasteStepChange={saveTasteStep}/>}
       {pathname.startsWith("/log")&&editC&&<CafeForm initial={editC} initialDineWith={editDineWith} weights={editC?.category==="Sweets"?sweetWeights:drinkWeights}
         user={user} tasteBudIds={tasteBudIds}
-        onPlaceCreated={(p)=>upsertPlace(setCafePlaces, p.id, p)}
+        onPlaceCreated={(p)=>{ if (user) upsertPlace(setCafePlaces, p.id, p); }}
+        existingCafes={!user ? guestCafes : cafes} existingCities={!user ? [...new Set(guestCafes.map(e=>e.city).filter(Boolean))] : existingCities} places={!user ? [] : cafePlaces}
         onSave={async e=>{
+        if (!user) {
+          setGuestCafes(p => p.map(x => x.id === editC.id ? { ...x, ...e } : x));
+          setEditC(null); setEditDineWith([]);
+          window.scrollTo({ top:0, behavior:"smooth" });
+          return;
+        }
         if (e.city) persistLastCity(e.city);
         let resolvedPlaceId = e.placeId;
         if(canMutateVisit(e,user)) {
@@ -2093,21 +2154,57 @@ export default function App() {
 
       {/* ── Add Rating ── */}
       {pathname==="/add"&&!user&&(
-        <GuestPreview message="Sign in to start logging your own ratings" onSignIn={() => setShowAuthModal(true)}>
-          <RestForm
-            initial={{...INIT_REST, city:"New York City"}}
-            weights={weights}
-            existingEntries={[]}
-            existingCities={[]}
-            places={[]}
-            onPlaceCreated={()=>{}}
-            onSave={()=>{}}
-            onCancel={()=>{}}
-            tasteStep={0.1}
-            addType="restaurant"
-            setAddType={()=>{}}
-          />
-        </GuestPreview>
+        <div>
+          <div style={{ display:"flex", gap:8, marginBottom:16 }}>
+            {[["restaurant","🍽 Restaurant"],["cafe","☕ Drink"],["sweets","🥐 Sweet"]].map(([v,l]) => (
+              <button key={v} type="button" onClick={() => setAddType(v)}
+                style={{ flex:1, padding:"8px 0", borderRadius:8, border:"none",
+                  background: addType===v ? "#F0997B" : "#252523",
+                  color: addType===v ? "#141413" : "#888780",
+                  fontSize:12, fontWeight:600, cursor:"pointer" }}>
+                {l}
+              </button>
+            ))}
+          </div>
+          {addType === "restaurant" ? (
+            <RestForm
+              key={addFormKey}
+              initial={{ ...INIT_REST, city: lastCity.current || "" }}
+              weights={weights}
+              existingEntries={guestEntries}
+              existingCities={[...new Set(guestEntries.map(e=>e.city).filter(Boolean))]}
+              places={[]} onPlaceCreated={() => {}}
+              tasteStep={0.1} addType={addType} setAddType={setAddType}
+              onSave={(e) => {
+                const entry = { ...e, id:`gr_new_${Date.now()}`, ownerId:"__guest__",
+                  placeId:null, visitedAt:new Date().toISOString(), currency_code:"USD",
+                  letter:(e.cuisine?.[0]||"").toUpperCase() };
+                setGuestEntries(p => [...p, entry]);
+                if (e.city) persistLastCity(e.city);
+                navigate("/log");
+              }}
+              onCancel={() => navigate("/log")}
+            />
+          ) : (
+            <CafeForm
+              key={addFormKey}
+              initial={{ ...INIT_CAFE, city: lastCity.current || "" }}
+              weights={addType === "sweets" ? sweetWeights : drinkWeights}
+              existingCafes={guestCafes}
+              existingCities={[...new Set(guestCafes.map(e=>e.city).filter(Boolean))]}
+              places={[]} onPlaceCreated={() => {}}
+              tasteStep={0.1} addType={addType} setAddType={setAddType}
+              onSave={(e) => {
+                const entry = { ...e, id:`gc_new_${Date.now()}`, ownerId:"__guest__",
+                  placeId:null, visitedAt:new Date().toISOString(), currency_code:"USD" };
+                setGuestCafes(p => [...p, entry]);
+                if (e.city) persistLastCity(e.city);
+                navigate(addType === "sweets" ? "/log/sweets" : "/log/drinks");
+              }}
+              onCancel={() => navigate("/log")}
+            />
+          )}
+        </div>
       )}
       {pathname==="/add"&&user&&(
         <div>
@@ -2192,6 +2289,9 @@ export default function App() {
                       if (isFirstEntry && !tasteBudsDone) setShowTasteBudsPrompt(true);
                       if (user?.id) { try { localStorage.removeItem(`bite_addRating_draft_${user.id}`); } catch {} }
                       setAddDraftData(null);
+                      // Auto-remove from Want to Go now that the viewer has actually been.
+                      // Fire-and-forget; removeWantToGo no-ops if the row doesn't exist.
+                      removeWantToGo(supabase, user.id, { placeId, kind: "rest" });
                       const toTag = (e.dineWith || []).filter(p => p.id !== sourceTaggerId);
                       if (toTag.length) {
                         // ARCHIVED 2026-05-04: see src/_archive/dine-tag-notifications.md
@@ -2443,21 +2543,19 @@ export default function App() {
       )}
       {pathname.startsWith("/taste")&&showSuggest&&user&&<SuggestView entries={st.entries} weights={weights} onBack={()=>setShowSuggest(false)}/>}
       {pathname.startsWith("/taste")&&!showSuggest&&!user&&(
-        <GuestPreview message="Sign in to see your personal taste profile" onSignIn={() => setShowAuthModal(true)}>
-          <PaletteView
-            entries={GUEST_PALETTE_ENTRIES}
-            cafes={[]}
-            weights={weights}
-            replaceRestaurantWeights={()=>{}}
-            drinkWeights={drinkWeights}
-            replaceDrinkWeights={()=>{}}
-            sweetWeights={sweetWeights}
-            replaceSweetWeights={()=>{}}
-            questL={new Set()}
-            toggleQ={()=>{}}
-            onOpenSuggest={()=>{}}
-          />
-        </GuestPreview>
+        <PaletteView
+          entries={guestEntries}
+          cafes={guestCafes}
+          weights={weights}
+          replaceRestaurantWeights={replaceRestaurantWeights}
+          drinkWeights={drinkWeights}
+          replaceDrinkWeights={replaceDrinkWeights}
+          sweetWeights={sweetWeights}
+          replaceSweetWeights={replaceSweetWeights}
+          questL={new Set()}
+          toggleQ={() => {}}
+          onOpenSuggest={() => {}}
+        />
       )}
       {pathname.startsWith("/taste")&&!showSuggest&&user&&(
         <PaletteView
