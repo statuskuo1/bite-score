@@ -90,6 +90,7 @@ export function FeedTab({
   onFollowChange,
   scrollTarget,
   onScrollTargetConsumed,
+  coDinersRefreshKey = 0,
 }) {
   const { t } = useLang();
   const navigate = useNavigate();
@@ -199,6 +200,16 @@ export function FeedTab({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingScroll, posts, loading, loadingMore, cursor, paginatedForScroll]);
+
+  /** External refresh trigger: parent (App.jsx) bumps `coDinersRefreshKey`
+   *  after Tag-them-back so we refetch fetch_co_diners_for_entries for every
+   *  loaded post. Skip the initial value (0) since the mount-time `enrich`
+   *  in the load effect already covers the first page. */
+  useEffect(() => {
+    if (!coDinersRefreshKey || !posts.length) return;
+    enrich(posts, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coDinersRefreshKey]);
 
   /**
    * Fire-and-forget enrichment for a slice of posts (initial page or

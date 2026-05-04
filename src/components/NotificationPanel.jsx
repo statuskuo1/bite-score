@@ -87,12 +87,12 @@ function NotifRow({ notif, isResolvedDineTag, onFollowBack, onRefetch, onOpenPro
               ? `@${p?.username || "someone"} hearted your BITE at ${restaurantName} ❤️`
               : isGroupVisitTagged
                 ? groupVisitVariant === "auto_linked"
-                  ? `Looks like you already logged this — we connected your entry. Tag @${p?.username || "someone"} back?`
+                  ? `@${p?.username || "someone"} tagged you at ${restaurantName}. Looks like you already logged! Tag them back?`
                   : groupVisitVariant === "pick_visit"
                     ? `You've been to ${restaurantName} a few times recently — which visit was with @${p?.username || "someone"}?`
                     : `All bark NO BITE 🐶 @${p?.username || "someone"} tagged you at ${restaurantName}. Log your visit.`
                 : isGroupVisitLogged
-                  ? `@${p?.username || "someone"} logged their visit at ${restaurantName}.`
+                  ? `@${p?.username || "someone"} logged their visit at ${restaurantName} with you.`
                   : isTasteBuds
                     ? `You and @${p?.username || "someone"} are now Taste Buds! 🎉`
                     : `@${p?.username || "someone"} followed you`;
