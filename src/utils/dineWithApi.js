@@ -1,16 +1,29 @@
 /**
- * Dine-with tagging API over `public.dine_with_tags` and `public.notifications`.
+ * Dine-with tagging API over `public.dine_with_tags`.
  *
  * Flow:
- *   1. User A saves a visit → inserts dine_with_tags rows for each tagged friend
- *      and inserts a 'dine_tag' notification for each tagged friend.
- *   2. Tagged friend sees a banner on /add and a notification in the bell.
- *   3. Tagged friend can log their own visit (entry_id stays null until then)
- *      or dismiss the tag.
+ *   1. User A saves a visit → inserts dine_with_tags rows for each tagged
+ *      friend. `group_visit_tagged` is the single notification type fired
+ *      per tagged friend (see `src/utils/groupVisitsApi.js`).
+ *   2. Tagged friend sees a banner on /add and a `group_visit_tagged`
+ *      notification in the bell.
+ *   3. Tagged friend can log their own visit (entry_id stays null until
+ *      then) or dismiss the tag.
+ *
+ * Notifications (2026-05-04 refactor): this module no longer inserts any
+ * `dine_tag` notification rows. `notify` is accepted for backward compat
+ * with call sites but is a no-op. See `src/_archive/dine-tag-notifications.md`.
  */
 
 /**
- * Insert one dine_with_tag row and a 'dine_tag' notification for the tagged user.
+ * Insert one dine_with_tag row for the tagged user.
+ *
+ * Returns the row id on success (or the id of a pre-existing row if this
+ * save closed a ping-pong loop). The `notify` parameter is retained for
+ * backward compat with call sites but no longer triggers any notification
+ * insert — `group_visit_tagged` is the single tag notification and is
+ * emitted by `createGroupVisit` in groupVisitsApi.js.
+ *
  * @param {object} client - Supabase client
  * @param {object} tag
  * @param {string} tag.taggerId
@@ -21,7 +34,7 @@
  * @param {string} [tag.city]
  * @param {string} [tag.cuisine]
  */
-export async function insertDineTag(client, { taggerId, taggedId, entryId, entryType, restaurantName, city = "", cuisine = "", notify = true }) {
+export async function insertDineTag(client, { taggerId, taggedId, entryId, entryType, restaurantName, city = "", cuisine = "" }) {
   try {
     // Upsert with ignoreDuplicates: pairs with the partial unique index added in
     // 20260516. A re-tag of the same (entry_id, tagger, tagged) triple becomes a
@@ -49,10 +62,9 @@ export async function insertDineTag(client, { taggerId, taggedId, entryId, entry
       return null;
     }
 
-    // Loop closure: if the tagged user has ANY existing tag pointed back at us
-    // (any time, any dismissed status), this save closes the ping-pong. Mark
-    // both rows dismissed (banners on both sides clear) and skip the
-    // notification — A already knows the tag exists since A initiated it.
+    // Loop closure: if the tagged user has ANY existing tag pointed back at
+    // us (any time, any dismissed status), this save closes the ping-pong.
+    // Mark both rows dismissed so the banners on both sides clear.
     const { data: reverseRow } = await client
       .from("dine_with_tags")
       .select("id, dismissed")
@@ -67,16 +79,6 @@ export async function insertDineTag(client, { taggerId, taggedId, entryId, entry
         !reverseRow.dismissed && client.from("dine_with_tags").update({ dismissed: true }).eq("id", reverseRow.id),
       ].filter(Boolean));
       return data?.id ?? null;
-    }
-
-    if (notify) {
-      const { error: nErr } = await client.from("notifications").insert({
-        user_id: taggedId,
-        from_user_id: taggerId,
-        type: "dine_tag",
-        meta: { restaurant_name: restaurantName, entry_type: entryType, city, cuisine, entry_id: entryId || null },
-      });
-      if (nErr) console.warn("[BITE] insertDineTag notification:", nErr.message);
     }
 
     return data?.id ?? null;
@@ -105,7 +107,13 @@ export async function fetchCoDiners(client, { taggerId, entryId, excludeUserId }
 
 /**
  * Fetch all non-dismissed dine_with_tags where the given user is tagged,
- * hydrated with the tagger's profile.
+ * hydrated with the tagger's profile and the tagger's entry `visited_at`.
+ *
+ * The visited_at hydration powers the auto-populated "Visit date" field on
+ * the Add form when the user opens it via the DineTagsBanner — they almost
+ * always ate the same day as the tagger, so we save them the keystrokes.
+ * Tags with no resolvable entry (legacy / deleted) get visited_at = null
+ * and the form falls back to today via the date input default.
  */
 export async function fetchUnloggedDineTags(client, userId) {
   if (!userId) return [];
@@ -124,15 +132,41 @@ export async function fetchUnloggedDineTags(client, userId) {
   if (!rows?.length) return [];
 
   const taggerIds = [...new Set(rows.map((r) => r.tagger_id))];
-  const { data: profiles } = await client
-    .from("profiles")
-    .select("id, username, display_name, avatar_url")
-    .in("id", taggerIds);
+  const restEntryIds = [
+    ...new Set(rows.filter((r) => r.entry_type !== "cafe" && r.entry_id).map((r) => r.entry_id)),
+  ];
+  const cafeEntryIds = [
+    ...new Set(rows.filter((r) => r.entry_type === "cafe" && r.entry_id).map((r) => r.entry_id)),
+  ];
+
+  const [{ data: profiles }, restRes, cafeRes] = await Promise.all([
+    client
+      .from("profiles")
+      .select("id, username, display_name, avatar_url")
+      .in("id", taggerIds),
+    restEntryIds.length
+      ? client.from("restaurant_visits").select("id, visited_at").in("id", restEntryIds)
+      : Promise.resolve({ data: [] }),
+    cafeEntryIds.length
+      ? client.from("cafe_visits").select("id, visited_at").in("id", cafeEntryIds)
+      : Promise.resolve({ data: [] }),
+  ]);
 
   const pm = {};
   for (const p of profiles || []) pm[p.id] = p;
 
-  return rows.map((r) => ({ ...r, taggerProfile: pm[r.tagger_id] || null }));
+  const visitedAtMap = {};
+  for (const v of restRes.data || []) visitedAtMap[`restaurant:${v.id}`] = v.visited_at;
+  for (const v of cafeRes.data || []) visitedAtMap[`cafe:${v.id}`] = v.visited_at;
+
+  return rows.map((r) => {
+    const key = `${r.entry_type === "cafe" ? "cafe" : "restaurant"}:${r.entry_id}`;
+    return {
+      ...r,
+      taggerProfile: pm[r.tagger_id] || null,
+      visited_at: visitedAtMap[key] || null,
+    };
+  });
 }
 
 /**

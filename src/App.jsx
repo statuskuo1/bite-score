@@ -68,6 +68,8 @@ import {
   fetchGroupVisitWithMembers,
   fetchVisitsByIds,
   tickGroupVisitsExpiry,
+  autoAttachVisitToGroupVisits,
+  findExpiredGroupVisitCandidates,
 } from "./utils/groupVisitsApi.js";
 import { DineTagsBanner } from "./components/DineTagsBanner.jsx";
 import { toUSD, fromUSD, CURRENCY_SYMBOLS } from "./utils/currency.js";
@@ -76,10 +78,12 @@ import { CategoryTabs } from "./components/CategoryTabs.jsx";
 import { ConfirmSheet } from "./components/ConfirmSheet.jsx";
 import { SameDinnerSheet } from "./components/SameDinnerSheet.jsx";
 import { PickVisitSheet } from "./components/PickVisitSheet.jsx";
+import { RetroAttachSheet } from "./components/RetroAttachSheet.jsx";
 import { OnboardingModal } from "./components/OnboardingModal.jsx";
 import { TasteBudsPromptSheet } from "./components/TasteBudsPromptSheet.jsx";
 import { removeWantToGo, listWantToGo } from "./utils/wantToGoApi.js";
 import { setWantToGoRows } from "./utils/sessionCache.js";
+import { formatVisitDateInput } from "./utils/visitDate.js";
 const GUEST_PALETTE_ENTRIES = [
   {id:"gp1",name:"Lilia",             cuisine:"Italian",        letter:"I",city:"New York City",taste:9.2,cost:120,portions:2,wait:20,repeatability:3,useR:true,notes:""},
   {id:"gp2",name:"Don Angie",         cuisine:"Italian",        letter:"I",city:"New York City",taste:8.8,cost:95, portions:2,wait:15,repeatability:3,useR:true,notes:""},
@@ -175,38 +179,14 @@ export default function App() {
    *  refreshes without a page reload. dinedWithMap covers My Log because
    *  RestRow/CafeGroupRow read from it directly via dinedWithForEntry. */
   const [coDinersRefreshKey, setCoDinersRefreshKey] = useState(0);
-  // Re-type dine_tag → dine_tag_mutual when the current user already has a logged entry
-  // for that restaurant AND the underlying dine_with_tags row is still un-dismissed.
-  // The un-dismissed check (via dineTags, which is filtered to dismissed=false) is what
-  // breaks the re-prompt loop: once the user taps Tag them back from either entry point,
-  // the row is dismissed and removed from dineTags, so this annotation no longer fires
-  // on subsequent renders even though the underlying notification row stays in the DB.
-  // resolvedDineTagIds collects dine_tag notif ids whose underlying row is gone — the
-  // panel renders these as past-tense (no action prompt, no row tap target). We only
-  // mark rows resolved once dineTagsReady is true; before then dineTags is empty by
-  // default and would falsely flag every dine_tag as resolved.
-  const { annotatedNotifications, resolvedDineTagIds } = useMemo(() => {
-    const resolved = new Set();
-    if (!notifications.length) return { annotatedNotifications: notifications, resolvedDineTagIds: resolved };
-    const annotated = notifications.map((n) => {
-      if (n.type !== "dine_tag") return n;
-      const name = (n.meta?.restaurant_name || "").trim().toLowerCase();
-      if (!name) return n;
-      const stillUnDismissed = dineTags.some(
-        (t) => t.tagger_id === n.from_user_id
-            && (t.restaurant_name || "").trim().toLowerCase() === name
-      );
-      if (!stillUnDismissed) {
-        if (dineTagsReady) resolved.add(n.id);
-        return n;
-      }
-      const found =
-        (st.entries || []).some((e) => (e.name || "").trim().toLowerCase() === name) ||
-        (cafes || []).some((e) => (e.name || "").trim().toLowerCase() === name);
-      return found ? { ...n, type: "dine_tag_mutual" } : n;
-    });
-    return { annotatedNotifications: annotated, resolvedDineTagIds: resolved };
-  }, [notifications, st.entries, cafes, dineTags, dineTagsReady]);
+  // `group_visit_tagged` carries the variant (standard / auto_linked /
+  // pick_visit) directly on `meta.variant`, so no client-side re-typing is
+  // needed anymore. Legacy `dine_tag` notifications are still rendered in
+  // NotificationPanel's generic fallback path. `resolvedDineTagIds` remains
+  // wired through as an empty set for backward compat with the panel
+  // component prop shape. See src/_archive/dine-tag-notifications.md.
+  const annotatedNotifications = notifications;
+  const resolvedDineTagIds = useMemo(() => new Set(), []);
   const [addPrefill, setAddPrefill] = useState(null);
   const [addInitialDineWith, setAddInitialDineWith] = useState([]);
   const [addFormKey, setAddFormKey] = useState(0);
@@ -223,6 +203,13 @@ export default function App() {
   /** Set when a `group_visit_tagged` notif arrives with `variant: 'pick_visit'`.
    *  Drives the PickVisitSheet — pick a date → joinExistingGroupVisit. */
   const [pickVisitState, setPickVisitState] = useState(null);
+  /** Set after a save when `find_expired_group_visit_candidates` finds a
+   *  >7-day-old group_visit (already marked `expired` by the day-7 sweep)
+   *  at the same place within ±30 days of the new visit. Drives the
+   *  retrospective "Was this with @X on {date}?" modal. Yes attaches the
+   *  new visit_id to that member row (no parent status change, no notif
+   *  fan-out — the group has already expired for everyone else). */
+  const [retroPromptState, setRetroPromptState] = useState(null);
   const formStateRef = useRef(null);
   const [addDraftData, setAddDraftData] = useState(null);
   const [tasteBudIds, setTasteBudIds] = useState(() => new Set());
@@ -406,8 +393,9 @@ export default function App() {
     }
   }
 
-  async function applyDineTagPrefill({ restaurantName, city, cuisine, taggerId, entryId, taggerProfile, entryType = "restaurant" }) {
+  async function applyDineTagPrefill({ restaurantName, city, cuisine, taggerId, entryId, taggerProfile, entryType = "restaurant", visitedAt }) {
     const resolvedCity = resolveCity(city || "");
+    const visitDate = formatVisitDateInput(visitedAt);
     let prefill;
     let coDiners;
     if (entryType === "cafe") {
@@ -415,6 +403,7 @@ export default function App() {
       prefill = {
         name: restaurantName || "",
         ...(resolvedCity ? { city: resolvedCity } : {}),
+        ...(visitDate ? { visitDate } : {}),
         category: cuisine || "Coffee",
       };
     } else {
@@ -429,6 +418,7 @@ export default function App() {
       prefill = {
         name: restaurantName || "",
         ...(resolvedCity ? { city: resolvedCity } : {}),
+        ...(visitDate ? { visitDate } : {}),
         cuisine: resolvedCuisine,
         cuisine2: place?.cuisine2 || "",
         isFusion: !!place?.is_fusion,
@@ -479,10 +469,12 @@ export default function App() {
         .eq("id", gv.placeId)
         .maybeSingle();
       const resolvedCity = resolveCity(place?.city || "");
+      const visitDate = formatVisitDateInput(gv.visitedAt);
       setAddPrefill({
         name: gv.restaurantName || place?.name || "",
         placeId: gv.placeId,
         ...(resolvedCity ? { city: resolvedCity } : {}),
+        ...(visitDate ? { visitDate } : {}),
       });
     } else {
       // Restaurant prefill: cuisine/fusion + city.
@@ -493,10 +485,12 @@ export default function App() {
         .maybeSingle();
       const resolvedCity = resolveCity(place?.city || "");
       const resolvedCuisine = place?.cuisine || "";
+      const visitDate = formatVisitDateInput(gv.visitedAt);
       setAddPrefill({
         name: gv.restaurantName || place?.name || "",
         placeId: gv.placeId,
         ...(resolvedCity ? { city: resolvedCity } : {}),
+        ...(visitDate ? { visitDate } : {}),
         cuisine: resolvedCuisine,
         cuisine2: place?.cuisine2 || "",
         isFusion: !!place?.is_fusion,
@@ -574,6 +568,9 @@ export default function App() {
     applyGroupVisitPrefill(groupVisitId);
   }
 
+  // Legacy: group_visit_logged stopped being inserted on 2026-05-04 in
+  // favor of the single `group_visit_all_logged` fan-out. Kept so notifs
+  // stored in the DB before the refactor still tap through sensibly.
   function handleGroupVisitLoggedTap(notif) {
     setShowNotifPanel(false);
     const meta = notif?.meta || {};
@@ -584,6 +581,22 @@ export default function App() {
     }
     const p = notif.fromProfile;
     if (p) handleOpenNotifProfile(p);
+  }
+
+  /** The whole party has logged — fan out by the Postgres auto-resolve
+   *  trigger (see supabase/migrations/20260504_tagging_refactor.sql). Tap
+   *  deep-links to the group's comparison view so the user can see
+   *  everyone's BITE scores side-by-side. */
+  function handleGroupVisitAllLoggedTap(notif) {
+    setShowNotifPanel(false);
+    const meta = notif?.meta || {};
+    const kind = meta.kind || "restaurant";
+    // If we have an entry_id we can deep-link to the feed post; otherwise
+    // fall back to the feed root so the user at least gets there.
+    if (meta.entry_id) {
+      setFeedScrollTarget({ postId: meta.entry_id, postType: kind, kind: entryTypeToKind(kind) });
+    }
+    navigate("/community/feed");
   }
 
   /** After a fresh save with tagged friends and no candidate group match (or
@@ -690,6 +703,51 @@ export default function App() {
     });
   }
 
+  /** Post-save companion to runGroupVisitsForSave. Handles the two
+   *  listening-window behaviors introduced by the 2026-05-04 tagging
+   *  refactor:
+   *    1. Auto-attach: any *pending* group_visit where this user is still
+   *       a member at this place within ±30 days gets this new visit_id
+   *       attached + flipped to 'logged'. The Postgres trigger then
+   *       decides whether the parent resolves and fan-outs the
+   *       `group_visit_all_logged` ping.
+   *    2. Retrospective prompt: any *expired* group_visit at this place
+   *       within ±30 days gets queued into retroPromptState so we can ask
+   *       "Was this with @X on {date}?". One prompt at a time — we take
+   *       the most recent. */
+  async function runPostSaveGroupVisitBackfill({ kind, placeId, visitedAt, visitId }) {
+    if (!user?.id || !placeId || !visitId) return;
+    try {
+      await autoAttachVisitToGroupVisits(supabase, {
+        userId: user.id,
+        kind,
+        placeId,
+        visitedAt,
+        visitId,
+      });
+      const candidates = await findExpiredGroupVisitCandidates(supabase, {
+        userId: user.id,
+        kind,
+        placeId,
+        visitedAt,
+      });
+      if (candidates.length && !retroPromptState) {
+        const next = candidates[0];
+        setRetroPromptState({
+          groupVisitId: next.groupVisitId,
+          kind: next.kind || kind,
+          creatorUsername: next.creatorProfile?.username || "",
+          creatorDisplayName: next.creatorProfile?.display_name || "",
+          restaurantName: next.restaurantName || "",
+          visitedAt: next.visitedAt,
+          visitId,
+        });
+      }
+    } catch (err) {
+      console.warn("[BITE] runPostSaveGroupVisitBackfill threw:", err);
+    }
+  }
+
   function handleHeartTap(notif) {
     setShowNotifPanel(false);
     const meta = notif?.meta || {};
@@ -762,6 +820,13 @@ export default function App() {
     navigate("/community/feed");
   }
 
+  // Legacy tag-mutual handler kept for notifications stored in the DB from
+  // before the 2026-05-04 tagging refactor. New `dine_tag` notifications are
+  // no longer inserted (see src/_archive/dine-tag-notifications.md), so this
+  // is only reachable via old rows. Dismisses the pending dine_with_tags row
+  // and any matching outgoing tag so the banner clears; does NOT insert a
+  // `dine_tag_back` notification — tag-back is now a UI acknowledgement and
+  // the party-logged fan-out covers the "they know you were there" signal.
   async function handleDineTagMutualBack(notif) {
     if (!user?.id) return;
     const fromUserId = notif.from_user_id;
@@ -776,9 +841,6 @@ export default function App() {
       supabase.from("dine_with_tags").select("id").eq("tagger_id", fromUserId).eq("tagged_id", user.id).ilike("restaurant_name", restaurantName).eq("dismissed", false).maybeSingle(),
       outgoingQ.maybeSingle(),
     ]);
-    // Idempotence: if incomingTag is null, the user already tagged back (or the row
-    // was dismissed some other way). Skip the tag_back notification insert so repeat
-    // taps from a stale notification don't keep spamming the original tagger.
     if (!incomingTag) {
       setDineTags((prev) => prev.filter((t) => t.tagger_id !== fromUserId || (t.restaurant_name || "").toLowerCase() !== restaurantName.toLowerCase()));
       return;
@@ -786,32 +848,29 @@ export default function App() {
     await Promise.all([
       dismissDineTag(supabase, incomingTag.id),
       outgoingTag && dismissDineTag(supabase, outgoingTag.id),
-      supabase.from("notifications").insert({
-        user_id: fromUserId, from_user_id: user.id,
-        type: "dine_tag_back",
-        meta: {
-          restaurant_name: restaurantName,
-          city: notif.meta?.city || "",
-          entry_id: outgoingTag?.entry_id || null,
-          entry_type: outgoingTag?.entry_type || null,
-        },
-      }),
     ].filter(Boolean));
     setDineTags((prev) => prev.filter((t) => t.tagger_id !== fromUserId || (t.restaurant_name || "").toLowerCase() !== restaurantName.toLowerCase()));
     fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
   }
 
-  /** Tag-them-back action for group_visit_tagged (variant `auto_linked`).
+  /** "Tag them to my entry" action for `group_visit_tagged` (variant
+   *  `auto_linked`). The tagged user already has a matching visit logged at
+   *  this place — this handler attaches the tagger to that existing entry
+   *  (updates the co-diner list via `dine_with_tags`) and dismisses the
+   *  inbound tag row so the Add-screen banner clears.
    *
-   *  Group visits layer on top of `dine_with_tags`: the save inserted a
-   *  `dine_with_tags` row alongside the group_visit, and that row drives the
-   *  /add `DineTagsBanner`. Tag-back must dismiss it so the banner clears.
+   *  Mechanics:
+   *    – Dismiss the pending `dine_with_tags` row powering the banner.
+   *    – Upsert a reciprocal `dine_with_tags` row tying the tagger onto
+   *      my existing entry (drives co-diner pills on feed + log cards).
+   *    – Stamp `meta.tagged_back: true` on the notif so the panel renders
+   *      past-tense next time it opens.
    *
-   *  ARCHIVED 2026-05-04: see src/_archive/dine-tag-notifications.md (Phase 1).
-   *  Used to also insert a `dine_tag_back` notification to the tagger here.
-   *  Removed — `group_visit_logged` (already fired at create-time from
-   *  createGroupVisit when this member was auto_linked) is the canonical
-   *  "they logged with you" signal. */
+   *  No `dine_tag_back` notification is inserted (removed 2026-05-04 — see
+   *  src/_archive/dine-tag-notifications.md). The auto-linked member was
+   *  already logged at create-time, so the parent group visit resolves as
+   *  soon as any remaining pending members log; when that happens the
+   *  Postgres trigger fans out `group_visit_all_logged` to everyone. */
   async function handleGroupVisitMutualBack(notif) {
     if (!user?.id || !notif?.id) return;
     const fromUserId = notif.from_user_id;
@@ -1632,7 +1691,8 @@ export default function App() {
                   onGroupVisitMutualBack={handleGroupVisitMutualBack}
                   onGroupVisitTaggedTap={handleGroupVisitTaggedTap}
                   onGroupVisitLoggedTap={handleGroupVisitLoggedTap}
-                  sheetOpen={!!notifSheetProfile || !!heartSheetTarget || !!sameDinnerPending || !!pickVisitState}
+                  onGroupVisitAllLoggedTap={handleGroupVisitAllLoggedTap}
+                  sheetOpen={!!notifSheetProfile || !!heartSheetTarget || !!sameDinnerPending || !!pickVisitState || !!retroPromptState}
                   anchorPos={notifAnchorPos}
                   followingIds={notifFollowingIds}
                 />
@@ -2198,6 +2258,7 @@ export default function App() {
                   entryId: tag.entry_id,
                   taggerProfile: tag.taggerProfile,
                   entryType: tag.entry_type || type,
+                  visitedAt: tag.visited_at,
                 });
               } else {
                 setAddType(type);
@@ -2270,7 +2331,6 @@ export default function App() {
                           restaurantName: e.name,
                           city: e.city||"",
                           cuisine: e.cuisine||"",
-                          notify: false,
                         })));
                         fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
                       }
@@ -2299,6 +2359,12 @@ export default function App() {
                         restaurantName: e.name,
                         visitedAt: data.visited_at,
                         taggedIds: groupVisitTaggedIds,
+                      });
+                      await runPostSaveGroupVisitBackfill({
+                        kind: "restaurant",
+                        placeId,
+                        visitedAt: data.visited_at,
+                        visitId: data.id,
                       });
                       if (sourceTaggerId) {
                         // ARCHIVED 2026-05-04: see src/_archive/dine-tag-notifications.md
@@ -2386,7 +2452,6 @@ export default function App() {
                         restaurantName: e.name,
                         city: e.city||"",
                         cuisine: e.category||"",
-                        notify: false,
                       })));
                       fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
                     } catch (tagErr) {
@@ -2414,6 +2479,12 @@ export default function App() {
                       restaurantName: e.name,
                       visitedAt: inserted.visitedAt,
                       taggedIds: groupVisitTaggedIds,
+                    });
+                    await runPostSaveGroupVisitBackfill({
+                      kind: "cafe",
+                      placeId: inserted.placeId,
+                      visitedAt: inserted.visitedAt,
+                      visitId: inserted.id,
                     });
                   }
                   if (sourceTaggerId && inserted?.id) {
@@ -2673,6 +2744,31 @@ export default function App() {
             kind: entryTypeToKind(pickedKind),
           });
           navigate("/community/feed");
+        }}
+      />
+    )}
+    {retroPromptState && (
+      <RetroAttachSheet
+        creatorUsername={retroPromptState.creatorUsername}
+        creatorDisplayName={retroPromptState.creatorDisplayName}
+        restaurantName={retroPromptState.restaurantName}
+        visitedAt={retroPromptState.visitedAt}
+        onNo={() => setRetroPromptState(null)}
+        onYes={async () => {
+          const state = retroPromptState;
+          setRetroPromptState(null);
+          // Attach the new visit_id onto the expired group's member row.
+          // We intentionally don't un-expire the parent or fan out
+          // `group_visit_all_logged` — everyone else was marked 'skipped'
+          // by the day-7 sweep days ago, so resuscitating the group would
+          // misrepresent reality. The attach is enough for co-diner
+          // rendering on the newly-logged entry.
+          await joinExistingGroupVisit(supabase, {
+            groupVisitId: state.groupVisitId,
+            userId: user.id,
+            visitId: state.visitId,
+          });
+          fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
         }}
       />
     )}

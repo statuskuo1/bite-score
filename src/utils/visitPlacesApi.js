@@ -309,6 +309,11 @@ export function restaurantVisitInsertPayload(placeId, userId, e, weights) {
     weight_taste: weights?.taste ?? null,
     weight_bpb:   weights?.bpb   ?? null,
     weight_wait:  weights?.wait  ?? null,
+    // When the user filled in the Basics > visit-date field, send it
+    // explicitly so visited_at reflects when they actually went rather than
+    // when they're logging. Leave undefined to let the DB default (`now()`)
+    // stand for quick same-day logs.
+    ...(e.visitedAt ? { visited_at: e.visitedAt } : {}),
   };
 }
 
@@ -349,6 +354,9 @@ export function cafeVisitInsertPayload(placeId, userId, e, weights) {
     weight_taste: weights?.taste ?? null,
     weight_bpb:   weights?.bpb   ?? null,
     weight_wait:  weights?.wait  ?? null,
+    // See restaurantVisitInsertPayload — user-supplied visit date overrides
+    // the now() default when present.
+    ...(e.visitedAt ? { visited_at: e.visitedAt } : {}),
   };
 }
 

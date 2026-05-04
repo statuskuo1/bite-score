@@ -14,6 +14,7 @@ import { BEAN_ORIGINS, BEAN_ORIGIN_GROUPS } from "../constants/coffeeConstants.j
 import { CityInput } from "./CityInput.jsx";
 import { DineWithPicker } from "./DineWithPicker.jsx";
 import { getCurrencyForCity, CURRENCY_SYMBOLS } from "../utils/currency.js";
+import { parseVisitDateInput } from "../utils/visitDate.js";
 
 
 const ROAST_LEVELS = [
@@ -276,6 +277,9 @@ export function CafeForm({initial,initialDineWith=[],onSave,onSaveAndContinue,on
       ).map(e => e.order)
     : [];
 
+  const visitDateRaw = (f.visitDate || "").trim();
+  const visitDateIso = visitDateRaw ? parseVisitDateInput(visitDateRaw) : null;
+  const visitDateInvalid = !!visitDateRaw && !visitDateIso;
   function buildEntry() {
     return {
       ...(isEdit ? {id: initial.id, ownerId: initial.ownerId ?? null} : {}),
@@ -292,10 +296,11 @@ export function CafeForm({initial,initialDineWith=[],onSave,onSaveAndContinue,on
       letter: "", cuisine2: "", isFusion: false,
       dineWith,
       currency_code: currencyCode,
+      visitedAt: visitDateIso || null,
     };
   }
   function validate() {
-    if (!f.name || !f.cost || !f.city) { setSub(true); return false; }
+    if (!f.name || !f.cost || !f.city || visitDateInvalid) { setSub(true); return false; }
     return true;
   }
   function save() {
@@ -377,6 +382,19 @@ export function CafeForm({initial,initialDineWith=[],onSave,onSaveAndContinue,on
           }}
         />
         {sub&&!f.name&&<div style={S.err}>Required</div>}
+      </div>
+
+      <div style={S.mb16}>
+        <FieldLabel>Visit date</FieldLabel>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={f.visitDate || ""}
+          onChange={(ev) => inp("visitDate", ev.target.value)}
+          placeholder="mm/dd/yy"
+          style={S.wb}
+        />
+        {visitDateInvalid && <div style={S.err}>Use mm/dd/yy</div>}
       </div>
 
       {user && (

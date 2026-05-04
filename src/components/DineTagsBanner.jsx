@@ -55,7 +55,13 @@ export function DineTagsBanner({ tags, onDismiss, onAddType, entries, cafes, use
     onAddType(tag.entry_type, tag);
   }
 
-  async function handleTagBack() {
+  // "Tag to my entry" — attaches the tagger onto the user's existing log at
+  // this place by upserting a reciprocal dine_with_tags row (drives co-diner
+  // pills on feed + log cards) and dismissing the inbound tag so the banner
+  // clears. No `dine_tag_back` notification is inserted (removed 2026-05-04
+  // — see src/_archive/dine-tag-notifications.md). The group_visit layer
+  // will handle any "whole party logged" fan-out when applicable.
+  async function handleTagToMyEntry() {
     if (!existingEntry) return;
     const dateStr = (() => {
       const d = new Date(existingEntry.visited_at || existingEntry.created_at);
@@ -64,10 +70,10 @@ export function DineTagsBanner({ tags, onDismiss, onAddType, entries, cafes, use
     const msg = `@${who?.username || name} tagged to your ${tag.restaurant_name}${dateStr}`;
     setTaggedConfirm(msg);
 
-    // Check for existing outgoing link — prevents duplicate rows in scenarios where
-    // both users already independently tagged each other (scenarios 2 & 4). Scope by
-    // entry_id when we have it so we don't false-match an unrelated past visit at a
-    // place with the same name.
+    // Check for existing outgoing link — prevents duplicate rows in scenarios
+    // where both users already independently tagged each other. Scope by
+    // entry_id when we have it so we don't false-match an unrelated past
+    // visit at a place with the same name.
     const { data: existingOutgoing } = await supabase
       .from("dine_with_tags")
       .select("id")
@@ -79,7 +85,6 @@ export function DineTagsBanner({ tags, onDismiss, onAddType, entries, cafes, use
 
     await Promise.all([
       dismissDineTag(supabase, tag.id),
-      // If we already tagged them back, dismiss that row too so their banner clears immediately.
       existingOutgoing && dismissDineTag(supabase, existingOutgoing.id),
       !existingOutgoing && supabase.from("dine_with_tags").upsert({
         tagger_id: userId,
@@ -91,12 +96,6 @@ export function DineTagsBanner({ tags, onDismiss, onAddType, entries, cafes, use
         cuisine: tag.cuisine || "",
         dismissed: true,
       }, { ignoreDuplicates: true }),
-      supabase.from("notifications").insert({
-        user_id: tag.tagger_id,
-        from_user_id: userId,
-        type: "dine_tag_back",
-        meta: { restaurant_name: tag.restaurant_name, entry_type: existingEntryType, city: tag.city || "", entry_id: existingEntry.id },
-      }),
     ].filter(Boolean));
 
     setTimeout(() => { setTaggedConfirm(null); onDismiss(tag.id); }, 4000);
@@ -154,18 +153,18 @@ export function DineTagsBanner({ tags, onDismiss, onAddType, entries, cafes, use
           {existingEntry ? (
             <>
               <div style={{ fontSize: 12, color: "#888780", marginBottom: 10 }}>
-                Looks like you already logged this place.
+                Looks like you already logged this place. Tag them to your entry?
               </div>
               <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
                 <button
                   type="button"
-                  onClick={handleTagBack}
+                  onClick={handleTagToMyEntry}
                   style={{
                     flex: 1, padding: "8px 12px", borderRadius: 8, border: "none",
                     background: "#F0997B", color: "#141413", fontSize: 13, fontWeight: 600, cursor: "pointer",
                   }}
                 >
-                  Tag them back
+                  Tag to my entry
                 </button>
                 <button
                   type="button"

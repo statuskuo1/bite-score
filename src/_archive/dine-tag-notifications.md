@@ -1,10 +1,11 @@
-# Archived: individual `dine_tag*` notification paths (restaurants)
+# Archived: individual `dine_tag*` + per-member `group_visit_logged`
+# notification paths
 
-Status: **Archived** — code paths below were removed from the active codebase
-on 2026-05-04 as part of the restaurant-tags-via-group_visits migration. The
-underlying `dine_with_tags` rows are still written everywhere (they power feed
-co-diner avatars, the `/add` `DineTagsBanner`, and the LogTab unread-tags
-badge); only the duplicate notifications were dropped.
+Status: **Archived** — code paths below were removed from the active
+codebase on 2026-05-04 as part of the tagging notifications refactor. The
+underlying `dine_with_tags` rows are still written everywhere (they power
+feed co-diner avatars, the `/add` `DineTagsBanner`, and the LogTab
+unread-tags badge); only the notifications listed below were dropped.
 
 This file is the authoritative source of the removed snippets so a future
 revert is a copy-paste away. Do **not** import or call from this file —
@@ -12,184 +13,212 @@ treat it as documentation.
 
 ## Why dropped
 
-Before this change, when A saved a restaurant tagging B (with B already
-logged), B received TWO bell notifications and A also received TWO:
+The 2026-05-04 refactor consolidated tagging notifications to exactly two
+live types plus one new party-logged signal:
 
-- B side: `dine_tag` (rendered as `dine_tag_mutual`) + `group_visit_tagged`
-  (variant `auto_linked`).
-- A side: `group_visit_logged` (fired at create-time when B was auto-linked) +
-  `dine_tag_back` (fired when B tapped Tag-them-back).
+| Kept / new                 | Dropped (inserts; legacy rows still render)   |
+|---------------------------|-----------------------------------------------|
+| `group_visit_tagged`       | `dine_tag`                                    |
+| `group_visit_all_logged`   | `dine_tag_back`                               |
+|                            | `dine_tag_accepted`                           |
+|                            | `dine_tag_mutual` (was synthetic, never DB)   |
+|                            | `group_visit_logged` (per-member creator ping)|
 
-Both pairs covered the same event. The new canonical path is the
-`group_visit_*` notifications introduced in
-`supabase/migrations/20260522_group_visits.sql`, which carries richer
-variants (`standard` / `auto_linked` / `pick_visit`) and structured group
-state (`group_visit_members`, auto-resolve trigger, day-7 expiry sweep).
+The two live types carry:
+
+- `group_visit_tagged` with `meta.variant`:
+  - `standard` — "All bark no BITE 🐶 @X tagged you at Y. Log your BITE?"
+  - `auto_linked` — "Looks like you already logged! Tag them to your entry?"
+  - `pick_visit` — "Which visit was with @X?" (opens a picker)
+- `group_visit_all_logged` — "Look at you! The whole party logged at Y."
+  Fanned out by the Postgres auto-resolve trigger
+  (`supabase/migrations/20260504_tagging_refactor.sql`) once the parent
+  `group_visits` row transitions from `pending` to `resolved`.
 
 ## Scope
 
-- **Restaurants only** — cafes still emit `dine_tag` / `dine_tag_mutual` /
-  `dine_tag_back` / `dine_tag_accepted` because there is no group_visits
-  equivalent for cafes yet (Phase 2). Edit-restaurant flow also still emits
-  `dine_tag` because the edit path doesn't run `createGroupVisitForSave`.
-- **Notification rendering** in `src/components/NotificationPanel.jsx` for
-  the four `dine_tag*` types is **kept**, so legacy notifications stored in
-  the DB before this change still display.
-- The in-memory `dine_tag` -> `dine_tag_mutual` re-typing in `src/App.jsx`
-  (`annotatedNotifications` `useMemo`) is **kept** for the same reason.
+- Applies to both **restaurants and cafes**. The previous
+  restaurants-only scoping was lifted — `group_visit_tagged` is the single
+  tag notif for both kinds.
+- Notification **rendering** in
+  `src/components/NotificationPanel.jsx` for the legacy `dine_tag*` and
+  `group_visit_logged` types is **kept** so DB rows written before this
+  refactor still display sensibly.
+- The in-memory `dine_tag` -> `dine_tag_mutual` re-typing `useMemo` in
+  `src/App.jsx` **was removed** — no new `dine_tag` rows are written, so
+  nothing else to re-type.
 
 ## Removed snippets
 
-### 1. `dine_tag` notification on restaurant ADD
+### 1. `dine_tag` notification on ADD (both restaurant + cafe)
 
-File: `src/App.jsx`, ADD restaurant `onSave` (around line 2014).
+File: `src/utils/dineWithApi.js`, `insertDineTag(...)`.
 
 Before:
 
 ```javascript
-const toTag = (e.dineWith || []).filter(p => p.id !== sourceTaggerId);
-if (toTag.length) {
-  await Promise.all(toTag.map(p=>insertDineTag(supabase,{
-    taggerId: user.id,
-    taggedId: p.id,
-    entryId: data.id,
-    entryType: "restaurant",
-    restaurantName: e.name,
-    city: e.city||"",
-    cuisine: e.cuisine||"",
+if (notify) {
+  const { error: nErr } = await client.from("notifications").insert({
+    user_id: taggedId,
+    from_user_id: taggerId,
+    type: "dine_tag",
+    meta: { restaurant_name: restaurantName, entry_type: entryType, city, cuisine, entry_id: entryId || null },
+  });
+  if (nErr) console.warn("[BITE] insertDineTag notification:", nErr.message);
+}
+```
+
+After: the block is removed entirely. The `notify` parameter was also
+dropped from the function signature — the `dine_with_tags` row insert /
+reverse-row dismiss is the only thing `insertDineTag` does now.
+
+Revert: restore the `notify = true` parameter and the `if (notify) { ... }`
+block.
+
+### 2. `dine_tag_accepted` notification on ADD (sourceTaggerId branch)
+
+File: `src/App.jsx`, ADD `onSave` (both restaurant + cafe). This path was
+originally removed for restaurants only in an earlier migration; the
+2026-05-04 refactor extends that to cafes by making `group_visit_tagged`
+the canonical tag notif across both kinds. The `dine_with_tags` upsert +
+dismiss still runs (keeps banner / co-diner data consistent).
+
+Replacement: `group_visit_all_logged` fires to **all** members once the
+whole party has logged. `dine_tag_accepted` was "your tagger was told you
+accepted"; the new party-logged fan-out is strictly better (one notif when
+there's something meaningful to celebrate instead of one ping per tag-back
+round-trip).
+
+### 3. Per-member `group_visit_logged` on create + join
+
+File: `src/utils/groupVisitsApi.js`, `createGroupVisit(...)` +
+`joinExistingGroupVisit(...)`.
+
+Before (`createGroupVisit`):
+
+```javascript
+// For auto-linked members, also notify the creator that B "logged" their
+// visit (which is exactly what auto-link is — no further action required).
+await Promise.all((taggedMembers || [])
+  .filter((m) => m.status === "logged" && m.visitId)
+  .map((m) => insertNotification(client, {
+    userId: creatorId,
+    fromUserId: m.userId,
+    type: "group_visit_logged",
+    meta: { group_visit_id: gv.id, kind: k, place_id: placeId, restaurant_name: restaurantName || "", entry_id: m.visitId, entry_type: k },
   })));
-  fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
+```
+
+Before (`joinExistingGroupVisit`):
+
+```javascript
+if (wasPending) {
+  if (gv.created_by) {
+    await insertNotification(client, {
+      userId: gv.created_by,
+      fromUserId: userId,
+      type: "group_visit_logged",
+      meta: { group_visit_id: groupVisitId, kind: k, place_id: placeId, restaurant_name: gv.restaurant_name || "", entry_id: visitId || null, entry_type: k },
+    });
+  }
 }
 ```
 
-After: same call with `notify: false` added at the bottom of the options
-object, suppressing the notification insert inside `insertDineTag` while
-keeping the `dine_with_tags` row upsert intact.
+After: both blocks removed. The Postgres auto-resolve trigger
+(`group_visit_members_after_status_change`) fans out one
+`group_visit_all_logged` notification per member when the parent transitions
+from pending to resolved.
 
-Revert: drop the `notify: false,` line.
+Side effect: `createGroupVisit` now inserts all members as `status='pending'`
+first, then UPDATEs the creator + auto-linked members to `'logged'`. The
+UPDATE path is what fires the trigger; if we inserted them as `'logged'`
+directly (the previous shape) the trigger wouldn't fire and the party-
+logged fan-out would miss the all-auto-linked edge case.
 
-### 2. `dine_tag_accepted` notification on restaurant ADD (sourceTaggerId branch)
+### 4. `dine_tag_back` notification inside `handleGroupVisitMutualBack`
 
-File: `src/App.jsx`, ADD restaurant `onSave` (around line 2085, inside the
-`if (sourceTaggerId)` block).
+File: `src/App.jsx`, `handleGroupVisitMutualBack`.
+
+This was already partially archived in an earlier migration; the
+2026-05-04 refactor additionally renames the user-facing action from
+"Tag them back" to "Tag to my entry" and clarifies that the handler
+attaches the tagger onto the user's existing log (no reciprocal save, no
+tag-back notif). See the handler's updated JSDoc for the new contract.
+
+### 5. `dine_tag_back` notification inside `handleDineTagMutualBack`
+
+File: `src/App.jsx`, `handleDineTagMutualBack`.
 
 Before:
 
 ```javascript
-if (sourceTaggerId) {
-  await Promise.all([
-    supabase.from("dine_with_tags").upsert({
-      tagger_id: user.id, tagged_id: sourceTaggerId,
-      entry_id: data.id, entry_type: "restaurant",
-      restaurant_name: e.name, city: e.city||"", cuisine: e.cuisine||"",
-      dismissed: true,
-    }, { onConflict: "entry_id,tagger_id,tagged_id", ignoreDuplicates: true }),
-    // Loop closed — clear the original tag from this user's banner.
-    supabase.from("dine_with_tags")
-      .update({ dismissed: true })
-      .eq("tagger_id", sourceTaggerId)
-      .eq("tagged_id", user.id)
-      .ilike("restaurant_name", e.name)
-      .eq("dismissed", false),
-    supabase.from("notifications").insert({
-      user_id: sourceTaggerId, from_user_id: user.id,
-      type: "dine_tag_accepted",
-      meta: { restaurant_name: e.name, entry_type: "restaurant", city: e.city||"", entry_id: data.id },
-    }),
-  ]);
-  fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
-}
+await Promise.all([
+  dismissDineTag(supabase, incomingTag.id),
+  outgoingTag && dismissDineTag(supabase, outgoingTag.id),
+  supabase.from("notifications").insert({
+    user_id: fromUserId, from_user_id: user.id,
+    type: "dine_tag_back",
+    meta: {
+      restaurant_name: restaurantName,
+      city: notif.meta?.city || "",
+      entry_id: outgoingTag?.entry_id || null,
+      entry_type: outgoingTag?.entry_type || null,
+    },
+  }),
+].filter(Boolean));
 ```
 
-After: the `notifications.insert` of type `dine_tag_accepted` is removed.
-The two `dine_with_tags` upserts/dismisses stay (they keep the banner /
-co-diner data consistent).
+After: the `notifications.insert` is removed. The handler now only
+dismisses the inbound/outbound `dine_with_tags` rows. It only runs for
+legacy `dine_tag_mutual` panel rows — new notifications use
+`handleGroupVisitMutualBack` via `group_visit_tagged` / `auto_linked`.
 
-Revert: paste the third array element (the `notifications.insert(...)` call)
-back into the `Promise.all([...])` array and remove the trailing comma on
-the previous element accordingly.
+### 6. `dine_tag_back` notification inside `DineTagsBanner.handleTagBack`
 
-Replacement: `group_visit_logged` is automatically inserted by
-`createGroupVisit` (when the tagged user is auto_linked at create-time, see
-`src/utils/groupVisitsApi.js` lines 214-229) and by `joinExistingGroupVisit`
-(when a previously-pending member transitions to logged).
-
-### 3. `dine_tag_back` notification inside `handleGroupVisitMutualBack`
-
-File: `src/App.jsx`, function `handleGroupVisitMutualBack` (around lines
-670-706 prior to this change).
+File: `src/components/DineTagsBanner.jsx`, `handleTagBack`.
 
 Before:
 
 ```javascript
-async function handleGroupVisitMutualBack(notif) {
-  if (!user?.id || !notif?.id) return;
-  const fromUserId = notif.from_user_id;
-  if (!fromUserId) return;
-  const meta = notif.meta || {};
-  const entryId = meta.auto_linked_visit_id || null;
-  const restaurantName = meta.restaurant_name || "";
-  const city = meta.city || "";
-  if (meta.tagged_back) return;
-  await Promise.all([
-    supabase.from("notifications").insert({
-      user_id: fromUserId,
-      from_user_id: user.id,
-      type: "dine_tag_back",
-      meta: {
-        restaurant_name: restaurantName,
-        city,
-        entry_id: entryId,
-        entry_type: entryId ? "restaurant" : null,
-      },
-    }),
-    supabase.from("notifications")
-      .update({ meta: { ...meta, tagged_back: true } })
-      .eq("id", notif.id),
-  ]);
-  setNotifications((prev) => prev.map((n) => (
-    n.id === notif.id ? { ...n, meta: { ...(n.meta || {}), tagged_back: true } } : n
-  )));
-}
+supabase.from("notifications").insert({
+  user_id: tag.tagger_id,
+  from_user_id: userId,
+  type: "dine_tag_back",
+  meta: { restaurant_name: tag.restaurant_name, entry_type: existingEntryType, city: tag.city || "", entry_id: existingEntry.id },
+}),
 ```
 
-After:
-
-- The `notifications.insert({ ..., type: "dine_tag_back", ... })` is removed.
-- A lookup + dismiss of the matching `dine_with_tags` row was added so that
-  the `/add` `DineTagsBanner` clears on Tag-them-back (the row was the
-  banner's data source).
-- A `setDineTags(...)` filter call was added so the local state matches the
-  DB dismiss without waiting for a refetch.
-
-Replacement: A keeps receiving `group_visit_logged` (fired at create-time
-when this member was auto_linked — see snippet 2's replacement). Tag-them-back
-is now a UI-side acknowledgement, not a notification round-trip.
-
-Revert: restore the `notifications.insert` for `dine_tag_back` inside the
-`Promise.all`, and (optionally) remove the new `dine_with_tags` lookup +
-dismiss + `setDineTags` filter if you also want the banner-dismiss revert.
-The `meta.tagged_back = true` stamp on the notif row should be kept either
-way — it drives the past-tense panel rendering for the auto_linked variant.
+After: the insert is removed and the function was renamed
+`handleTagToMyEntry`. The button label flipped from "Tag them back" to
+"Tag to my entry". `dine_with_tags` upsert/dismiss is unchanged —
+co-diner pills still populate off the reciprocal row.
 
 ## Revert procedure
 
-1. Open this file alongside `src/App.jsx`.
-2. For each numbered snippet above, locate the `// ARCHIVED 2026-05-04: see
-   src/_archive/dine-tag-notifications.md ...` comment block in `src/App.jsx`
-   and paste the original snippet back, removing the comment block and any
-   `notify: false` flag added during the migration.
-3. If you also want cafes back to single-notif (they never broke; this is
-   only relevant if you're rolling back something downstream), no further
-   action is needed — cafe paths were not touched in this migration.
-4. Re-run `npm run lint` (or whatever linter the project uses) to confirm.
+1. Open this file alongside `src/App.jsx` / `src/utils/dineWithApi.js` /
+   `src/utils/groupVisitsApi.js` / `src/components/DineTagsBanner.jsx` /
+   `src/components/NotificationPanel.jsx`.
+2. For each numbered snippet above, paste the original code back into the
+   corresponding function. Restore the `notify` parameter on
+   `insertDineTag` if reverting snippet 1.
+3. Drop `group_visit_all_logged` from the notifications type-check
+   constraint added in `supabase/migrations/20260504_tagging_refactor.sql`
+   (or simply skip running that migration).
+4. Re-run `npm run lint` to confirm.
 
 ## Related
 
-- Migration that introduced `group_visit_tagged` /
+- Refactor migration:
+  `supabase/migrations/20260504_tagging_refactor.sql` (adds
+  `group_visit_all_logged`, extends the auto-resolve trigger + expiry RPC
+  to fan it out, adds `auto_attach_visit_to_group_visits` +
+  `find_expired_group_visit_candidates` RPCs for the 30-day listening
+  window).
+- Group-visit migration that introduced `group_visit_tagged` /
   `group_visit_logged`: `supabase/migrations/20260522_group_visits.sql`.
-- Group-visit copy and inline tag-back UI:
-  `src/components/NotificationPanel.jsx` (auto_linked variant, group_visit_logged).
-- Group-visit save flow: `src/App.jsx` ADD restaurant `onSave` group-visits
-  block (`createGroupVisitForSave` / `joinExistingGroupVisit` /
-  `findCandidateGroupVisit`).
+- Retrospective "Was this with @X on {date}?" prompt:
+  `src/components/RetroAttachSheet.jsx` +
+  `src/App.jsx` `runPostSaveGroupVisitBackfill`.
+- Visit-date Basics field (drives the ±30-day auto-attach + retro prompt):
+  `src/components/RestForm.jsx`, `src/components/CafeForm.jsx`,
+  `src/utils/visitDate.js`.

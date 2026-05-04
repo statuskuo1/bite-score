@@ -13,6 +13,7 @@ import { FormScoreHeader } from "./FormScoreHeader.jsx";
 import { CityInput } from "./CityInput.jsx";
 import { DineWithPicker } from "./DineWithPicker.jsx";
 import { getCurrencyForCity, CURRENCY_SYMBOLS } from "../utils/currency.js";
+import { parseVisitDateInput } from "../utils/visitDate.js";
 
 export function RestForm({initial,initialDineWith=[],onSave,onCancel,onFormChange,weights,addType,setAddType,existingEntries,existingCities,places,onPlaceCreated,user,tasteBudIds,tasteStep=0.1,onTasteStepChange}) {
   const {t} = useLang();
@@ -28,9 +29,12 @@ export function RestForm({initial,initialDineWith=[],onSave,onCancel,onFormChang
   const currSymbol = CURRENCY_SYMBOLS[currencyCode] || currencyCode;
   const score = calcBiteOutOf10(+f.taste,+f.cost,+f.portions,+f.wait,f.useR,+f.repeatability,weights,currencyCode);
   const bg = score===null?"#2C2C2A":score>=9.5?"#1A2E0A":score>=8.5?"#1A2E0A":score>=7?"#0C2A3A":score>=4?"#2A1E05":score>=2?"#2C2C2A":"#3C1F13";
+  const visitDateRaw = (f.visitDate || "").trim();
+  const visitDateIso = visitDateRaw ? parseVisitDateInput(visitDateRaw) : null;
+  const visitDateInvalid = !!visitDateRaw && !visitDateIso;
   function save() {
-    if(!f.name||!f.cost||!f.city){setSub(true);return;}
-    onSave({...f,placeId:f.placeId||null,taste:+f.taste,cost:+f.cost,currency_code:currencyCode,portions:+f.portions,wait:+f.wait,repeatability:+f.repeatability,dineWith});
+    if(!f.name||!f.cost||!f.city||visitDateInvalid){setSub(true);return;}
+    onSave({...f,placeId:f.placeId||null,taste:+f.taste,cost:+f.cost,currency_code:currencyCode,portions:+f.portions,wait:+f.wait,repeatability:+f.repeatability,dineWith,visitedAt:visitDateIso||null});
   }
   return (
     <div style={{...S.card,marginBottom:12}}>
@@ -99,6 +103,19 @@ export function RestForm({initial,initialDineWith=[],onSave,onCancel,onFormChang
         <Toggle on={f.isFusion} onClick={()=>inp("isFusion",!f.isFusion)}/><span style={{fontSize:13,color:"#888780"}}>{t.fusionDish}</span>
       </div>
       {f.isFusion&&<div style={S.mb16}><FieldLabel>{t.secondCuisine}</FieldLabel><CuisineInput value={f.cuisine2||""} placeholder={t.cuisine} onChange={v=>inp("cuisine2",v)}/></div>}
+
+      <div style={S.mb16}>
+        <FieldLabel>Visit date</FieldLabel>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={f.visitDate || ""}
+          onChange={(ev) => inp("visitDate", ev.target.value)}
+          placeholder="mm/dd/yy"
+          style={S.wb}
+        />
+        {visitDateInvalid && <div style={S.err}>Use mm/dd/yy</div>}
+      </div>
 
       {user && (
         <div style={S.mb16}>

@@ -2,8 +2,8 @@
  * Group visits API over `public.group_visits` and `public.group_visit_members`.
  *
  * Group visits coordinate the "we all ate dinner together — log it" flow:
- *   1. User A saves a visit with tagged friends → createGroupVisit(...) inserts
- *      one parent row + one member row per tagger/tagged user + one
+ *   1. User A saves a visit with tagged friends → createGroupVisit(...)
+ *      inserts one parent row + one member row per tagger/tagged user + one
  *      `group_visit_tagged` notification per tagged friend (variant chosen
  *      per-friend based on whether they already have a matching visit).
  *   2. A tagged friend B taps the notification → applyGroupVisitPrefill() in
@@ -11,21 +11,30 @@
  *      App.jsx detects an active addGroupVisitId and calls
  *      joinExistingGroupVisit(...) instead of createGroupVisit(...).
  *   3. Auto-resolve: when every member transitions to logged/skipped, a
- *      Postgres trigger flips the parent to status='resolved'.
+ *      Postgres trigger flips the parent to status='resolved' and fans out
+ *      one `group_visit_all_logged` notification to every member (the
+ *      "whole party logged" ping). The per-member `group_visit_logged`
+ *      creator ping was removed on 2026-05-04 — see
+ *      `src/_archive/dine-tag-notifications.md`.
  *   4. Day-7 expiry: tick_group_visits_expiry() runs on every notif-panel
  *      open and skips/expires stale rows.
+ *   5. 30-day retroactive attach: on save, the client calls
+ *      `auto_attach_visit_to_group_visits` so a late log at the same place
+ *      within ±30 days automatically attaches to any pending group_visit
+ *      the user was tagged into (same mechanism as "tag them back", just
+ *      driven by the save itself instead of a user action).
  *
- * Group visits LAYER ON TOP of `dine_with_tags`; they do not replace co-diner
- * tags. The save flow continues to call `insertDineTag(...)` for each tagged
- * friend so feed cards keep rendering "dined with …" via the existing
- * `fetch_co_diners_for_entries` RPC.
+ * Group visits LAYER ON TOP of `dine_with_tags`; they do not replace
+ * co-diner tags. The save flow continues to call `insertDineTag(...)` for
+ * each tagged friend so feed cards keep rendering "dined with …" via the
+ * existing `fetch_co_diners_for_entries` RPC.
  *
- * Phase 2 (`20260523_group_visits_cafes.sql`) extends this to cafes (drinks +
- * sweets). Each function takes a `kind: 'restaurant' | 'cafe'` parameter that
- * picks the right place table (`restaurant_places` / `cafe_places`) and the
- * right visit table (`restaurant_visits` / `cafe_visits`). On the parent
- * `group_visits` row, kind is stored explicitly and the FK is split into
- * `restaurant_place_id` / `cafe_place_id`; the same split applies to
+ * Phase 2 (`20260523_group_visits_cafes.sql`) extends this to cafes (drinks
+ * + sweets). Each function takes a `kind: 'restaurant' | 'cafe'` parameter
+ * that picks the right place table (`restaurant_places` / `cafe_places`)
+ * and the right visit table (`restaurant_visits` / `cafe_visits`). On the
+ * parent `group_visits` row, kind is stored explicitly and the FK is split
+ * into `restaurant_place_id` / `cafe_place_id`; the same split applies to
  * `group_visit_members.{restaurant,cafe}_visit_id`.
  */
 
@@ -176,9 +185,11 @@ async function insertNotification(client, { userId, fromUserId, type, meta }) {
  * save flow): `taggedMembers` is a list of
  *   { userId, variant, status, visitId?, candidateVisitIds? }
  *
- * `variant` is one of 'standard' | 'auto_linked' | 'pick_visit'. Notifications
- * fire one per tagged member; the creator does not get a notification on
- * create (only on member-logged events later).
+ * `variant` is one of 'standard' | 'auto_linked' | 'pick_visit'. One
+ * `group_visit_tagged` notification is fired per tagged member. The creator
+ * does not receive any per-member notifications; they see the single
+ * `group_visit_all_logged` notification when the whole party has logged
+ * (fanned out by the Postgres auto-resolve trigger).
  *
  * `kind` decides which place column gets `placeId` and which member visit
  * column gets `creatorVisitId` / `m.visitId`. Notification meta also carries
@@ -217,31 +228,63 @@ export async function createGroupVisit(client, {
       return null;
     }
 
-    const memberRows = [
-      // Creator — already logged at the moment of save.
+    // Insert every member as 'pending' first, then flip to 'logged' via an
+    // UPDATE for the creator + any auto-linked members. The UPDATE path is
+    // what fires the `group_visit_members_after_status_change` trigger; if
+    // we inserted with status='logged' directly, the trigger wouldn't fire
+    // and the parent would never auto-resolve (so the
+    // `group_visit_all_logged` fan-out would never happen in the all-
+    // auto-linked edge case).
+    const memberInsertRows = [
       {
         group_visit_id: gv.id,
         user_id: creatorId,
         [memberVisitCol]: creatorVisitId || null,
         tagged_by: creatorId,
-        status: "logged",
+        status: "pending",
       },
       ...(taggedMembers || []).map((m) => ({
         group_visit_id: gv.id,
         user_id: m.userId,
         [memberVisitCol]: m.visitId || null,
         tagged_by: creatorId,
-        status: m.status === "logged" ? "logged" : "pending",
+        status: "pending",
         notified_at: new Date().toISOString(),
       })),
     ];
 
     const { error: memErr } = await client
       .from("group_visit_members")
-      .insert(memberRows);
+      .insert(memberInsertRows);
     if (memErr) {
       console.warn("[BITE] createGroupVisit members:", memErr.message);
       return null;
+    }
+
+    // Flip creator to logged (always). Trigger runs after this UPDATE and
+    // checks whether the parent can resolve yet.
+    {
+      const { error: cErr } = await client
+        .from("group_visit_members")
+        .update({ status: "logged" })
+        .eq("group_visit_id", gv.id)
+        .eq("user_id", creatorId);
+      if (cErr) console.warn("[BITE] createGroupVisit flip creator:", cErr.message);
+    }
+
+    // Flip auto-linked tagged members to logged. Each UPDATE fires the
+    // trigger once; the final one that clears the pending set also fans
+    // out `group_visit_all_logged`.
+    const autoLinked = (taggedMembers || []).filter((m) => m.status === "logged" && m.userId);
+    if (autoLinked.length) {
+      await Promise.all(autoLinked.map((m) => client
+        .from("group_visit_members")
+        .update({ status: "logged" })
+        .eq("group_visit_id", gv.id)
+        .eq("user_id", m.userId)
+        .then(({ error: uErr }) => {
+          if (uErr) console.warn("[BITE] createGroupVisit flip auto-linked:", uErr.message);
+        })));
     }
 
     // Fire one group_visit_tagged notification per tagged member.
@@ -265,25 +308,13 @@ export async function createGroupVisit(client, {
       });
     }));
 
-    // For auto-linked members, also notify the creator that B "logged" their
-    // visit (which is exactly what auto-link is — no further action required).
-    await Promise.all((taggedMembers || [])
-      .filter((m) => m.status === "logged" && m.visitId)
-      .map((m) => insertNotification(client, {
-        userId: creatorId,
-        fromUserId: m.userId,
-        type: "group_visit_logged",
-        meta: {
-          group_visit_id: gv.id,
-          kind: k,
-          place_id: placeId,
-          restaurant_name: restaurantName || "",
-          entry_id: m.visitId,
-          entry_type: k,
-        },
-      })));
+    // Per-member `group_visit_logged` (creator ping when an auto-linked
+    // member was already logged at create-time) was dropped 2026-05-04 —
+    // the Postgres auto-resolve trigger now fans out a single
+    // `group_visit_all_logged` notification to every member once the whole
+    // party has logged. See `src/_archive/dine-tag-notifications.md`.
 
-    return { id: gv.id, members: memberRows };
+    return { id: gv.id, members: memberInsertRows };
   } catch (err) {
     console.warn("[BITE] createGroupVisit threw:", err);
     return null;
@@ -293,9 +324,10 @@ export async function createGroupVisit(client, {
 /**
  * Tagged user logged their own visit and is joining an existing group_visit.
  * Updates their member row to status='logged' with the new visit_id (written
- * to the kind-appropriate column) and notifies the creator. Idempotent —
- * repeat calls just re-write the same status and skip the notification if no
- * row was actually flipped.
+ * to the kind-appropriate column). Idempotent — repeat calls just re-write
+ * the same status. When the status flip causes the parent to resolve, the
+ * Postgres auto-resolve trigger fans out `group_visit_all_logged`
+ * notifications to every member.
  *
  * `kind` is loaded from the group_visits row, not passed in — so the caller
  * doesn't need to know it ahead of time.
@@ -303,9 +335,6 @@ export async function createGroupVisit(client, {
 export async function joinExistingGroupVisit(client, { groupVisitId, userId, visitId }) {
   if (!groupVisitId || !userId) return false;
   try {
-    // Load the parent so we know which visit column to write into, plus the
-    // member row so we know whether this is a real transition (we only want
-    // to fire group_visit_logged the first time).
     const [{ data: gv, error: gvErr }, { data: existing, error: loadErr }] = await Promise.all([
       client
         .from("group_visits")
@@ -337,8 +366,6 @@ export async function joinExistingGroupVisit(client, { groupVisitId, userId, vis
     }
     const k = normalizeKind(gv.kind);
     const memberVisitCol = memberVisitColumnFor(k);
-    const wasPending = existing.status === "pending";
-    const placeId = gv.restaurant_place_id || gv.cafe_place_id;
 
     const { error: updErr } = await client
       .from("group_visit_members")
@@ -352,24 +379,6 @@ export async function joinExistingGroupVisit(client, { groupVisitId, userId, vis
       return false;
     }
 
-    if (wasPending) {
-      // Notify the creator.
-      if (gv.created_by) {
-        await insertNotification(client, {
-          userId: gv.created_by,
-          fromUserId: userId,
-          type: "group_visit_logged",
-          meta: {
-            group_visit_id: groupVisitId,
-            kind: k,
-            place_id: placeId,
-            restaurant_name: gv.restaurant_name || "",
-            entry_id: visitId || null,
-            entry_type: k,
-          },
-        });
-      }
-    }
     return true;
   } catch (err) {
     console.warn("[BITE] joinExistingGroupVisit threw:", err);
@@ -453,7 +462,8 @@ export async function fetchVisitsByIds(client, { kind, visitIds }) {
  * Fire-and-forget day-7 sweep. Runs on every notif-panel open. Cheap (three
  * predicate-bound UPDATEs) and idempotent — failures are logged, never thrown.
  * Kind-agnostic — the RPC sweeps both restaurant and cafe groups in one
- * transaction.
+ * transaction. The resolve-backstop pass also fans out
+ * `group_visit_all_logged` notifications for any parents it resolves.
  */
 export async function tickGroupVisitsExpiry(client) {
   try {
@@ -461,5 +471,87 @@ export async function tickGroupVisitsExpiry(client) {
     if (error) console.warn("[BITE] tick_group_visits_expiry:", error.message);
   } catch (err) {
     console.warn("[BITE] tick_group_visits_expiry threw:", err);
+  }
+}
+
+/**
+ * After a fresh visit save, attach the new visit_id to any pending
+ * group_visit_member rows for this user at the same place within ±30 days.
+ *
+ * This is the listening-window mechanism: when A tags B but B doesn't log
+ * right away, the tag sits in `group_visit_members(status='pending')`. If B
+ * eventually logs at the same place within the window, this attaches B's
+ * new visit to the group_visit so the party-logged trigger can fire.
+ *
+ * Returns an array of group_visit_ids that got attached, or [] on
+ * failure / no matches.
+ */
+export async function autoAttachVisitToGroupVisits(client, { userId, kind, placeId, visitedAt, visitId }) {
+  if (!userId || !placeId || !visitId) return [];
+  const k = normalizeKind(kind);
+  try {
+    const { data, error } = await client.rpc("auto_attach_visit_to_group_visits", {
+      p_user_id: userId,
+      p_kind: k,
+      p_place_id: placeId,
+      p_visited_at: visitedAt || new Date().toISOString(),
+      p_visit_id: visitId,
+    });
+    if (error) {
+      console.warn("[BITE] auto_attach_visit_to_group_visits:", error.message);
+      return [];
+    }
+    return (data || []).map((r) => r.group_visit_id).filter(Boolean);
+  } catch (err) {
+    console.warn("[BITE] auto_attach_visit_to_group_visits threw:", err);
+    return [];
+  }
+}
+
+/**
+ * Find expired group_visits the saver was a member of, at the same place
+ * and within ±30 days of the new visit. Used to surface the retrospective
+ * "Was this with @X on {date}?" prompt for saves that landed >7 days after
+ * the original tag (which the day-7 sweep already marked expired/skipped).
+ *
+ * Returns one row per candidate with creator info fetched in a second
+ * round-trip so the prompt can render "@{creatorUsername} on {date}".
+ */
+export async function findExpiredGroupVisitCandidates(client, { userId, kind, placeId, visitedAt }) {
+  if (!userId || !placeId) return [];
+  const k = normalizeKind(kind);
+  try {
+    const { data, error } = await client.rpc("find_expired_group_visit_candidates", {
+      p_user_id: userId,
+      p_kind: k,
+      p_place_id: placeId,
+      p_visited_at: visitedAt || new Date().toISOString(),
+    });
+    if (error) {
+      console.warn("[BITE] find_expired_group_visit_candidates:", error.message);
+      return [];
+    }
+    const rows = data || [];
+    if (!rows.length) return [];
+    const creatorIds = [...new Set(rows.map((r) => r.created_by).filter(Boolean))];
+    let creatorMap = {};
+    if (creatorIds.length) {
+      const { data: profs } = await client
+        .from("profiles")
+        .select(PROFILE_FIELDS)
+        .in("id", creatorIds);
+      for (const p of profs || []) creatorMap[p.id] = p;
+    }
+    return rows.map((r) => ({
+      groupVisitId: r.group_visit_id,
+      createdBy: r.created_by,
+      restaurantName: r.restaurant_name,
+      visitedAt: r.visited_at,
+      kind: r.kind,
+      creatorProfile: creatorMap[r.created_by] || null,
+    }));
+  } catch (err) {
+    console.warn("[BITE] find_expired_group_visit_candidates threw:", err);
+    return [];
   }
 }

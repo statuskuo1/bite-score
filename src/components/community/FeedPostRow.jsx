@@ -251,13 +251,19 @@ function viewerFirst(profiles, viewerId) {
 }
 
 /**
- * Dined-with summary as discrete parts so the renderer can choose
- * affordances per token. Each part is one of:
+ * Dined-with summary as discrete parts. Every text token in the row taps
+ * to the same target — the party comparison sheet (`OthersListSheet`) via
+ * `onOpenOthers` — so the viewer always has an entry point regardless of
+ * party size. Individual profiles are reachable one tap deeper from
+ * inside the comparison sheet. The avatar stack tapping into the same
+ * sheet is wired in the renderer, not here.
  *
- *   { kind: "name",   text, profile }   — tappable, opens MiniProfileSheet
- *   { kind: "you",    text: "you" }     — plain accent (viewer self; not tappable)
- *   { kind: "and",    text: "and" }     — grey literal separator
- *   { kind: "others", text: "N others" } — tappable, opens OthersListSheet
+ * Each part is one of:
+ *
+ *   { kind: "name",   text, profile }   — tappable accent (opens party sheet)
+ *   { kind: "you",    text: "you" }     — tappable accent (opens party sheet)
+ *   { kind: "and",    text: "and" }     — grey literal separator (inert)
+ *   { kind: "others", text: "N others" } — tappable accent (opens party sheet)
  *
  * Viewer-included rules:
  *   1 (just viewer)        → "you"
@@ -418,7 +424,20 @@ export function FeedPostRow({
   const headerInteractive = typeof onOpenProfile === "function";
   const heartInteractive = typeof onToggleHeart === "function";
   const othersInteractive = typeof onOpenOthers === "function";
-  const profileInteractive = typeof onOpenProfile === "function";
+
+  /** Single source of truth for "open the party comparison sheet for this
+   *  card". Used by every tappable token in the dined-with row + the avatar
+   *  stack so the payload (post + ordered profiles) stays consistent. Null
+   *  when the surface didn't wire `onOpenOthers` (e.g. FeedPostSheet) — the
+   *  tokens fall back to inert plain accent in that case. */
+  const openParty = othersInteractive
+    ? () => onOpenOthers({
+        kind: "co_diners",
+        post,
+        profiles: orderedDiners,
+        title: "Dined with",
+      })
+    : null;
 
   /** Inline accent style for the clickable "N others" tokens — accent-orange
    *  with a dotted underline + pointer to signal interactivity. The named
@@ -624,7 +643,19 @@ export function FeedPostRow({
           border: BORDER,
           marginBottom: post.notes ? 12 : 0,
         }}>
-          <AvatarStack profiles={orderedDiners} size={20} max={COD_INER_AVATAR_LIMIT} />
+          {openParty ? (
+            <span
+              onClick={(e) => {
+                e.stopPropagation();
+                openParty();
+              }}
+              style={{ display: "inline-flex", cursor: "pointer" }}
+            >
+              <AvatarStack profiles={orderedDiners} size={20} max={COD_INER_AVATAR_LIMIT} />
+            </span>
+          ) : (
+            <AvatarStack profiles={orderedDiners} size={20} max={COD_INER_AVATAR_LIMIT} />
+          )}
           <div style={{
             fontSize: 12,
             color: "#C4C2BA",
@@ -639,13 +670,13 @@ export function FeedPostRow({
               const trailing = i < dinedWith.parts.length - 1 ? " " : "";
 
               if (part.kind === "name") {
-                const tappable = profileInteractive && !!part.profile;
+                const tappable = !!openParty;
                 return (
                   <span
                     key={i}
                     onClick={tappable ? (e) => {
                       e.stopPropagation();
-                      onOpenProfile(part.profile);
+                      openParty();
                     } : undefined}
                     style={tappable
                       ? tappableAccentStyle
@@ -657,18 +688,13 @@ export function FeedPostRow({
               }
 
               if (part.kind === "others") {
-                const tappable = othersInteractive;
+                const tappable = !!openParty;
                 return (
                   <span
                     key={i}
                     onClick={tappable ? (e) => {
                       e.stopPropagation();
-                      onOpenOthers({
-                        kind: "co_diners",
-                        post,
-                        profiles: orderedDiners,
-                        title: "Dined with",
-                      });
+                      openParty();
                     } : undefined}
                     style={tappable
                       ? tappableAccentStyle
@@ -687,9 +713,20 @@ export function FeedPostRow({
                 );
               }
 
-              // "you" — plain accent text, not tappable (it's the viewer)
+              // "you" — taps open the same party comparison sheet so the
+              // viewer has a tap target even when no friends are tagged.
+              const youTappable = !!openParty;
               return (
-                <span key={i} style={{ color: ACCENT_ORANGE, fontWeight: 500 }}>
+                <span
+                  key={i}
+                  onClick={youTappable ? (e) => {
+                    e.stopPropagation();
+                    openParty();
+                  } : undefined}
+                  style={youTappable
+                    ? tappableAccentStyle
+                    : { color: ACCENT_ORANGE, fontWeight: 500 }}
+                >
                   {part.text}{trailing}
                 </span>
               );
