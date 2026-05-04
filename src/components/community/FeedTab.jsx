@@ -427,8 +427,14 @@ export function FeedTab({
         const isHighlighted = highlightKey === key;
         // For own posts, override stored author weights with current React-state weights
         // so the poster's BITE score and weight lens always reflect the user's current settings.
-        const post = p.ownerId === user?.id
-          ? { ...p, authorWeightTaste: restaurantWeights?.taste, authorWeightBpb: restaurantWeights?.bpb, authorWeightWait: restaurantWeights?.wait }
+        // Cafe/sweets entries must use drink/sweet weights, not restaurant weights.
+        const ownPostWeights = p.ownerId === user?.id
+          ? (p.kind === "cafe"
+              ? (p.category === "Sweets" ? sweetWeights : drinkWeights)
+              : restaurantWeights)
+          : null;
+        const post = ownPostWeights
+          ? { ...p, authorWeightTaste: ownPostWeights.taste, authorWeightBpb: ownPostWeights.bpb, authorWeightWait: ownPostWeights.wait }
           : p;
         return (
           <div
