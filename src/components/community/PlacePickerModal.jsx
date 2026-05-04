@@ -68,10 +68,20 @@ function Pill({ label, active, onClick }) {
   );
 }
 
-function scorePlace(place, myWts, theirWts) {
+function scorePlace(place, myWts, theirWts, myActual = [], theirActual = []) {
+  function fromVisits(visits, wts) {
+    const scores = visits
+      .map(v => calcBiteOutOf10(v.taste, v.cost, v.portions, v.wait, v.useR, v.repeatability, wts, v.currency_code || "USD"))
+      .filter(s => s != null);
+    return scores.length ? scores.reduce((x, y) => x + y, 0) / scores.length : null;
+  }
   const r = rr(place.avgRepeat);
-  const a = calcBiteOutOf10(place.avgTaste, place.avgCost, place.avgPortions, place.avgWait, place.useRMajority, r, myWts, "USD");
-  const b = calcBiteOutOf10(place.avgTaste, place.avgCost, place.avgPortions, place.avgWait, place.useRMajority, r, theirWts, "USD");
+  const a = myActual.length > 0
+    ? fromVisits(myActual, myWts)
+    : calcBiteOutOf10(place.avgTaste, place.avgCost, place.avgPortions, place.avgWait, place.useRMajority, r, myWts, "USD");
+  const b = theirActual.length > 0
+    ? fromVisits(theirActual, theirWts)
+    : calcBiteOutOf10(place.avgTaste, place.avgCost, place.avgPortions, place.avgWait, place.useRMajority, r, theirWts, "USD");
   if (a == null || b == null) return null;
   return { scoreA: a, scoreB: b, minScore: Math.min(a, b) };
 }
@@ -85,7 +95,7 @@ export function PlacePickerModal({
   const [city, setCity] = useState("Anywhere");
   const [budget, setBudget] = useState(null);
   const [visitTab, setVisitTab] = useState("neither");
-  const [shufflePage, setShufflePage] = useState(0);
+  const [displayItems, setDisplayItems] = useState([]);
   const [cacheReady, setCacheReady] = useState(() => globalCache.restaurants.length > 0);
   const [cacheLoading, setCacheLoading] = useState(false);
 
@@ -121,6 +131,26 @@ export function PlacePickerModal({
   const theirPlaceIds = useMemo(() => new Set(theirVisits.map(v => v.placeId)), [theirVisits]);
   const myAvgTaste = useMemo(() => arrAvg(myVisits.map(v => +v.taste)), [myVisits]);
   const theirAvgTaste = useMemo(() => arrAvg(theirVisits.map(v => +v.taste)), [theirVisits]);
+
+  const myVisitsMap = useMemo(() => {
+    const m = new Map();
+    for (const v of myVisits) {
+      if (!v.placeId) continue;
+      if (!m.has(v.placeId)) m.set(v.placeId, []);
+      m.get(v.placeId).push(v);
+    }
+    return m;
+  }, [myVisits]);
+
+  const theirVisitsMap = useMemo(() => {
+    const m = new Map();
+    for (const v of theirVisits) {
+      if (!v.placeId) continue;
+      if (!m.has(v.placeId)) m.set(v.placeId, []);
+      m.get(v.placeId).push(v);
+    }
+    return m;
+  }, [theirVisits]);
 
   // Top cuisines / cities these two users have actually dined at, by combined frequency
   const userCuisines = useMemo(
@@ -172,7 +202,9 @@ export function PlacePickerModal({
         return true;
       })
       .map(place => {
-        const s = scorePlace(place, myWts, theirWts);
+        const myActual = myVisitsMap.get(place.placeId) || [];
+        const theirActual = theirVisitsMap.get(place.placeId) || [];
+        const s = scorePlace(place, myWts, theirWts, myActual, theirActual);
         return s ? { place, ...s } : null;
       })
       .filter(Boolean)
@@ -181,7 +213,7 @@ export function PlacePickerModal({
   }, [ // eslint-disable-line react-hooks/exhaustive-deps
     cuisine, city, budget, visitTab, cacheReady,
     myAvgTaste, theirAvgTaste, myPlaceIds, theirPlaceIds,
-    myWeights, theirWeights,
+    myWeights, theirWeights, myVisitsMap, theirVisitsMap,
   ]);
 
   // Fallback: top globally scored places, no filters
@@ -189,15 +221,30 @@ export function PlacePickerModal({
     return (globalCache.restaurants || [])
       .filter(place => place.validCount >= 1 && place.avgTaste != null)
       .map(place => {
-        const s = scorePlace(place, myWts, theirWts);
+        const myActual = myVisitsMap.get(place.placeId) || [];
+        const theirActual = theirVisitsMap.get(place.placeId) || [];
+        const s = scorePlace(place, myWts, theirWts, myActual, theirActual);
         return s ? { place, ...s } : null;
       })
       .filter(Boolean)
       .sort((a, b) => b.minScore - a.minScore)
       .slice(0, 3);
-  }, [cacheReady, myWeights, theirWeights]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cacheReady, myWeights, theirWeights, myVisitsMap, theirVisitsMap]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { setShufflePage(0); }, [ranked]);
+  // Reset display to top 3 whenever ranked changes
+  useEffect(() => {
+    setDisplayItems(ranked.slice(0, 3));
+  }, [ranked]);
+
+  function doShuffle() {
+    if (ranked.length === 0) return;
+    const pool = [...ranked];
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    setDisplayItems(pool.slice(0, 3));
+  }
 
   function buildReason({ place }) {
     const myCv = myVisits.filter(v => v.cuisine === place.cuisine);
@@ -222,9 +269,6 @@ export function PlacePickerModal({
     return null;
   }
 
-  const maxPages = Math.max(1, Math.ceil(ranked.length / 3));
-  const visibleBatch = ranked.slice(shufflePage * 3, shufflePage * 3 + 3);
-  const isLastPage = shufflePage >= maxPages - 1;
   const myFn = firstName(myDisplayName);
   const thFn = firstName(friendName);
   const noFilteredResults = step === "results" && !cacheLoading && ranked.length === 0;
@@ -272,7 +316,7 @@ export function PlacePickerModal({
           textTransform: "uppercase", letterSpacing: "0.06em",
           marginBottom: 4,
         }}>
-          BITE Estimate
+          BITE Score
         </div>
         <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
           <span style={{
@@ -417,19 +461,15 @@ export function PlacePickerModal({
               }}
             >← Back</button>
 
-            <div style={{
-              display: "flex", gap: 6, marginBottom: 16, overflowX: "auto",
-              paddingBottom: 2,
-            }}>
+            <select
+              value={visitTab}
+              onChange={e => setVisitTab(e.target.value)}
+              style={{ width: "100%", marginBottom: 16, fontSize: 13, cursor: "pointer" }}
+            >
               {tabOptions.map(opt => (
-                <Pill
-                  key={opt.key}
-                  label={opt.label}
-                  active={visitTab === opt.key}
-                  onClick={() => setVisitTab(opt.key)}
-                />
+                <option key={opt.key} value={opt.key}>{opt.label}</option>
               ))}
-            </div>
+            </select>
 
             {cacheLoading && (
               <p style={{ fontSize: 13, color: "#888780", textAlign: "center" }}>
@@ -440,13 +480,13 @@ export function PlacePickerModal({
             {/* Filtered results */}
             {!cacheLoading && !noFilteredResults && (
               <>
-                {visibleBatch.map(item => (
+                {displayItems.map(item => (
                   <ResultCard key={item.place.placeId} item={item} />
                 ))}
-                {ranked.length > 0 && (
+                {ranked.length > 3 && (
                   <button
                     type="button"
-                    onClick={() => setShufflePage(p => (p + 1) % maxPages)}
+                    onClick={doShuffle}
                     style={{
                       width: "100%", padding: 11, background: "transparent",
                       border: "0.5px solid rgba(255,255,255,0.15)",
@@ -454,7 +494,7 @@ export function PlacePickerModal({
                       fontSize: 14, cursor: "pointer", marginTop: 4,
                     }}
                   >
-                    {isLastPage ? "Start over" : "Shuffle ↺"}
+                    Shuffle ↺
                   </button>
                 )}
               </>

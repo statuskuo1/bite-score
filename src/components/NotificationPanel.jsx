@@ -14,7 +14,7 @@ function relativeTime(ts) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-function NotifRow({ notif, isResolvedDineTag, onFollowBack, onRefetch, onOpenProfile, onDineTagTap, onDineTagBackTap, onFollowTap, onDineTagAcceptedTap, onHeartTap, onTagMutualBack, alreadyFollowed, onMarkFollowed, followingIds }) {
+function NotifRow({ notif, isResolvedDineTag, onFollowBack, onRefetch, onOpenProfile, onDineTagTap, onDineTagBackTap, onFollowTap, onDineTagAcceptedTap, onHeartTap, onTagMutualBack, onGroupVisitTaggedTap, onGroupVisitLoggedTap, alreadyFollowed, onMarkFollowed, followingIds }) {
   const [followed, setFollowed] = useState(false);
   const [isTasteBuds, setIsTasteBuds] = useState(notif.type === "taste_buds");
   const [busy, setBusy] = useState(false);
@@ -53,10 +53,16 @@ function NotifRow({ notif, isResolvedDineTag, onFollowBack, onRefetch, onOpenPro
   const isDineTagAccepted = notif.type === "dine_tag_accepted";
   const isDineTagMutual = notif.type === "dine_tag_mutual";
   const isHeartReaction = notif.type === "heart_reaction";
+  const isGroupVisitTagged = notif.type === "group_visit_tagged";
+  const isGroupVisitLogged = notif.type === "group_visit_logged";
   // A dine_tag whose underlying dine_with_tags row is gone (dismissed or tagged back).
   // Render past-tense with no action prompt — the prior round-trip is already done.
   const isResolved = isDineTag && isResolvedDineTag;
   const restaurantName = notif.meta?.restaurant_name || notif.meta?.place_name || "a place";
+  // group_visit_tagged has three variants set at create time. Pick copy per
+  // variant so the same notification type can carry standard / auto-linked /
+  // pick-which-visit prompts without spawning extra type values.
+  const groupVisitVariant = isGroupVisitTagged ? (notif.meta?.variant || "standard") : null;
   const message = isResolved
     ? `@${p?.username || "someone"} tagged you at ${restaurantName}`
     : isDineTag
@@ -69,9 +75,17 @@ function NotifRow({ notif, isResolvedDineTag, onFollowBack, onRefetch, onOpenPro
             ? `@${p?.username || "someone"} tagged you back at ${restaurantName}. see their BITE Score`
             : isHeartReaction
               ? `@${p?.username || "someone"} hearted your BITE at ${restaurantName} ❤️`
-              : isTasteBuds
-                ? `You and @${p?.username || "someone"} are now Taste Buds! 🎉`
-                : `@${p?.username || "someone"} followed you`;
+              : isGroupVisitTagged
+                ? groupVisitVariant === "auto_linked"
+                  ? `Looks like you already logged this — we connected your entry. Tag @${p?.username || "someone"} back?`
+                  : groupVisitVariant === "pick_visit"
+                    ? `You've been to ${restaurantName} a few times recently — which visit was with @${p?.username || "someone"}?`
+                    : `All bark NO BITE 🐶 @${p?.username || "someone"} tagged you at ${restaurantName}. Log your visit.`
+                : isGroupVisitLogged
+                  ? `@${p?.username || "someone"} logged their visit at ${restaurantName}.`
+                  : isTasteBuds
+                    ? `You and @${p?.username || "someone"} are now Taste Buds! 🎉`
+                    : `@${p?.username || "someone"} followed you`;
 
   const handleRowTap = isResolved
     ? () => p && onOpenProfile(p)
@@ -87,9 +101,13 @@ function NotifRow({ notif, isResolvedDineTag, onFollowBack, onRefetch, onOpenPro
               ? () => (notif.meta?.entry_id && notif.meta?.entry_type)
                   ? onDineTagAcceptedTap?.(notif)
                   : p && onOpenProfile(p)
-              : notif.type === "follow"
-                ? () => onFollowTap?.(notif)
-                : () => p && onOpenProfile(p);
+              : isGroupVisitTagged
+                ? () => onGroupVisitTaggedTap?.(notif)
+                : isGroupVisitLogged
+                  ? () => onGroupVisitLoggedTap?.(notif)
+                  : notif.type === "follow"
+                    ? () => onFollowTap?.(notif)
+                    : () => p && onOpenProfile(p);
 
   return (
     <div style={{
@@ -112,7 +130,7 @@ function NotifRow({ notif, isResolvedDineTag, onFollowBack, onRefetch, onOpenPro
             <button
               type="button"
               onClick={handleRowTap}
-              style={{ background: "none", border: "none", padding: 0, cursor: !isResolved && (isDineTagMutual || isDineTag || isHeartReaction) ? "pointer" : "default", color: isResolved ? "#888780" : "inherit", fontSize: "inherit", textAlign: "left" }}
+              style={{ background: "none", border: "none", padding: 0, cursor: !isResolved && (isDineTagMutual || isDineTag || isHeartReaction || isGroupVisitTagged || isGroupVisitLogged) ? "pointer" : "default", color: isResolved ? "#888780" : "inherit", fontSize: "inherit", textAlign: "left" }}
             >
               {message}
             </button>
@@ -172,7 +190,8 @@ function NotifRow({ notif, isResolvedDineTag, onFollowBack, onRefetch, onOpenPro
 export function NotificationPanel({
   notifications, resolvedDineTagIds, loading, onClose, onFollowBack, onRefetch,
   onOpenProfile, onDineTagTap, onDineTagBackTap, onFollowTap, onDineTagAcceptedTap,
-  onHeartTap, onTagMutualBack, sheetOpen, anchorPos, followingIds,
+  onHeartTap, onTagMutualBack, onGroupVisitTaggedTap, onGroupVisitLoggedTap,
+  sheetOpen, anchorPos, followingIds,
 }) {
   const { t } = useLang();
   const panelRef = useRef(null);
@@ -245,6 +264,8 @@ export function NotificationPanel({
             onDineTagAcceptedTap={onDineTagAcceptedTap}
             onHeartTap={onHeartTap}
             onTagMutualBack={onTagMutualBack}
+            onGroupVisitTaggedTap={onGroupVisitTaggedTap}
+            onGroupVisitLoggedTap={onGroupVisitLoggedTap}
             alreadyFollowed={followedIds.has(n.id)}
             onMarkFollowed={markFollowed}
             followingIds={followingIds}

@@ -59,11 +59,22 @@ import { ShowMoreButton } from "./components/ShowMoreButton.jsx";
 import { NotificationPanel } from "./components/NotificationPanel.jsx";
 import { FeedPostSheet } from "./components/community/FeedPostSheet.jsx";
 import { insertDineTag, fetchUnloggedDineTags, countUnloggedDineTags, dismissDineTag, fetchCoDiners, fetchDinedWithByEntry } from "./utils/dineWithApi.js";
+import {
+  findCandidateGroupVisit,
+  findAlreadyLoggedMatch,
+  createGroupVisit,
+  joinExistingGroupVisit,
+  fetchGroupVisitWithMembers,
+  fetchVisitsByIds,
+  tickGroupVisitsExpiry,
+} from "./utils/groupVisitsApi.js";
 import { DineTagsBanner } from "./components/DineTagsBanner.jsx";
 import { toUSD, fromUSD, CURRENCY_SYMBOLS } from "./utils/currency.js";
 import { resolveCity } from "./components/CityInput.jsx";
 import { CategoryTabs } from "./components/CategoryTabs.jsx";
 import { ConfirmSheet } from "./components/ConfirmSheet.jsx";
+import { SameDinnerSheet } from "./components/SameDinnerSheet.jsx";
+import { PickVisitSheet } from "./components/PickVisitSheet.jsx";
 import { OnboardingModal } from "./components/OnboardingModal.jsx";
 import { TasteBudsPromptSheet } from "./components/TasteBudsPromptSheet.jsx";
 const GUEST_PALETTE_ENTRIES = [
@@ -191,6 +202,18 @@ export default function App() {
   const [addInitialDineWith, setAddInitialDineWith] = useState([]);
   const [addFormKey, setAddFormKey] = useState(0);
   const [addTagTaggerId, setAddTagTaggerId] = useState(null);
+  /** Set when a `group_visit_tagged` notification tap pre-fills the Add form.
+   *  The save handler reads this and calls joinExistingGroupVisit(...) instead
+   *  of the normal candidate-lookup flow. Cleared on /add leave (same as the
+   *  other prefill state). */
+  const [addGroupVisitId, setAddGroupVisitId] = useState(null);
+  /** Set after a successful save when a candidate group_visit was found.
+   *  Drives the SameDinnerSheet — Yes joins the candidate, No falls through
+   *  to creating a new group_visit with the prepared per-member variants. */
+  const [sameDinnerPending, setSameDinnerPending] = useState(null);
+  /** Set when a `group_visit_tagged` notif arrives with `variant: 'pick_visit'`.
+   *  Drives the PickVisitSheet — pick a date → joinExistingGroupVisit. */
+  const [pickVisitState, setPickVisitState] = useState(null);
   const formStateRef = useRef(null);
   const [addDraftData, setAddDraftData] = useState(null);
   const [tasteBudIds, setTasteBudIds] = useState(() => new Set());
@@ -293,6 +316,10 @@ export default function App() {
     setShowNotifPanel(true);
     setNotifLoading(true);
     try {
+      // Day-7 sweep runs opportunistically here. Fire-and-forget; the
+      // notifications fetch below renders the post-sweep state because we
+      // await the tick first. Cheap (3 predicate-bound UPDATEs, partial idx).
+      await tickGroupVisitsExpiry(supabase);
       const [rows, ids] = await Promise.all([
         fetchUnreadNotifications(supabase, user.id),
         fetchFollowingIds(supabase, user.id),
@@ -318,6 +345,7 @@ export default function App() {
     try {
       // Wait for the Postgres trigger to fire before fetching.
       await new Promise((r) => setTimeout(r, 700));
+      await tickGroupVisitsExpiry(supabase);
       const [rows, ids] = await Promise.all([
         fetchUnreadNotifications(supabase, user.id),
         fetchFollowingIds(supabase, user.id),
@@ -397,6 +425,141 @@ export default function App() {
     setAddFormKey(k => k + 1);
     setAddType(entryType === "cafe" ? "cafe" : "restaurant");
     navigate("/add");
+  }
+
+  /** Pre-fill the Add form from a `group_visit_tagged` notification. Mirror
+   *  applyDineTagPrefill, but seed `addGroupVisitId` so the save handler
+   *  calls joinExistingGroupVisit(...) instead of running candidate lookup
+   *  + createGroupVisit again. Group visits are restaurants-only (v1). */
+  async function applyGroupVisitPrefill(groupVisitId) {
+    if (!groupVisitId || !user?.id) return;
+    const gv = await fetchGroupVisitWithMembers(supabase, groupVisitId);
+    if (!gv) return;
+    // Look up restaurant_places for cuisine/fusion to fill the form like
+    // applyDineTagPrefill does. Cheap — single PK query.
+    const { data: place } = await supabase
+      .from("restaurant_places")
+      .select("name, city, cuisine, cuisine2, is_fusion")
+      .eq("id", gv.placeId)
+      .maybeSingle();
+    const resolvedCity = resolveCity(place?.city || "");
+    const resolvedCuisine = place?.cuisine || "";
+    setAddPrefill({
+      name: gv.restaurantName || place?.name || "",
+      placeId: gv.placeId,
+      ...(resolvedCity ? { city: resolvedCity } : {}),
+      cuisine: resolvedCuisine,
+      cuisine2: place?.cuisine2 || "",
+      isFusion: !!place?.is_fusion,
+      letter: (resolvedCuisine[0] || "").toUpperCase(),
+    });
+    // Pre-fill dined-with with every other member (creator + co-tagged
+    // friends), excluding the viewer. Order is deterministic — creator first,
+    // then alphabetic by username — so the form looks the same on reopen.
+    const others = gv.members
+      .filter((m) => m.userId !== user.id && m.profile)
+      .sort((a, b) => {
+        if (a.userId === gv.createdBy) return -1;
+        if (b.userId === gv.createdBy) return 1;
+        return (a.profile?.username || "").localeCompare(b.profile?.username || "");
+      })
+      .map((m) => m.profile);
+    setAddInitialDineWith(others);
+    // No reverse-tag semantics for group visits — clear addTagTaggerId so the
+    // save flow doesn't try to insert a `dine_tag_accepted` notification.
+    setAddTagTaggerId(null);
+    setAddGroupVisitId(groupVisitId);
+    setAddDraftData(null);
+    setAddFormKey((k) => k + 1);
+    setAddType("restaurant");
+    navigate("/add");
+  }
+
+  function handleGroupVisitTaggedTap(notif) {
+    setShowNotifPanel(false);
+    const meta = notif?.meta || {};
+    const groupVisitId = meta.group_visit_id;
+    if (!groupVisitId) return;
+    const variant = meta.variant || "standard";
+    if (variant === "auto_linked") {
+      // Already linked — land on the feed (never the /add log view), scrolled
+      // to the joined entry when we know it. Mirrors dine_tag_accepted UX.
+      const entryId = meta.auto_linked_visit_id;
+      if (entryId) {
+        setFeedScrollTarget({ postId: entryId, postType: "restaurant", kind: "rest" });
+      }
+      navigate("/community/feed");
+      return;
+    }
+    if (variant === "pick_visit") {
+      const candidateIds = meta.candidate_visit_ids || [];
+      if (!candidateIds.length) {
+        applyGroupVisitPrefill(groupVisitId);
+        return;
+      }
+      Promise.all([
+        fetchVisitsByIds(supabase, candidateIds),
+        fetchGroupVisitWithMembers(supabase, groupVisitId),
+      ]).then(([visits, gv]) => {
+        if (!visits.length) {
+          applyGroupVisitPrefill(groupVisitId);
+          return;
+        }
+        setPickVisitState({
+          groupVisitId,
+          visits,
+          creatorUsername: gv?.creatorProfile?.username || notif.fromProfile?.username || "",
+          restaurantName: gv?.restaurantName || meta.restaurant_name || "",
+        });
+      });
+      return;
+    }
+    applyGroupVisitPrefill(groupVisitId);
+  }
+
+  function handleGroupVisitLoggedTap(notif) {
+    setShowNotifPanel(false);
+    const meta = notif?.meta || {};
+    if (meta.entry_id && meta.entry_type) {
+      setFeedScrollTarget({ postId: meta.entry_id, postType: meta.entry_type, kind: entryTypeToKind(meta.entry_type) });
+      navigate("/community/feed");
+      return;
+    }
+    const p = notif.fromProfile;
+    if (p) handleOpenNotifProfile(p);
+  }
+
+  /** After a fresh restaurant save with tagged friends and no candidate group
+   *  match (or after a "No, different" answer to SameDinnerSheet), pick a
+   *  per-member variant + status by looking for already-logged matches and
+   *  call createGroupVisit. Returns the new group_visit_id (or null). */
+  async function createGroupVisitForSave({ creatorVisitId, placeId, restaurantName, visitedAt, taggedIds }) {
+    if (!user?.id || !taggedIds?.length) return null;
+    const taggedMembers = await Promise.all(taggedIds.map(async (id) => {
+      const matches = await findAlreadyLoggedMatch(supabase, { userId: id, placeId, visitedAt });
+      if (matches.length === 0) {
+        return { userId: id, variant: "standard", status: "pending" };
+      }
+      if (matches.length === 1) {
+        return {
+          userId: id, variant: "auto_linked", status: "logged",
+          visitId: matches[0].id,
+        };
+      }
+      return {
+        userId: id, variant: "pick_visit", status: "pending",
+        candidateVisitIds: matches.map((m) => m.id),
+      };
+    }));
+    const res = await createGroupVisit(supabase, {
+      creatorId: user.id,
+      placeId,
+      restaurantName,
+      visitedAt,
+      creatorVisitId,
+      taggedMembers,
+    });
+    return res?.id || null;
   }
 
   function handleHeartTap(notif) {
@@ -662,6 +825,7 @@ export default function App() {
       setAddPrefill(null);
       setAddInitialDineWith([]);
       setAddTagTaggerId(null);
+      setAddGroupVisitId(null);
     } else {
       // Navigated TO /add — restore draft if no prefill is active
       if (user?.id && !addPrefill) {
@@ -1239,7 +1403,9 @@ export default function App() {
                   onDineTagAcceptedTap={handleDineTagAcceptedTap}
                   onHeartTap={handleHeartTap}
                   onTagMutualBack={handleDineTagMutualBack}
-                  sheetOpen={!!notifSheetProfile || !!heartSheetTarget}
+                  onGroupVisitTaggedTap={handleGroupVisitTaggedTap}
+                  onGroupVisitLoggedTap={handleGroupVisitLoggedTap}
+                  sheetOpen={!!notifSheetProfile || !!heartSheetTarget || !!sameDinnerPending || !!pickVisitState}
                   anchorPos={notifAnchorPos}
                   followingIds={notifFollowingIds}
                 />
@@ -1827,6 +1993,51 @@ export default function App() {
                         })));
                         fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
                       }
+                      // ── Group visits ────────────────────────────────────────
+                      // Group visits layer on top of dine_with_tags; the
+                      // insertDineTag loop above stays so feed cards keep
+                      // rendering "dined with …" via the existing co-diners
+                      // RPC. This block decides whether to (a) join an
+                      // existing pending group_visit (notif-prefilled save),
+                      // (b) prompt "Same dinner?" for an organic candidate,
+                      // or (c) create a new group_visit outright.
+                      const sourceGroupVisitId = addGroupVisitId;
+                      setAddGroupVisitId(null);
+                      const taggedIds = toTag.map(p => p.id);
+                      if (sourceGroupVisitId) {
+                        await joinExistingGroupVisit(supabase, {
+                          groupVisitId: sourceGroupVisitId,
+                          userId: user.id,
+                          visitId: data.id,
+                        });
+                      } else if (taggedIds.length) {
+                        const candidate = await findCandidateGroupVisit(supabase, {
+                          placeId,
+                          memberIds: [user.id, ...taggedIds],
+                          visitedAt: data.visited_at,
+                        });
+                        if (candidate) {
+                          // Defer until user answers the SameDinnerSheet — the
+                          // pending bag carries everything we need to either
+                          // join (Yes) or fall through to create (No).
+                          setSameDinnerPending({
+                            candidate,
+                            creatorVisitId: data.id,
+                            placeId,
+                            restaurantName: e.name,
+                            visitedAt: data.visited_at,
+                            taggedIds,
+                          });
+                        } else {
+                          await createGroupVisitForSave({
+                            creatorVisitId: data.id,
+                            placeId,
+                            restaurantName: e.name,
+                            visitedAt: data.visited_at,
+                            taggedIds,
+                          });
+                        }
+                      }
                       if (sourceTaggerId) {
                         await Promise.all([
                           supabase.from("dine_with_tags").upsert({
@@ -2087,6 +2298,52 @@ export default function App() {
         drinkWeights={drinkWeights}
         sweetWeights={sweetWeights}
         onClose={() => setHeartSheetTarget(null)}
+      />
+    )}
+    {sameDinnerPending && (
+      <SameDinnerSheet
+        creatorUsername={sameDinnerPending.candidate.creatorProfile?.username}
+        restaurantName={sameDinnerPending.restaurantName}
+        visitedAt={sameDinnerPending.candidate.visitedAt}
+        onYes={async () => {
+          const pending = sameDinnerPending;
+          setSameDinnerPending(null);
+          await joinExistingGroupVisit(supabase, {
+            groupVisitId: pending.candidate.id,
+            userId: user.id,
+            visitId: pending.creatorVisitId,
+          });
+        }}
+        onNo={async () => {
+          const pending = sameDinnerPending;
+          setSameDinnerPending(null);
+          await createGroupVisitForSave({
+            creatorVisitId: pending.creatorVisitId,
+            placeId: pending.placeId,
+            restaurantName: pending.restaurantName,
+            visitedAt: pending.visitedAt,
+            taggedIds: pending.taggedIds,
+          });
+        }}
+      />
+    )}
+    {pickVisitState && (
+      <PickVisitSheet
+        creatorUsername={pickVisitState.creatorUsername}
+        restaurantName={pickVisitState.restaurantName}
+        visits={pickVisitState.visits}
+        onCancel={() => setPickVisitState(null)}
+        onPick={async (visitId) => {
+          const state = pickVisitState;
+          setPickVisitState(null);
+          await joinExistingGroupVisit(supabase, {
+            groupVisitId: state.groupVisitId,
+            userId: user.id,
+            visitId,
+          });
+          setFeedScrollTarget({ postId: visitId, postType: "restaurant", kind: "rest" });
+          navigate("/community/feed");
+        }}
       />
     )}
     </LangContext.Provider>
