@@ -465,9 +465,9 @@ export function FeedPostRow({
           </div>
         </div>
 
-        {/* Been / want-to-go badge — hidden on own posts */}
-        {post.placeId && viewerId !== post.ownerId && (
-          hasBeenHere ? (
+        {/* Been / want-to-go badge */}
+        {post.placeId && (
+          (viewerId === post.ownerId || hasBeenHere) ? (
             <span style={{ fontSize: 11, color: "#7DBF8E", fontWeight: 500, flexShrink: 0 }}>
               ✓ been
             </span>

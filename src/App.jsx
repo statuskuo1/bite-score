@@ -1437,8 +1437,11 @@ export default function App() {
   );
 
   const myRestaurantPlaceIds = useMemo(
-    () => new Set(st.entries.map((e) => e.placeId).filter(Boolean)),
-    [st.entries],
+    () => new Set([
+      ...st.entries.map((e) => e.placeId).filter(Boolean),
+      ...cafes.map((e) => e.placeId).filter(Boolean),
+    ]),
+    [st.entries, cafes],
   );
 
   const drinkGroups = useMemo(() => {
