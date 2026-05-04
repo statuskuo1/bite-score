@@ -465,8 +465,8 @@ export function FeedPostRow({
           </div>
         </div>
 
-        {/* Been / want-to-go badge */}
-        {post.placeId && (
+        {/* Been / want-to-go badge — hidden on own posts */}
+        {post.placeId && viewerId !== post.ownerId && (
           hasBeenHere ? (
             <span style={{ fontSize: 11, color: "#7DBF8E", fontWeight: 500, flexShrink: 0 }}>
               ✓ been
@@ -576,7 +576,7 @@ export function FeedPostRow({
           <Pill icon="⏱">{wait} min</Pill>
           <RepeatPill rating={post.repeatability} useR={post.useR} />
         </div>
-        {viewerScore != null && (
+        {viewerScore != null && viewerId !== post.ownerId && !hasBeenHere && (
           <div style={{
             fontSize: 11,
             color: "#888780",
