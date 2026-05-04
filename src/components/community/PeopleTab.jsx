@@ -697,10 +697,10 @@ export function PeopleTab({ user, myWeights, onCompareWith, onMarkFollowersSeen,
             <FollowRow
               key={f.id}
               entry={f}
-              stats={budsOnly && f.isMutual ? budStats[f.otherUserId] : undefined}
+              stats={f.isMutual ? budStats[f.otherUserId] : undefined}
               onOpen={openProfileSheet}
               onUnfollowConfirm={(profile, isMutual) => setInlineUnfollowTarget({ profile, isMutual })}
-              onCompare={budsOnly && f.isMutual ? () => onCompareWith?.(f.otherProfile) : undefined}
+              onCompare={f.isMutual ? () => onCompareWith?.(f.otherProfile) : undefined}
               t={t}
               hideTasteBudsBadge={budsOnly}
             />
