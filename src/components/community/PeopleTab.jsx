@@ -252,7 +252,7 @@ function FollowerRow({ entry, onFollow, onOpen, busy, t }) {
  * before. Compare is no longer a top-strip sub-tab but the route stays
  * addressable.
  */
-export function PeopleTab({ user, myWeights, onCompareWith, onMarkFollowersSeen, onFollowChange, onViewLog }) {
+export function PeopleTab({ user, myWeights, onCompareWith, onMarkFollowersSeen, onFollowChange, onViewLog, guestTasteBud = null, guestTasteBudCompat = null, onSignIn }) {
   const { t } = useLang();
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -670,7 +670,22 @@ export function PeopleTab({ user, myWeights, onCompareWith, onMarkFollowersSeen,
             </div>
           )}
 
-          {followingOnly.length === 0 && (
+          {guestTasteBud && followingOnly.length === 0 && (
+            <>
+              <FollowRow
+                entry={guestTasteBud}
+                stats={{ compatScore: guestTasteBudCompat, ratings: 18, city: "New York City" }}
+                onOpen={(profile, rel) => openProfileSheet(profile, rel)}
+                onUnfollowConfirm={() => {}}
+                onCompare={() => onCompareWith?.(guestTasteBud.otherProfile)}
+                t={t}
+              />
+              <p style={{ fontSize:11, color:"#555553", margin:"0 0 16px", textAlign:"center" }}>
+                Example taste bud — sign in to find yours
+              </p>
+            </>
+          )}
+          {followingOnly.length === 0 && !guestTasteBud && (
             <p style={{ fontSize: 12, color: "#888780", margin: "0 0 16px" }}>
               {t.noFollowingYet || "Not following anyone yet. Find people under Discover."}
             </p>

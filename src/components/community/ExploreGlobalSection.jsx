@@ -22,12 +22,6 @@ import { usePaginatedList } from "../usePaginatedList.js";
 import { ShowMoreButton } from "../ShowMoreButton.jsx";
 import { SortFilterToolbar } from "../SortFilterToolbar.jsx";
 
-const CATS = [
-  { key: "restaurants", labelKey: "restaurants", icon: "🍽" },
-  { key: "drinks", labelKey: "drinks", icon: "☕" },
-  { key: "sweets", labelKey: "sweets", icon: "🥐" },
-];
-
 /**
  * Explore > Global sub-section (was the standalone GlobalTab).
  *
@@ -196,36 +190,13 @@ export function ExploreGlobalSection({ user, restaurantWeights, drinkWeights, sw
 
   return (
     <div>
-      <div style={{
-        display: "flex", background: "#252523", borderRadius: 10, padding: 3,
-        gap: 2, marginBottom: 12,
-      }}>
-        {CATS.map((c) => {
-          const on = cat === c.key;
-          return (
-            <button
-              key={c.key}
-              type="button"
-              onClick={() => setCat(c.key)}
-              style={{
-                flex: 1, padding: "6px 0", textAlign: "center", borderRadius: 8,
-                border: "none",
-                background: on ? "#3C1F13" : "transparent",
-                color: on ? "#F0997B" : "#888780",
-                fontSize: 11, fontWeight: on ? 700 : 500,
-                cursor: "pointer", transition: "all 0.15s",
-              }}
-            >
-              {c.icon} {t[c.labelKey]}
-            </button>
-          );
-        })}
-      </div>
-
       <SortFilterToolbar
         viewBy={viewBy}
         onViewBy={setViewBy}
         viewOptions={[["bite", "BITE"], ["taste", t.taste], ["bpb", t.bangBuck], ["wait", t.wait], ["repeat", t.repeatability]]}
+        typeBy={cat}
+        onTypeBy={setCat}
+        typeOptions={[["restaurants", t.restaurants], ["drinks", t.drinks], ["sweets", t.sweets]]}
         cityCounts={cityCounts}
         selectedCities={cityFilter}
         onCitiesChange={setCityFilter}

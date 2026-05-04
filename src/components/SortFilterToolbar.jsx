@@ -27,6 +27,9 @@ export function SortFilterToolbar({
   viewBy,
   onViewBy,
   viewOptions,
+  typeBy,
+  onTypeBy,
+  typeOptions,
   cityCounts,
   selectedCities,
   onCitiesChange,
@@ -40,6 +43,7 @@ export function SortFilterToolbar({
 }) {
   const { t } = useLang();
   const [openView, setOpenView] = useState(false);
+  const [openType, setOpenType] = useState(false);
   const [openCity, setOpenCity] = useState(false);
   const [openSearch, setOpenSearch] = useState(false);
   const [openFilter, setOpenFilter] = useState(false);
@@ -50,6 +54,7 @@ export function SortFilterToolbar({
   }, [viewBy]);
 
   const viewRef = useRef(null);
+  const typeRef = useRef(null);
   const cityRef = useRef(null);
   const searchRef = useRef(null);
   const filterRef = useRef(null);
@@ -57,6 +62,7 @@ export function SortFilterToolbar({
   useEffect(() => {
     function h(e) {
       if (viewRef.current && !viewRef.current.contains(e.target)) setOpenView(false);
+      if (typeRef.current && !typeRef.current.contains(e.target)) setOpenType(false);
       if (cityRef.current && !cityRef.current.contains(e.target)) setOpenCity(false);
       if (searchRef.current && !searchRef.current.contains(e.target)) setOpenSearch(false);
       if (filterRef.current && !filterRef.current.contains(e.target)) setOpenFilter(false);
@@ -69,11 +75,18 @@ export function SortFilterToolbar({
     };
   }, []);
 
+  const showTypePill = Array.isArray(typeOptions) && typeOptions.length > 0;
   const showCityPill = Array.isArray(cityCounts) && cityCounts.length > 1;
 
   const viewLabelText = (() => {
     const found = viewOptions.find(([k]) => k === viewBy);
     return `${t.viewLabel || "View"}: ${found ? found[1] : viewBy}`;
+  })();
+
+  const typeLabelText = (() => {
+    if (!showTypePill) return "";
+    const found = typeOptions.find(([k]) => k === typeBy);
+    return `${t.typeLabel || "Type"}: ${found ? found[1] : typeBy}`;
   })();
 
   const cityLabelText = (() => {
@@ -130,6 +143,39 @@ export function SortFilterToolbar({
             </div>
           )}
         </div>
+
+        {showTypePill && (
+          <div ref={typeRef} style={{ position: "relative", flexShrink: 0 }}>
+            <button
+              type="button"
+              onClick={() => setOpenType((x) => !x)}
+              style={pillStyle(openType)}
+            >
+              {typeLabelText} <span style={{ fontSize: 9, opacity: 0.8 }}>▼</span>
+            </button>
+            {openType && (
+              <div style={dropdownStyle("left")}>
+                {typeOptions.map(([key, label]) => {
+                  const on = key === typeBy;
+                  return (
+                    <div
+                      key={key}
+                      onClick={() => { onTypeBy(key); setOpenType(false); }}
+                      style={{
+                        padding: "8px 12px", cursor: "pointer", fontSize: 12,
+                        color: on ? "#F0997B" : "#F1EFE8",
+                        background: on ? "rgba(240,153,123,0.08)" : "transparent",
+                        borderBottom: "0.5px solid rgba(255,255,255,0.06)",
+                      }}
+                    >
+                      {label}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {showCityPill && (
           <div ref={cityRef} style={{ position: "relative", flexShrink: 0 }}>

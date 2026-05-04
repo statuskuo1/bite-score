@@ -16,12 +16,6 @@ import {
 import { FLAGS } from "../../constants/cuisineConstants.js";
 import { PlaceStatsSheet } from "./PlaceStatsSheet.jsx";
 
-const CATS = [
-  { key: "restaurants", labelKey: "restaurants", icon: "🍽" },
-  { key: "drinks", labelKey: "drinks", icon: "☕" },
-  { key: "sweets", labelKey: "sweets", icon: "🥐" },
-];
-
 const DRINK_CATS = ["Coffee", "Tea", "Other"];
 
 const ROW_STYLE = {
@@ -184,11 +178,14 @@ export function ExploreTopPicksSection({
   const [sweets, setSweets] = useState(() => tasteBudsPicksCache.sweets || []);
   const [cityFilter, setCityFilter] = useState(new Set());
   const [openCity, setOpenCity] = useState(false);
+  const [openType, setOpenType] = useState(false);
   const cityRef = useRef(null);
+  const typeRef = useRef(null);
 
   useEffect(() => {
     function h(e) {
       if (cityRef.current && !cityRef.current.contains(e.target)) setOpenCity(false);
+      if (typeRef.current && !typeRef.current.contains(e.target)) setOpenType(false);
     }
     document.addEventListener("mousedown", h);
     document.addEventListener("touchstart", h);
@@ -197,6 +194,13 @@ export function ExploreTopPicksSection({
       document.removeEventListener("touchstart", h);
     };
   }, []);
+
+  const typeLabelByKey = {
+    restaurants: t.restaurants,
+    drinks: t.drinks,
+    sweets: t.sweets,
+  };
+  const typeLabelText = `${t.typeLabel || "Type"}: ${typeLabelByKey[cat] || cat}`;
 
   /** Reset the city filter when switching tabs so a city that exists in one
    *  category but not another doesn't leave the list mysteriously empty. */
@@ -340,10 +344,53 @@ export function ExploreTopPicksSection({
     );
   }
 
+  const typePillNode = (
+    <div ref={typeRef} style={{ position: "relative" }}>
+      <button
+        type="button"
+        onClick={() => setOpenType((x) => !x)}
+        style={{
+          ...PILL_STYLE,
+          borderColor: openType ? "#F0997B" : "rgba(255,255,255,0.15)",
+          color: openType ? "#F0997B" : "#C4C2BA",
+        }}
+      >
+        {typeLabelText} <span style={{ fontSize: 9, opacity: 0.8 }}>▼</span>
+      </button>
+      {openType && (
+        <div style={DROPDOWN_STYLE}>
+          {[
+            ["restaurants", t.restaurants],
+            ["drinks", t.drinks],
+            ["sweets", t.sweets],
+          ].map(([key, label]) => {
+            const on = key === cat;
+            return (
+              <div
+                key={key}
+                onClick={() => { setCat(key); setOpenType(false); }}
+                style={{
+                  padding: "8px 12px", cursor: "pointer", fontSize: 12,
+                  color: on ? "#F0997B" : "#F1EFE8",
+                  background: on ? "rgba(240,153,123,0.08)" : "transparent",
+                  borderBottom: "0.5px solid rgba(255,255,255,0.06)",
+                }}
+              >
+                {label}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+
   if (budIds && budIds.length === 0) {
     return (
       <div>
-        <CategoryStrip cat={cat} setCat={setCat} t={t} />
+        <div style={{ display: "flex", gap: 6, marginBottom: 12, alignItems: "center" }}>
+          {typePillNode}
+        </div>
         <p style={{ fontSize: 12, color: "#888780", margin: 0 }}>
           {t.topPicksEmptyNoBuds || "Follow some Taste Buds to see what they all love."}
         </p>
@@ -355,7 +402,9 @@ export function ExploreTopPicksSection({
   if (!sourceForCat.length) {
     return (
       <div>
-        <CategoryStrip cat={cat} setCat={setCat} t={t} />
+        <div style={{ display: "flex", gap: 6, marginBottom: 12, alignItems: "center" }}>
+          {typePillNode}
+        </div>
         <p style={{ fontSize: 12, color: "#888780", margin: 0 }}>
           {t.topPicksEmptyLoading || "Loading…"}
         </p>
@@ -365,10 +414,10 @@ export function ExploreTopPicksSection({
 
   return (
     <div>
-      <CategoryStrip cat={cat} setCat={setCat} t={t} />
+      <div style={{ display: "flex", gap: 6, marginBottom: 12, alignItems: "center", flexWrap: "wrap" }}>
+        {typePillNode}
 
-      {cityCounts.length > 1 && (
-        <div style={{ display: "flex", gap: 6, marginBottom: 12, alignItems: "center" }}>
+        {cityCounts.length > 1 && (
           <div ref={cityRef} style={{ position: "relative" }}>
             <button
               type="button"
@@ -420,8 +469,8 @@ export function ExploreTopPicksSection({
               </div>
             )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       <p style={{ fontSize: 11, color: "#888780", margin: "0 0 12px" }}>
         Scored with your weights from your Taste Buds' ratings
@@ -448,32 +497,3 @@ export function ExploreTopPicksSection({
   );
 }
 
-function CategoryStrip({ cat, setCat, t }) {
-  return (
-    <div style={{
-      display: "flex", background: "#252523", borderRadius: 10, padding: 3,
-      gap: 2, marginBottom: 12,
-    }}>
-      {CATS.map((c) => {
-        const on = cat === c.key;
-        return (
-          <button
-            key={c.key}
-            type="button"
-            onClick={() => setCat(c.key)}
-            style={{
-              flex: 1, padding: "6px 0", textAlign: "center", borderRadius: 8,
-              border: "none",
-              background: on ? "#3C1F13" : "transparent",
-              color: on ? "#F0997B" : "#888780",
-              fontSize: 11, fontWeight: on ? 700 : 500,
-              cursor: "pointer", transition: "all 0.15s",
-            }}
-          >
-            {c.icon} {t[c.labelKey] || c.key}
-          </button>
-        );
-      })}
-    </div>
-  );
-}

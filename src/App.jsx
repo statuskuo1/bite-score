@@ -1568,7 +1568,7 @@ export default function App() {
 
   return (
     <LangContext.Provider value={{t,lang}}>
-    <div style={{fontFamily:"var(--font-sans)",maxWidth:640,margin:"0 auto",padding:user?"1.25rem 1rem max(8rem, env(safe-area-inset-bottom)) 1rem":"1.25rem 1rem 2rem 1rem",background:"#141413",minHeight:"100vh",color:"#F1EFE8",overflowX:"hidden"}}>
+    <div style={{fontFamily:"var(--font-sans)",maxWidth:640,margin:"0 auto",padding:"1.25rem 1rem max(8rem, env(safe-area-inset-bottom)) 1rem",background:"#141413",minHeight:"100vh",color:"#F1EFE8",overflowX:"hidden"}}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&display=swap');
         input,select,textarea{background:#252523!important;color:#F1EFE8!important;border:1px solid rgba(255,255,255,0.2)!important;border-radius:8px;padding:9px 12px;font-size:16px!important;font-family:inherit!important;}
@@ -2150,61 +2150,23 @@ export default function App() {
         setAddType("cafe");
         navigate("/add");
       }}
-      onCancel={()=>{setEditC(null);setEditDineWith([]);window.scrollTo({top:0,behavior:"smooth"});}} tasteStep={tasteHalfStep?0.5:0.1} onTasteStepChange={saveTasteStep} existingCafes={cafes} existingCities={existingCities} places={cafePlaces}/>}
+      onCancel={()=>{setEditC(null);setEditDineWith([]);window.scrollTo({top:0,behavior:"smooth"});}} tasteStep={tasteHalfStep?0.5:0.1} onTasteStepChange={saveTasteStep}/>}
 
       {/* ── Add Rating ── */}
       {pathname==="/add"&&!user&&(
-        <div>
-          <div style={{ display:"flex", gap:8, marginBottom:16 }}>
-            {[["restaurant","🍽 Restaurant"],["cafe","☕ Drink"],["sweets","🥐 Sweet"]].map(([v,l]) => (
-              <button key={v} type="button" onClick={() => setAddType(v)}
-                style={{ flex:1, padding:"8px 0", borderRadius:8, border:"none",
-                  background: addType===v ? "#F0997B" : "#252523",
-                  color: addType===v ? "#141413" : "#888780",
-                  fontSize:12, fontWeight:600, cursor:"pointer" }}>
-                {l}
-              </button>
-            ))}
-          </div>
-          {addType === "restaurant" ? (
-            <RestForm
-              key={addFormKey}
-              initial={{ ...INIT_REST, city: lastCity.current || "" }}
-              weights={weights}
-              existingEntries={guestEntries}
-              existingCities={[...new Set(guestEntries.map(e=>e.city).filter(Boolean))]}
-              places={[]} onPlaceCreated={() => {}}
-              tasteStep={0.1} addType={addType} setAddType={setAddType}
-              onSave={(e) => {
-                const entry = { ...e, id:`gr_new_${Date.now()}`, ownerId:"__guest__",
-                  placeId:null, visitedAt:new Date().toISOString(), currency_code:"USD",
-                  letter:(e.cuisine?.[0]||"").toUpperCase() };
-                setGuestEntries(p => [...p, entry]);
-                if (e.city) persistLastCity(e.city);
-                navigate("/log");
-              }}
-              onCancel={() => navigate("/log")}
-            />
-          ) : (
-            <CafeForm
-              key={addFormKey}
-              initial={{ ...INIT_CAFE, city: lastCity.current || "" }}
-              weights={addType === "sweets" ? sweetWeights : drinkWeights}
-              existingCafes={guestCafes}
-              existingCities={[...new Set(guestCafes.map(e=>e.city).filter(Boolean))]}
-              places={[]} onPlaceCreated={() => {}}
-              tasteStep={0.1} addType={addType} setAddType={setAddType}
-              onSave={(e) => {
-                const entry = { ...e, id:`gc_new_${Date.now()}`, ownerId:"__guest__",
-                  placeId:null, visitedAt:new Date().toISOString(), currency_code:"USD" };
-                setGuestCafes(p => [...p, entry]);
-                if (e.city) persistLastCity(e.city);
-                navigate(addType === "sweets" ? "/log/sweets" : "/log/drinks");
-              }}
-              onCancel={() => navigate("/log")}
-            />
-          )}
-        </div>
+        <GuestPreview message="Sign in to add your rating" onSignIn={() => setShowAuthModal(true)}>
+          <RestForm
+            initial={{...INIT_REST, city:"New York City"}}
+            weights={weights}
+            existingEntries={[]}
+            existingCities={[]}
+            places={[]}
+            onPlaceCreated={()=>{}}
+            onSave={()=>{}}
+            onCancel={()=>{}}
+            tasteStep={0.1}
+          />
+        </GuestPreview>
       )}
       {pathname==="/add"&&user&&(
         <div>
