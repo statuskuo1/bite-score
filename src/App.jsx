@@ -481,16 +481,10 @@ export default function App() {
     const groupVisitId = meta.group_visit_id;
     if (!groupVisitId) return;
     const variant = meta.variant || "standard";
-    if (variant === "auto_linked") {
-      // Already linked — land on the feed (never the /add log view), scrolled
-      // to the joined entry when we know it. Mirrors dine_tag_accepted UX.
-      const entryId = meta.auto_linked_visit_id;
-      if (entryId) {
-        setFeedScrollTarget({ postId: entryId, postType: "restaurant", kind: "rest" });
-      }
-      navigate("/community/feed");
-      return;
-    }
+    // auto_linked is handled inline in NotificationPanel (Tag-them-back button).
+    // We never reach this handler for that variant; bail just in case the panel
+    // ever forwards it (e.g. legacy notifications without meta.tagged_back).
+    if (variant === "auto_linked") return;
     if (variant === "pick_visit") {
       const candidateIds = meta.candidate_visit_ids || [];
       if (!candidateIds.length) {
@@ -609,15 +603,10 @@ export default function App() {
     const meta = notif.meta || {};
     if (meta.entry_id && meta.entry_type) {
       setFeedScrollTarget({ postId: meta.entry_id, postType: meta.entry_type, kind: entryTypeToKind(meta.entry_type) });
-      navigate("/community/feed");
-      return;
     }
-    // Legacy notifications without entry_id — fall back to opening the
-    // friend's profile so the user can still find the post manually.
-    const p = notif.fromProfile;
-    if (!p) return;
-    setExtUserLogTarget(p);
-    navigate("/community/people");
+    // Always land on the feed for "tagged you back" notifs, even when entry_id
+    // is missing on legacy rows — feed root is acceptable as a fallback.
+    navigate("/community/feed");
   }
 
   function handleFollowNotifTap(notif) {
@@ -633,8 +622,9 @@ export default function App() {
   function handleDineTagAcceptedTap(notif) {
     setShowNotifPanel(false);
     const meta = notif.meta || {};
-    if (!meta.entry_id || !meta.entry_type) return;
-    setFeedScrollTarget({ postId: meta.entry_id, postType: meta.entry_type, kind: entryTypeToKind(meta.entry_type) });
+    if (meta.entry_id && meta.entry_type) {
+      setFeedScrollTarget({ postId: meta.entry_id, postType: meta.entry_type, kind: entryTypeToKind(meta.entry_type) });
+    }
     navigate("/community/feed");
   }
 
@@ -675,6 +665,44 @@ export default function App() {
     ].filter(Boolean));
     setDineTags((prev) => prev.filter((t) => t.tagger_id !== fromUserId || (t.restaurant_name || "").toLowerCase() !== restaurantName.toLowerCase()));
     fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
+  }
+
+  /** Tag-them-back action for group_visit_tagged (variant `auto_linked`).
+   *  No `dine_with_tags` row exists for group visits — the linkage lives in
+   *  `group_visit_members` — so this is a leaner mirror of
+   *  handleDineTagMutualBack: fire `dine_tag_back` to the tagger pointing at
+   *  the user's already-logged visit, and stamp the notification's meta with
+   *  `tagged_back: true` so the panel renders past-tense on next load. */
+  async function handleGroupVisitMutualBack(notif) {
+    if (!user?.id || !notif?.id) return;
+    const fromUserId = notif.from_user_id;
+    if (!fromUserId) return;
+    const meta = notif.meta || {};
+    const entryId = meta.auto_linked_visit_id || null;
+    const restaurantName = meta.restaurant_name || "";
+    const city = meta.city || "";
+    // Idempotence: bail if already tagged back. Repeat taps on a stale
+    // in-memory notif shouldn't re-spam the tagger.
+    if (meta.tagged_back) return;
+    await Promise.all([
+      supabase.from("notifications").insert({
+        user_id: fromUserId,
+        from_user_id: user.id,
+        type: "dine_tag_back",
+        meta: {
+          restaurant_name: restaurantName,
+          city,
+          entry_id: entryId,
+          entry_type: entryId ? "restaurant" : null,
+        },
+      }),
+      supabase.from("notifications")
+        .update({ meta: { ...meta, tagged_back: true } })
+        .eq("id", notif.id),
+    ]);
+    setNotifications((prev) => prev.map((n) => (
+      n.id === notif.id ? { ...n, meta: { ...(n.meta || {}), tagged_back: true } } : n
+    )));
   }
 
   async function handleNotifSheetFollow(targetId) {
@@ -1403,6 +1431,7 @@ export default function App() {
                   onDineTagAcceptedTap={handleDineTagAcceptedTap}
                   onHeartTap={handleHeartTap}
                   onTagMutualBack={handleDineTagMutualBack}
+                  onGroupVisitMutualBack={handleGroupVisitMutualBack}
                   onGroupVisitTaggedTap={handleGroupVisitTaggedTap}
                   onGroupVisitLoggedTap={handleGroupVisitLoggedTap}
                   sheetOpen={!!notifSheetProfile || !!heartSheetTarget || !!sameDinnerPending || !!pickVisitState}
