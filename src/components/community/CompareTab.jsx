@@ -424,10 +424,10 @@ export function CompareTab({ user, myWeights, username, primedTarget, onFollowCh
         style={{
           display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
           width: "100%", padding: "11px",
-          background: "transparent",
-          border: "0.5px solid rgba(240,153,123,0.35)",
-          borderRadius: 10, color: "#F0997B",
-          fontSize: 14, fontWeight: 500, cursor: "pointer",
+          background: "#F0997B",
+          border: "none",
+          borderRadius: 10, color: "#141413",
+          fontSize: 14, fontWeight: 600, cursor: "pointer",
           marginBottom: 16,
         }}
       >
