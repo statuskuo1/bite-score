@@ -166,12 +166,10 @@ function SearchRowAction({ profile, relation, busy, onFollow, onUnfollowConfirm,
   }
 }
 
-/** Unified row for someone you follow (mutual or one-way). Mutual rows show
- *  green Taste Buds badge + Following pill + match%. Non-mutual rows show
- *  only the Following pill. `hideTasteBudsBadge` drops the redundant badge
- *  when rendering inside the Taste Buds sub-tab (the tab itself is the
- *  status indicator). */
-function FollowRow({ entry, stats, onOpen, onUnfollowConfirm, onCompare, t, hideTasteBudsBadge = false }) {
+/** Unified row for someone you follow (mutual or one-way).
+ *  Taste Buds (mutual): single green "Taste Buds" pill (tappable → unfollow confirm) + % match pill.
+ *  One-way following: single blue "Following" pill (tappable → unfollow confirm). */
+function FollowRow({ entry, stats, onOpen, onUnfollowConfirm, onCompare, t }) {
   const profile = entry.otherProfile;
   const { isMutual } = entry;
   return (
@@ -184,26 +182,35 @@ function FollowRow({ entry, stats, onOpen, onUnfollowConfirm, onCompare, t, hide
         <UserIdentity profile={profile} size={28} />
       </button>
       <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
-        {isMutual && !hideTasteBudsBadge && (
-          <StatusBadge
-            label="🤝"
-            bg="#1A2E0A" color="#97C459" border="rgba(151,196,89,0.4)"
-          />
-        )}
-        <button
-          type="button"
-          onClick={() => onUnfollowConfirm?.(profile, isMutual)}
-          style={{
-            fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 20,
-            background: "rgba(155,169,213,0.1)", color: "#9BA9D5",
-            border: "1px solid rgba(155,169,213,0.3)",
-            cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
-          }}
-        >
-          {t.following || "Following"}
-        </button>
         {isMutual && (
           <MatchPill score={stats?.compatScore ?? null} suffix={t.matchSuffix} onCompare={onCompare} />
+        )}
+        {isMutual ? (
+          <button
+            type="button"
+            onClick={() => onUnfollowConfirm?.(profile, true)}
+            style={{
+              fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 20,
+              background: "#1A2E0A", color: "#97C459",
+              border: "1px solid rgba(151,196,89,0.4)",
+              cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+            }}
+          >
+            {t.tasteBuds || "Taste Buds"}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onUnfollowConfirm?.(profile, false)}
+            style={{
+              fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 20,
+              background: "rgba(155,169,213,0.1)", color: "#9BA9D5",
+              border: "1px solid rgba(155,169,213,0.3)",
+              cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+            }}
+          >
+            {t.following || "Following"}
+          </button>
         )}
       </div>
     </div>
@@ -717,7 +724,6 @@ export function PeopleTab({ user, myWeights, onCompareWith, onMarkFollowersSeen,
               onUnfollowConfirm={(profile, isMutual) => setInlineUnfollowTarget({ profile, isMutual })}
               onCompare={f.isMutual ? () => onCompareWith?.(f.otherProfile) : undefined}
               t={t}
-              hideTasteBudsBadge={budsOnly}
             />
           ))}
           <ShowMoreButton

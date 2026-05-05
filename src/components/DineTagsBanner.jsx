@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Avatar } from "./community/Avatar.jsx";
 import { dismissDineTag, joinExistingGroupVisit } from "../utils/groupVisitsApi.js";
 import { supabase } from "../config/supabaseClient.js";
@@ -10,6 +10,7 @@ import { supabase } from "../config/supabaseClient.js";
  *
  * Shows one card at a time. Badge in the top-right shows total pending count.
  * Both actions advance to the next card automatically.
+ * Tapping the count badge opens a scrollable modal of all pending tags.
  *
  * Props:
  *   tags      - array returned by fetchUnloggedDineTags (v2 shape with
@@ -22,6 +23,12 @@ import { supabase } from "../config/supabaseClient.js";
  */
 export function DineTagsBanner({ tags, onDismiss, onAddType, entries, cafes, userId }) {
   const [taggedConfirm, setTaggedConfirm] = useState(null);
+  const [showAll, setShowAll] = useState(false);
+
+  useEffect(() => {
+    if (!tags?.length) setShowAll(false);
+  }, [tags?.length]);
+
   if (!tags?.length) return null;
 
   const tag = tags[0];
@@ -29,6 +36,19 @@ export function DineTagsBanner({ tags, onDismiss, onAddType, entries, cafes, use
   const name = who?.display_name || who?.username || "Someone";
   const handle = who?.username ? `@${who.username}` : "";
   const count = tags.length;
+
+  function findExisting(t) {
+    const tName = (t.restaurant_name || "").trim().toLowerCase();
+    const tCity = (t.city || "").trim().toLowerCase();
+    const match = (list) => tName
+      ? (list || []).find((e) => {
+          const eName = (e.name || "").trim().toLowerCase();
+          const eCity = (e.city || "").trim().toLowerCase();
+          return eName === tName && (!tCity || !eCity || eCity === tCity);
+        })
+      : null;
+    return match(entries) || match(cafes);
+  }
 
   // Check if the user already has a logged entry for this place (name + city match).
   // Search both lists — a place like Kasama might be logged as restaurant by one user, cafe by another.
@@ -91,69 +111,110 @@ export function DineTagsBanner({ tags, onDismiss, onAddType, entries, cafes, use
   }
 
   return (
-    <div style={{ position: "relative", marginBottom: 16 }}>
-      {/* Badge — matches the notification bell badge style */}
-      {count > 1 && (
-        <span style={{
-          position: "absolute", top: -6, right: -6, zIndex: 1,
-          minWidth: 18, height: 18, padding: "0 4px",
-          borderRadius: 9, background: "#E85A5A",
-          color: "#FFF", fontSize: 11, fontWeight: 700,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          lineHeight: 1, boxSizing: "border-box",
-          border: "1.5px solid #141413",
-        }}>
-          {count > 99 ? "99+" : count}
-        </span>
-      )}
-
-      <div style={{
-        background: "#1E1E1C",
-        border: "0.5px solid rgba(240,153,123,0.35)",
-        borderRadius: 12,
-        padding: "12px 14px",
-      }}>
-        {taggedConfirm && (
-          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "4px 0" }}>
-            <span style={{ fontSize: 18 }}>✓</span>
-            <span style={{ fontSize: 13, color: "#F1EFE8", flex: 1 }}>{taggedConfirm}</span>
-            <button
-              onClick={() => { setTaggedConfirm(null); onDismiss(tag.id); }}
-              style={{ background: "none", border: "none", color: "#888780", fontSize: 18, cursor: "pointer", lineHeight: 1, padding: 0, flexShrink: 0 }}
-            >×</button>
-          </div>
+    <>
+      <div style={{ position: "relative", marginBottom: 16 }}>
+        {/* Badge — tappable to open full queue modal */}
+        {count > 1 && (
+          <button
+            onClick={() => setShowAll(true)}
+            style={{
+              position: "absolute", top: -6, right: -6, zIndex: 1,
+              minWidth: 18, height: 18, padding: "0 4px",
+              borderRadius: 9, background: "#E85A5A",
+              color: "#FFF", fontSize: 11, fontWeight: 700,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              lineHeight: 1, boxSizing: "border-box",
+              border: "1.5px solid #141413",
+              cursor: "pointer",
+            }}
+          >
+            {count > 99 ? "99+" : count}
+          </button>
         )}
-        {!taggedConfirm && (<>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-            <Avatar profile={who} size={32} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, color: "#F1EFE8", lineHeight: 1.4 }}>
-                <span style={{ fontWeight: 600 }}>{name}</span>
-                {handle && <span style={{ color: "#888780", marginLeft: 4 }}>{handle}</span>}
-                {" "}tagged you at
-              </div>
-              <div style={{ fontSize: 13, color: "#F0997B", fontWeight: 500, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {tag.restaurant_name}
-                {tag.city ? ` · ${tag.city}` : ""}
+
+        <div style={{
+          background: "#1E1E1C",
+          border: "0.5px solid rgba(240,153,123,0.35)",
+          borderRadius: 12,
+          padding: "12px 14px",
+        }}>
+          {taggedConfirm && (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "4px 0" }}>
+              <span style={{ fontSize: 18 }}>✓</span>
+              <span style={{ fontSize: 13, color: "#F1EFE8", flex: 1 }}>{taggedConfirm}</span>
+              <button
+                onClick={() => { setTaggedConfirm(null); onDismiss(tag.id); }}
+                style={{ background: "none", border: "none", color: "#888780", fontSize: 18, cursor: "pointer", lineHeight: 1, padding: 0, flexShrink: 0 }}
+              >×</button>
+            </div>
+          )}
+          {!taggedConfirm && (<>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+              <Avatar profile={who} size={32} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, color: "#F1EFE8", lineHeight: 1.4 }}>
+                  <span style={{ fontWeight: 600 }}>{name}</span>
+                  {handle && <span style={{ color: "#888780", marginLeft: 4 }}>{handle}</span>}
+                  {" "}tagged you at
+                </div>
+                <div style={{ fontSize: 13, color: "#F0997B", fontWeight: 500, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {tag.restaurant_name}
+                  {tag.city ? ` · ${tag.city}` : ""}
+                </div>
               </div>
             </div>
-          </div>
 
-          {existingEntry ? (
-            <>
-              <div style={{ fontSize: 12, color: "#888780", marginBottom: 10 }}>
-                Looks like you already logged this place. Tag them to your entry?
-              </div>
-              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+            {existingEntry ? (
+              <>
+                <div style={{ fontSize: 12, color: "#888780", marginBottom: 10 }}>
+                  Looks like you already logged this place. Tag them to your entry?
+                </div>
+                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                  <button
+                    type="button"
+                    onClick={handleTagToMyEntry}
+                    style={{
+                      flex: 1, padding: "8px 12px", borderRadius: 8, border: "none",
+                      background: "#F0997B", color: "#141413", fontSize: 13, fontWeight: 600, cursor: "pointer",
+                    }}
+                  >
+                    Tag to my entry
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDismiss}
+                    style={{
+                      padding: "8px 14px", borderRadius: 8,
+                      background: "transparent", border: "0.5px solid rgba(255,255,255,0.1)",
+                      color: "#888780", fontSize: 13, cursor: "pointer",
+                    }}
+                  >
+                    Dismiss
+                  </button>
+                </div>
                 <button
                   type="button"
-                  onClick={handleTagToMyEntry}
+                  onClick={handleLogMyVisit}
+                  style={{
+                    background: "none", border: "none", padding: 0,
+                    fontSize: 12, color: "#888780", cursor: "pointer",
+                    textDecoration: "underline", textDecorationColor: "rgba(136,135,128,0.4)",
+                  }}
+                >
+                  Log a new visit anyway →
+                </button>
+              </>
+            ) : (
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={handleLogMyVisit}
                   style={{
                     flex: 1, padding: "8px 12px", borderRadius: 8, border: "none",
                     background: "#F0997B", color: "#141413", fontSize: 13, fontWeight: 600, cursor: "pointer",
                   }}
                 >
-                  Tag to my entry
+                  Log my visit
                 </button>
                 <button
                   type="button"
@@ -167,45 +228,124 @@ export function DineTagsBanner({ tags, onDismiss, onAddType, entries, cafes, use
                   Dismiss
                 </button>
               </div>
-              <button
-                type="button"
-                onClick={handleLogMyVisit}
-                style={{
-                  background: "none", border: "none", padding: 0,
-                  fontSize: 12, color: "#888780", cursor: "pointer",
-                  textDecoration: "underline", textDecorationColor: "rgba(136,135,128,0.4)",
-                }}
-              >
-                Log a new visit anyway →
-              </button>
-            </>
-          ) : (
-            <div style={{ display: "flex", gap: 8 }}>
-              <button
-                type="button"
-                onClick={handleLogMyVisit}
-                style={{
-                  flex: 1, padding: "8px 12px", borderRadius: 8, border: "none",
-                  background: "#F0997B", color: "#141413", fontSize: 13, fontWeight: 600, cursor: "pointer",
-                }}
-              >
-                Log my visit
-              </button>
-              <button
-                type="button"
-                onClick={handleDismiss}
-                style={{
-                  padding: "8px 14px", borderRadius: 8,
-                  background: "transparent", border: "0.5px solid rgba(255,255,255,0.1)",
-                  color: "#888780", fontSize: 13, cursor: "pointer",
-                }}
-              >
-                Dismiss
-              </button>
-            </div>
-          )}
-        </>)}
+            )}
+          </>)}
+        </div>
       </div>
-    </div>
+
+      {showAll && (
+        <div
+          style={{
+            position: "fixed", inset: 0, zIndex: 1000,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            background: "rgba(0,0,0,0.6)",
+          }}
+          onClick={() => setShowAll(false)}
+        >
+          <div
+            style={{
+              background: "#1E1E1C", borderRadius: 14,
+              width: "min(420px, calc(100vw - 32px))",
+              maxHeight: "70vh", display: "flex", flexDirection: "column",
+              overflow: "hidden",
+              border: "0.5px solid rgba(240,153,123,0.25)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "14px 16px", borderBottom: "0.5px solid rgba(255,255,255,0.08)", flexShrink: 0,
+            }}>
+              <span style={{ fontSize: 14, fontWeight: 600, color: "#F1EFE8" }}>
+                Tagged in ({count})
+              </span>
+              <button
+                onClick={() => setShowAll(false)}
+                style={{ background: "none", border: "none", color: "#888780", fontSize: 20, cursor: "pointer", lineHeight: 1, padding: 0 }}
+              >×</button>
+            </div>
+
+            <div style={{ overflowY: "auto", padding: "0 16px", flex: 1 }}>
+              {tags.map((t) => {
+                const tWho = t.taggerProfile;
+                const tName = tWho?.display_name || tWho?.username || "Someone";
+                const existing = findExisting(t);
+                return (
+                  <div key={t.id} style={{
+                    display: "flex", alignItems: "center", gap: 10,
+                    padding: "10px 0", borderBottom: "0.5px solid rgba(255,255,255,0.06)",
+                  }}>
+                    <Avatar profile={tWho} size={28} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, color: "#F1EFE8", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {tName}{tWho?.username ? ` @${tWho.username}` : ""}
+                      </div>
+                      <div style={{ fontSize: 12, color: "#F0997B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {t.restaurant_name}{t.city ? ` · ${t.city}` : ""}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                      {existing ? (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (t.group_visit_id && userId) {
+                              await joinExistingGroupVisit(supabase, {
+                                groupVisitId: t.group_visit_id,
+                                userId,
+                                visitId: existing.id,
+                              });
+                            }
+                            onDismiss(t.id);
+                            if (tags.length <= 1) setShowAll(false);
+                          }}
+                          style={{
+                            padding: "5px 10px", borderRadius: 7, border: "none",
+                            background: "#F0997B", color: "#141413", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                          }}
+                        >
+                          Tag to entry
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowAll(false);
+                            onDismiss(t.id);
+                            dismissDineTag(supabase, t.id);
+                            onAddType(t.entry_type, t);
+                          }}
+                          style={{
+                            padding: "5px 10px", borderRadius: 7, border: "none",
+                            background: "#F0997B", color: "#141413", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                          }}
+                        >
+                          Log visit
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onDismiss(t.id);
+                          dismissDineTag(supabase, t.id);
+                          if (tags.length <= 1) setShowAll(false);
+                        }}
+                        style={{
+                          padding: "5px 10px", borderRadius: 7,
+                          background: "transparent", border: "0.5px solid rgba(255,255,255,0.1)",
+                          color: "#888780", fontSize: 12, cursor: "pointer",
+                        }}
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
