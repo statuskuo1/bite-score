@@ -65,6 +65,7 @@ import {
   dismissDineTag,
   fetchCoDiners,
   fetchDinedWithByEntry,
+  resolveGroupVisitTaggedNotif,
 } from "./utils/groupVisitsApi.js";
 import {
   findCandidateGroupVisit,
@@ -842,23 +843,21 @@ export default function App() {
    *  `<kind>_visit_id` set. The auto-resolve trigger handles party-logged
    *  fan-out when the last pending member resolves.
    *
-   *  Pre-Phase-2 of the dine_with_tags deprecation, this also wrote a
-   *  reciprocal dine_with_tags row to drive feed/log co-diner pills.
-   *  After Phase 2, those pills read directly from group_visit_members
-   *  via fetch_co_diners_for_entries_v2, so the dine_with_tags write is
-   *  no longer needed — flipping the member row in joinExistingGroupVisit
-   *  achieves the same downstream effect through one canonical write.
-   *
-   *  Stamps `meta.tagged_back: true` on the notif so the panel renders
-   *  past-tense on next open. No `dine_tag_back` notification is inserted
-   *  (removed 2026-05-04). */
+   *  As of 20260528, this also hard-deletes the bell notif (RLS DELETE
+   *  policy on notifications allows recipient self-clear) so the bell
+   *  badge decrements and the row vanishes on next panel open. The local
+   *  `notifications` state stamp keeps the panel rendering "Tagged ✓"
+   *  past-tense until the panel closes, so the user gets in-session
+   *  confirmation. We also call `refreshDineTags()` so the /add banner
+   *  re-pulls from DB and reflects the now-`logged` member row (the
+   *  prior name-based local filter was fragile — case/whitespace mismatch
+   *  could leave the banner showing). */
   async function handleGroupVisitMutualBack(notif) {
     if (!user?.id || !notif?.id) return;
     const fromUserId = notif.from_user_id;
     if (!fromUserId) return;
     const meta = notif.meta || {};
     if (meta.tagged_back) return;
-    const restaurantName = meta.restaurant_name || "";
     const myVisitId = meta.auto_linked_visit_id || null;
     const groupVisitId = meta.group_visit_id || null;
     await Promise.all([
@@ -867,9 +866,10 @@ export default function App() {
         userId: user.id,
         visitId: myVisitId,
       }),
-      supabase.from("notifications")
-        .update({ meta: { ...meta, tagged_back: true } })
-        .eq("id", notif.id),
+      groupVisitId && resolveGroupVisitTaggedNotif(supabase, {
+        userId: user.id,
+        groupVisitId,
+      }),
     ].filter(Boolean));
     if (myVisitId) {
       fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
@@ -879,8 +879,19 @@ export default function App() {
       // see the flipped status until reload.
       setCoDinersRefreshKey((k) => k + 1);
     }
-    setDineTags((prev) => prev.filter((t) => t.tagger_id !== fromUserId
-      || (t.restaurant_name || "").toLowerCase() !== restaurantName.toLowerCase()));
+    // Refresh banner state from DB. Replaces a fragile name-based filter
+    // that missed when meta.restaurant_name and the banner row's name
+    // differed by case/whitespace, leaving the banner showing the now-
+    // resolved tag. Source-of-truth is `fetch_pending_tags_for_user`,
+    // which already excludes status != 'pending' rows.
+    refreshDineTags();
+    // Re-poll the bell count — `resolveGroupVisitTaggedNotif` above hard-
+    // deleted the row, so the badge should decrement immediately rather
+    // than waiting for the next focus/mount.
+    refreshNotifCount();
+    // Local meta stamp keeps the panel rendering "Tagged ✓" past-tense
+    // until the user closes/reopens it; the row vanishes on next open
+    // because the DB row is gone.
     setNotifications((prev) => prev.map((n) => (
       n.id === notif.id ? { ...n, meta: { ...(n.meta || {}), tagged_back: true } } : n
     )));
@@ -1079,6 +1090,8 @@ export default function App() {
   }
   const [search, setSearch] = useState("");
   const [contextRestaurant, setContextRestaurant] = useState(null); // { name, idx } for ±3 ranking view
+  const [contextDrink, setContextDrink] = useState(null);
+  const [contextSweet, setContextSweet] = useState(null);
   const [weights, setWeights] = useState(() => {
     try { const v = localStorage.getItem("bite_restaurantWeights_bootstrap"); if (v) return normalizeWeights(JSON.parse(v)); } catch {}
     return { ...RESTAURANT_WEIGHT_DEFAULTS };
@@ -1455,6 +1468,46 @@ export default function App() {
   const restaurantRankMap = useMemo(
     () => new Map(restaurantGroupsAll.map(({ e }, i) => [e.name, i + 1])),
     [restaurantGroupsAll],
+  );
+
+  const drinkGroupsAll = useMemo(() => {
+    const drinks = cafes.filter(e => DRINK_CATS.includes(e.category));
+    const groups = {};
+    drinks.forEach(e => { const k = e.name; if (!groups[k]) groups[k] = []; groups[k].push(e); });
+    const getSortVal = (grp) => {
+      const avg = (fn) => grp.reduce((a, e) => a + fn(e), 0) / grp.length;
+      if (cafeSortBy === "taste") return avg(e => e.taste);
+      if (cafeSortBy === "bpb") return -avg(e => e.cost / e.portions);
+      if (cafeSortBy === "wait") return -avg(e => e.wait);
+      if (cafeSortBy === "repeat") return avg(e => e.repeatability) + (grp.length * 0.001);
+      return avg(e => calcCafeOutOf10(e.taste, e.cost, e.portions, e.wait, e.useR, e.repeatability, drinkWeights, e.currency_code||"USD") ?? 0);
+    };
+    return Object.entries(groups).sort((a, b) => cafeSortAsc ? getSortVal(a[1]) - getSortVal(b[1]) : getSortVal(b[1]) - getSortVal(a[1]));
+  }, [cafes, cafeSortBy, cafeSortAsc, drinkWeights]);
+
+  const drinkRankMap = useMemo(
+    () => new Map(drinkGroupsAll.map(([name], i) => [name, i + 1])),
+    [drinkGroupsAll],
+  );
+
+  const sweetGroupsAll = useMemo(() => {
+    const sweets = cafes.filter(e => e.category === "Sweets");
+    const groups = {};
+    sweets.forEach(e => { const k = e.name; if (!groups[k]) groups[k] = []; groups[k].push(e); });
+    const getSortVal = (grp) => {
+      const avg = (fn) => grp.reduce((a, e) => a + fn(e), 0) / grp.length;
+      if (sweetsSortBy === "taste") return avg(e => e.taste);
+      if (sweetsSortBy === "bpb") return -avg(e => e.cost / e.portions);
+      if (sweetsSortBy === "wait") return -avg(e => e.wait);
+      if (sweetsSortBy === "repeat") return avg(e => e.repeatability) + (grp.length * 0.001);
+      return avg(e => calcCafeOutOf10(e.taste, e.cost, e.portions, e.wait, e.useR, e.repeatability, sweetWeights, e.currency_code||"USD") ?? 0);
+    };
+    return Object.entries(groups).sort((a, b) => sweetsSortAsc ? getSortVal(a[1]) - getSortVal(b[1]) : getSortVal(b[1]) - getSortVal(a[1]));
+  }, [cafes, sweetsSortBy, sweetsSortAsc, sweetWeights]);
+
+  const sweetRankMap = useMemo(
+    () => new Map(sweetGroupsAll.map(([name], i) => [name, i + 1])),
+    [sweetGroupsAll],
   );
 
   const myRestaurantPlaceIds = useMemo(
@@ -1883,7 +1936,7 @@ export default function App() {
                 selectedCities={cafeCityFilter}
                 onCitiesChange={setCafeCityFilter}
                 search={cafeSearch}
-                onSearch={setCafeSearch}
+                onSearch={(v)=>{setCafeSearch(v);setContextDrink(null);}}
                 filterContent={
                   <div style={{padding:"10px 12px"}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
@@ -1913,21 +1966,38 @@ export default function App() {
                 onToggleSortAsc={()=>setCafeSortAsc(a=>!a)}
               />
               {!sortedDrinks.length&&<p style={{color:"#888780",fontSize:14}}>{cafes.some(e=>DRINK_CATS.includes(e.category))?t.noEntries:t.noDrinks}</p>}
-              {drinkGroupsPage.visible.map(([name,grp],i)=>(
-                <CafeGroupRow key={name} rank={i+1} group={grp} cafeSortBy={cafeSortBy} weights={drinkWeights} user={user} dinedWithForEntry={(id)=>dinedWithMap.get(id)||[]} onEdit={e=>{setEditC(e);setEditDineWith(dinedWithMap.get(e.id)||[]);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={id=>{
-                      const row=cafes.find(x=>x.id===id);
-                      if(!canMutateVisit(row,user))return;
-                      setPendingDelete({onConfirm:async()=>{
-                        try{await supabase.from("cafe_visits").delete().eq("id",id);}catch(err){console.error("cafe delete threw:",err);}
-                        setCafes(p=>p.filter(x=>x.id!==id));
-                      }});
-                    }}/>
-              ))}
-              <ShowMoreButton
-                remaining={drinkGroupsPage.remaining}
-                pageSize={drinkGroupsPage.pageSize}
-                onClick={drinkGroupsPage.showMore}
-              />
+              {contextDrink ? (
+                <div>
+                  <button type="button" onClick={()=>setContextDrink(null)} style={{fontSize:12,color:"#F0997B",background:"none",border:"none",cursor:"pointer",padding:"4px 0 10px",display:"flex",alignItems:"center",gap:4}}>← Back to full list</button>
+                  {drinkGroupsAll.slice(Math.max(0,contextDrink.idx-3),contextDrink.idx+4).map(([name,grp],i)=>{
+                    const absRank=Math.max(1,contextDrink.idx-2)+i;
+                    const isCenter=name===contextDrink.name;
+                    return(
+                      <div key={name} style={isCenter?{outline:"1.5px solid #F0997B",borderRadius:10,marginBottom:6}:{marginBottom:6}}>
+                        <CafeGroupRow rank={absRank} group={grp} cafeSortBy={cafeSortBy} weights={drinkWeights} user={user} dinedWithForEntry={(id)=>dinedWithMap.get(id)||[]} onEdit={e=>{setEditC(e);setEditDineWith(dinedWithMap.get(e.id)||[]);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={id=>{const row=cafes.find(x=>x.id===id);if(!canMutateVisit(row,user))return;setPendingDelete({onConfirm:async()=>{try{await supabase.from("cafe_visits").delete().eq("id",id);}catch(err){console.error("cafe delete threw:",err);}setCafes(p=>p.filter(x=>x.id!==id));}});}}/>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <>
+                  {drinkGroupsPage.visible.map(([name,grp],i)=>(
+                    <div key={name}>
+                      <CafeGroupRow rank={i+1} group={grp} cafeSortBy={cafeSortBy} weights={drinkWeights} user={user} dinedWithForEntry={(id)=>dinedWithMap.get(id)||[]} onEdit={e=>{setEditC(e);setEditDineWith(dinedWithMap.get(e.id)||[]);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={id=>{const row=cafes.find(x=>x.id===id);if(!canMutateVisit(row,user))return;setPendingDelete({onConfirm:async()=>{try{await supabase.from("cafe_visits").delete().eq("id",id);}catch(err){console.error("cafe delete threw:",err);}setCafes(p=>p.filter(x=>x.id!==id));}});}}/>
+                      {cafeSearch.trim()&&(
+                        <button type="button" onClick={()=>{const idx=drinkGroupsAll.findIndex(([n])=>n===name);if(idx>=0){setCafeSearch("");setContextDrink({name,idx});}}} style={{fontSize:11,color:"#F0997B",background:"none",border:"none",cursor:"pointer",padding:"2px 0 6px 58px",display:"block"}}>
+                          Show ±3 rankings around #{drinkRankMap.get(name)}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <ShowMoreButton
+                    remaining={drinkGroupsPage.remaining}
+                    pageSize={drinkGroupsPage.pageSize}
+                    onClick={drinkGroupsPage.showMore}
+                  />
+                </>
+              )}
             </div>
           )}
 
@@ -1941,7 +2011,7 @@ export default function App() {
                 selectedCities={sweetsCityFilter}
                 onCitiesChange={setSweetsCityFilter}
                 search={sweetsSearch}
-                onSearch={setSweetsSearch}
+                onSearch={(v)=>{setSweetsSearch(v);setContextSweet(null);}}
                 filterContent={
                   <>
                     <div style={{padding:"6px 10px",borderBottom:"0.5px solid rgba(255,255,255,0.1)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -1966,21 +2036,38 @@ export default function App() {
                 onToggleSortAsc={()=>setSweetsSortAsc(a=>!a)}
               />
               {!sortedSweets.length&&<p style={{color:"#888780",fontSize:14}}>{cafes.some(e=>e.category==="Sweets")?t.noEntries:t.noSweets}</p>}
-              {sweetGroupsPage.visible.map(([name,grp],i)=>(
-                <CafeGroupRow key={name} rank={i+1} group={grp} cafeSortBy={sweetsSortBy} weights={sweetWeights} user={user} dinedWithForEntry={(id)=>dinedWithMap.get(id)||[]} onEdit={e=>{setEditC(e);setEditDineWith(dinedWithMap.get(e.id)||[]);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={id=>{
-                      const row=cafes.find(x=>x.id===id);
-                      if(!canMutateVisit(row,user))return;
-                      setPendingDelete({onConfirm:async()=>{
-                        try{await supabase.from("cafe_visits").delete().eq("id",id);}catch(err){console.error("cafe delete threw:",err);}
-                        setCafes(p=>p.filter(x=>x.id!==id));
-                      }});
-                    }}/>
-              ))}
-              <ShowMoreButton
-                remaining={sweetGroupsPage.remaining}
-                pageSize={sweetGroupsPage.pageSize}
-                onClick={sweetGroupsPage.showMore}
-              />
+              {contextSweet ? (
+                <div>
+                  <button type="button" onClick={()=>setContextSweet(null)} style={{fontSize:12,color:"#F0997B",background:"none",border:"none",cursor:"pointer",padding:"4px 0 10px",display:"flex",alignItems:"center",gap:4}}>← Back to full list</button>
+                  {sweetGroupsAll.slice(Math.max(0,contextSweet.idx-3),contextSweet.idx+4).map(([name,grp],i)=>{
+                    const absRank=Math.max(1,contextSweet.idx-2)+i;
+                    const isCenter=name===contextSweet.name;
+                    return(
+                      <div key={name} style={isCenter?{outline:"1.5px solid #F0997B",borderRadius:10,marginBottom:6}:{marginBottom:6}}>
+                        <CafeGroupRow rank={absRank} group={grp} cafeSortBy={sweetsSortBy} weights={sweetWeights} user={user} dinedWithForEntry={(id)=>dinedWithMap.get(id)||[]} onEdit={e=>{setEditC(e);setEditDineWith(dinedWithMap.get(e.id)||[]);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={id=>{const row=cafes.find(x=>x.id===id);if(!canMutateVisit(row,user))return;setPendingDelete({onConfirm:async()=>{try{await supabase.from("cafe_visits").delete().eq("id",id);}catch(err){console.error("cafe delete threw:",err);}setCafes(p=>p.filter(x=>x.id!==id));}});}}/>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <>
+                  {sweetGroupsPage.visible.map(([name,grp],i)=>(
+                    <div key={name}>
+                      <CafeGroupRow rank={i+1} group={grp} cafeSortBy={sweetsSortBy} weights={sweetWeights} user={user} dinedWithForEntry={(id)=>dinedWithMap.get(id)||[]} onEdit={e=>{setEditC(e);setEditDineWith(dinedWithMap.get(e.id)||[]);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={id=>{const row=cafes.find(x=>x.id===id);if(!canMutateVisit(row,user))return;setPendingDelete({onConfirm:async()=>{try{await supabase.from("cafe_visits").delete().eq("id",id);}catch(err){console.error("cafe delete threw:",err);}setCafes(p=>p.filter(x=>x.id!==id));}});}}/>
+                      {sweetsSearch.trim()&&(
+                        <button type="button" onClick={()=>{const idx=sweetGroupsAll.findIndex(([n])=>n===name);if(idx>=0){setSweetsSearch("");setContextSweet({name,idx});}}} style={{fontSize:11,color:"#F0997B",background:"none",border:"none",cursor:"pointer",padding:"2px 0 6px 58px",display:"block"}}>
+                          Show ±3 rankings around #{sweetRankMap.get(name)}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <ShowMoreButton
+                    remaining={sweetGroupsPage.remaining}
+                    pageSize={sweetGroupsPage.pageSize}
+                    onClick={sweetGroupsPage.showMore}
+                  />
+                </>
+              )}
             </div>
           )}
         </div>
@@ -2192,16 +2279,41 @@ export default function App() {
               setDineTags(prev=>prev.filter(t=>t.id!==tagId));
               setDineTagCount(prev=>Math.max(0,prev-1));
               try {
-                const raw = sessionStorage.getItem(`bite_dineTagsCache_${user.id}`);
+                const raw = sessionStorage.getItem(`bite_dineTagsCache_v2_${user.id}`);
                 if (raw) {
                   const cached = JSON.parse(raw);
                   cached.tags = (cached.tags||[]).filter(t=>t.id!==tagId);
                   cached.count = Math.max(0,(cached.count||1)-1);
-                  sessionStorage.setItem(`bite_dineTagsCache_${user.id}`, JSON.stringify(cached));
+                  sessionStorage.setItem(`bite_dineTagsCache_v2_${user.id}`, JSON.stringify(cached));
                 }
               } catch {}
+              // Defensive re-pull from DB so the banner reflects truth even
+              // when the local-state filter misses (e.g. tag.id mismatch
+              // from stale state, or duplicate group_visits at the same
+              // place created by the 20260526 backfill). Skipped/logged
+              // member rows are excluded by fetch_pending_tags_for_user, so
+              // a fresh fetch always shows the correct remaining queue.
+              refreshDineTags();
+              // Banner Dismiss/Tag-to-entry deletes the matching bell
+              // notif (DineTagsBanner → resolveGroupVisitTaggedNotif).
+              // Re-poll the count so the badge decrements without waiting
+              // for the next focus/mount cycle.
+              refreshNotifCount();
             }}
             onAddType={(type, tag) => {
+              // v2 banner rows always carry group_visit_id — route through
+              // applyGroupVisitPrefill so the dined-with picker is seeded
+              // from the full group_visit_members list (creator + every
+              // other tagged friend) and addGroupVisitId is set so the save
+              // handler joins the existing group instead of creating a
+              // duplicate. Falling through to applyDineTagPrefill is kept
+              // for any pre-Phase-2 banner state still held in cache; that
+              // path can't seed co-diners (entry_id is null for unlogged
+              // tagged users) but won't crash.
+              if (tag?.group_visit_id) {
+                applyGroupVisitPrefill(tag.group_visit_id);
+                return;
+              }
               if (tag) {
                 applyDineTagPrefill({
                   restaurantName: tag.restaurant_name,
