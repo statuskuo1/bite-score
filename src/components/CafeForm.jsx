@@ -16,6 +16,13 @@ import { DineWithPicker } from "./DineWithPicker.jsx";
 import { getCurrencyForCity, CURRENCY_SYMBOLS } from "../utils/currency.js";
 import { parseVisitDateInput } from "../utils/visitDate.js";
 
+function maskDate(raw) {
+  const digits = raw.replace(/\D/g, "").slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+}
+
 
 const ROAST_LEVELS = [
   { value: "Light", labelKey: "roastLight" },
@@ -390,7 +397,7 @@ export function CafeForm({initial,initialDineWith=[],onSave,onSaveAndContinue,on
           type="text"
           inputMode="numeric"
           value={f.visitDate || ""}
-          onChange={(ev) => inp("visitDate", ev.target.value)}
+          onChange={(ev) => inp("visitDate", maskDate(ev.target.value))}
           placeholder="mm/dd/yyyy"
           style={S.wb}
         />

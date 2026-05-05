@@ -15,6 +15,13 @@ import { DineWithPicker } from "./DineWithPicker.jsx";
 import { getCurrencyForCity, CURRENCY_SYMBOLS } from "../utils/currency.js";
 import { parseVisitDateInput } from "../utils/visitDate.js";
 
+function maskDate(raw) {
+  const digits = raw.replace(/\D/g, "").slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+}
+
 export function RestForm({initial,initialDineWith=[],onSave,onCancel,onFormChange,weights,addType,setAddType,existingEntries,existingCities,places,onPlaceCreated,user,tasteBudIds,tasteStep=0.1,onTasteStepChange}) {
   const {t} = useLang();
   const isEdit = !!initial.id;
@@ -110,7 +117,7 @@ export function RestForm({initial,initialDineWith=[],onSave,onCancel,onFormChang
           type="text"
           inputMode="numeric"
           value={f.visitDate || ""}
-          onChange={(ev) => inp("visitDate", ev.target.value)}
+          onChange={(ev) => inp("visitDate", maskDate(ev.target.value))}
           placeholder="mm/dd/yyyy"
           style={S.wb}
         />
