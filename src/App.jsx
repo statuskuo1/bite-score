@@ -2293,11 +2293,8 @@ export default function App() {
               // place created by the 20260526 backfill). Skipped/logged
               // member rows are excluded by fetch_pending_tags_for_user, so
               // a fresh fetch always shows the correct remaining queue.
-              setTimeout(refreshDineTags, 2500);
-              // Banner Dismiss/Tag-to-entry deletes the matching bell
-              // notif (DineTagsBanner → resolveGroupVisitTaggedNotif).
-              // Re-poll the count so the badge decrements without waiting
-              // for the next focus/mount cycle.
+              // Re-poll the bell count so the badge decrements without
+              // waiting for the next focus/mount cycle.
               refreshNotifCount();
             }}
             onAddType={(type, tag) => {
