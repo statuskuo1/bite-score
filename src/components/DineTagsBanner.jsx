@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { Avatar } from "./community/Avatar.jsx";
-import { dismissDineTag, joinExistingGroupVisit } from "../utils/groupVisitsApi.js";
+import {
+  dismissDineTag,
+  joinExistingGroupVisit,
+  resolveGroupVisitTaggedNotif,
+} from "../utils/groupVisitsApi.js";
 import { supabase } from "../config/supabaseClient.js";
 
 /**
@@ -68,12 +72,25 @@ export function DineTagsBanner({ tags, onDismiss, onAddType, entries, cafes, use
 
   async function handleDismiss() {
     onDismiss(tag.id);
-    await dismissDineTag(supabase, tag.id);
+    await Promise.all([
+      dismissDineTag(supabase, tag.id),
+      // Resolve the matching bell notif at the same time so the badge
+      // decrements and the row vanishes on next panel open. RLS DELETE
+      // policy from 20260528 allows recipient self-clear.
+      tag.group_visit_id && resolveGroupVisitTaggedNotif(supabase, {
+        userId,
+        groupVisitId: tag.group_visit_id,
+      }),
+    ].filter(Boolean));
   }
 
   function handleLogMyVisit() {
     onDismiss(tag.id);
-    dismissDineTag(supabase, tag.id); // dismiss in DB — was missing before
+    // Don't pre-skip the member row here — the user is going to /add to
+    // log their visit. The save flow auto-attaches via
+    // auto_attach_visit_to_group_visits which will flip the same row to
+    // 'logged' and clean up the bell notif inline. Pre-skipping would
+    // leave the user looking 'skipped' even though they did log.
     onAddType(tag.entry_type, tag);
   }
 
@@ -100,11 +117,20 @@ export function DineTagsBanner({ tags, onDismiss, onAddType, entries, cafes, use
     setTaggedConfirm(msg);
 
     if (tag.group_visit_id && userId) {
-      await joinExistingGroupVisit(supabase, {
-        groupVisitId: tag.group_visit_id,
-        userId,
-        visitId: existingEntry.id,
-      });
+      await Promise.all([
+        joinExistingGroupVisit(supabase, {
+          groupVisitId: tag.group_visit_id,
+          userId,
+          visitId: existingEntry.id,
+        }),
+        // Resolve the matching bell notif at the same time so the badge
+        // decrements and the row vanishes on next panel open. RLS DELETE
+        // policy from 20260528 allows recipient self-clear.
+        resolveGroupVisitTaggedNotif(supabase, {
+          userId,
+          groupVisitId: tag.group_visit_id,
+        }),
+      ]);
     }
 
     setTimeout(() => { setTaggedConfirm(null); onDismiss(tag.id); }, 4000);

@@ -809,6 +809,31 @@ export async function dismissDineTag(client, memberId) {
 }
 
 /**
+ * Hard-delete the recipient's `group_visit_tagged` notification for a
+ * given group_visit. Companion to any code path that resolves a pending
+ * member row (banner Dismiss/Tag-to-entry, notif inline "Tag to my entry
+ * ✓", any explicit tag-back) so the bell badge decrements alongside the
+ * banner.
+ *
+ * Auto-attach (server-side) cleans up notifs inline inside the
+ * `auto_attach_visit_to_group_visits` SECURITY DEFINER RPC — see
+ * 20260528 migration. This client helper is for the user-initiated paths.
+ *
+ * Requires the DELETE policy from 20260528 (recipient = auth.uid() = user_id).
+ * No-op if either argument is missing.
+ */
+export async function resolveGroupVisitTaggedNotif(client, { userId, groupVisitId }) {
+  if (!userId || !groupVisitId) return;
+  const { error } = await client
+    .from("notifications")
+    .delete()
+    .eq("user_id", userId)
+    .eq("type", "group_visit_tagged")
+    .eq("meta->>group_visit_id", groupVisitId);
+  if (error) console.warn("[BITE] resolveGroupVisitTaggedNotif:", error.message);
+}
+
+/**
  * Edit-time sync of `group_visit_members` to match the new dine-with picker.
  *
  * Phase 4 of the dine_with_tags deprecation
