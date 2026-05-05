@@ -17,7 +17,8 @@ export function CafeGroupRow({ group, cafeSortBy, onEdit, onDelete, user, weight
     .filter((s) => s != null);
   const avgScore = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
   const avgTaste = group.reduce((a, e) => a + e.taste, 0) / visits;
-  const avgCost = group.reduce((a, e) => a + (e.cost / (e.portions || 1)), 0) / visits;
+  const avgCost = group.reduce((a, e) => a + e.cost, 0) / visits;
+  const avgBpb = group.reduce((a, e) => a + (e.cost / (e.portions || 1)), 0) / visits;
   const avgWait = group.reduce((a, e) => a + e.wait, 0) / visits;
   const avgRepeat = Math.round(group.reduce((a, e) => a + e.repeatability, 0) / visits);
   const avgPortions = group.reduce((a, e) => a + (+e.portions || 1), 0) / visits;
@@ -34,7 +35,7 @@ export function CafeGroupRow({ group, cafeSortBy, onEdit, onDelete, user, weight
       const tv = avgTaste;
       return { val: tv.toFixed(1), label: tasteLabel(tv, t), color: tasteColor(tv) };
     }
-    if (cafeSortBy === "bpb") return { val: "$" + avgCost.toFixed(2), label: "avg/item", color: "#5B9BD5" };
+    if (cafeSortBy === "bpb") return { val: "$" + avgBpb.toFixed(2), label: "avg/item", color: "#5B9BD5" };
     if (cafeSortBy === "wait") return { val: avgWait.toFixed(0) + " min", label: "avg wait", color: "#888780" };
     if (cafeSortBy === "repeat") return { val: "⭐".repeat(avgRepeat) || "✕", label: "avg repeat", color: "#EF9F27" };
     return {
