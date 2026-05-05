@@ -138,6 +138,25 @@ function GuestPreview({ message, onSignIn, children }) {
   );
 }
 
+function getTombstonedIds(userId) {
+  try {
+    const raw = localStorage.getItem(`bite_dismissed_tags_${userId}`);
+    const parsed = JSON.parse(raw || "[]");
+    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    return new Set(parsed.filter((x) => x.t > cutoff).map((x) => x.id));
+  } catch { return new Set(); }
+}
+
+function tombstoneTag(userId, tagId) {
+  try {
+    const raw = localStorage.getItem(`bite_dismissed_tags_${userId}`);
+    const parsed = JSON.parse(raw || "[]");
+    const deduped = parsed.filter((x) => x.id !== tagId).slice(-199);
+    deduped.push({ id: tagId, t: Date.now() });
+    localStorage.setItem(`bite_dismissed_tags_${userId}`, JSON.stringify(deduped));
+  } catch {}
+}
+
 export default function App() {
   const { user, authReady, username, profile, refreshProfile } = useAuth();
   const navigate = useNavigate();
@@ -966,10 +985,15 @@ export default function App() {
       countUnloggedDineTags(supabase, user.id),
       fetchFollowingIds(supabase, user.id),
     ]);
-    setDineTags(tags);
-    setDineTagCount(count);
+    const dismissed = getTombstonedIds(user.id);
+    const filteredTags = dismissed.size ? tags.filter((t) => !dismissed.has(t.id)) : tags;
+    const adjustedCount = filteredTags.length < tags.length
+      ? Math.max(0, count - (tags.length - filteredTags.length))
+      : count;
+    setDineTags(filteredTags);
+    setDineTagCount(adjustedCount);
     setDineTagsReady(true);
-    try { sessionStorage.setItem(`bite_dineTagsCache_v2_${user.id}`, JSON.stringify({ tags, count })); } catch {}
+    try { sessionStorage.setItem(`bite_dineTagsCache_v2_${user.id}`, JSON.stringify({ tags: filteredTags, count: adjustedCount })); } catch {}
     setTasteBudIds(followingIds);
   }, [user?.id]);
 
@@ -2276,6 +2300,7 @@ export default function App() {
             cafes={cafes}
             userId={user.id}
             onDismiss={(tagId)=>{
+              tombstoneTag(user.id, tagId);
               setDineTags(prev=>prev.filter(t=>t.id!==tagId));
               setDineTagCount(prev=>Math.max(0,prev-1));
               try {
