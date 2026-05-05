@@ -41,42 +41,33 @@ export function DineTagsBanner({ tags, onDismiss, onAddType, entries, cafes, use
   const handle = who?.username ? `@${who.username}` : "";
   const count = tags.length;
 
+  // Kind-aware lookup: only search the same-kind list as the tag. The
+  // group_visit_members row carries `restaurant_visit_id` XOR
+  // `cafe_visit_id` based on the parent gv.kind, so handing
+  // joinExistingGroupVisit a cross-kind id (e.g. cafe_visits.id when the
+  // gv is a restaurant) trips an FK violation that fails silently and
+  // leaves the row pending — which then "snaps back" into the banner via
+  // the next refreshDineTags. Restricting the search keeps the
+  // "Tag to entry" button only available when there's a usable entry,
+  // and falls through to "Log visit" otherwise.
   function findExisting(t) {
+    const list = t.entry_type === "cafe" ? cafes : entries;
     const tName = (t.restaurant_name || "").trim().toLowerCase();
     const tCity = (t.city || "").trim().toLowerCase();
-    const match = (list) => tName
-      ? (list || []).find((e) => {
-          const eName = (e.name || "").trim().toLowerCase();
-          const eCity = (e.city || "").trim().toLowerCase();
-          return eName === tName && (!tCity || !eCity || eCity === tCity);
-        })
-      : null;
-    return match(entries) || match(cafes);
+    if (!tName) return null;
+    return (list || []).find((e) => {
+      const eName = (e.name || "").trim().toLowerCase();
+      const eCity = (e.city || "").trim().toLowerCase();
+      return eName === tName && (!tCity || !eCity || eCity === tCity);
+    });
   }
 
-  // Check if the user already has a logged entry for this place (name + city match).
-  // Search both lists — a place like Kasama might be logged as restaurant by one user, cafe by another.
-  const tagName = (tag.restaurant_name || "").trim().toLowerCase();
-  const tagCity = (tag.city || "").trim().toLowerCase();
-  const findMatch = (list) => tagName
-    ? (list || []).find((e) => {
-        const eName = (e.name || "").trim().toLowerCase();
-        const eCity = (e.city || "").trim().toLowerCase();
-        return eName === tagName && (!tagCity || !eCity || eCity === tagCity);
-      })
-    : null;
-  const existingRestEntry = findMatch(entries);
-  const existingCafeEntry = existingRestEntry ? null : findMatch(cafes);
-  const existingEntry = existingRestEntry || existingCafeEntry;
-  const existingEntryType = existingRestEntry ? "restaurant" : "cafe";
+  const existingEntry = findExisting(tag);
 
   async function handleDismiss() {
-    onDismiss(tag.id);
+    onDismiss(tag.id); // optimistic remove — instant UI
     await Promise.all([
       dismissDineTag(supabase, tag.id),
-      // Resolve the matching bell notif at the same time so the badge
-      // decrements and the row vanishes on next panel open. RLS DELETE
-      // policy from 20260528 allows recipient self-clear.
       tag.group_visit_id && resolveGroupVisitTaggedNotif(supabase, {
         userId,
         groupVisitId: tag.group_visit_id,
@@ -104,11 +95,8 @@ export function DineTagsBanner({ tags, onDismiss, onAddType, entries, cafes, use
   // Post-Phase-2 those pills read directly from group_visit_members via
   // fetch_co_diners_for_entries_v2, so flipping the member row is the
   // sole canonical write that achieves the same downstream effect.
-  // existingEntryType is unused here but kept in the surrounding scope
-  // for future use (variant detection, etc).
   async function handleTagToMyEntry() {
     if (!existingEntry) return;
-    void existingEntryType;
     const dateStr = (() => {
       const d = new Date(existingEntry.visited_at || existingEntry.created_at);
       return isNaN(d) ? "" : " · " + d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -316,11 +304,21 @@ export function DineTagsBanner({ tags, onDismiss, onAddType, entries, cafes, use
                           type="button"
                           onClick={async () => {
                             if (t.group_visit_id && userId) {
-                              await joinExistingGroupVisit(supabase, {
-                                groupVisitId: t.group_visit_id,
-                                userId,
-                                visitId: existing.id,
-                              });
+                              await Promise.all([
+                                joinExistingGroupVisit(supabase, {
+                                  groupVisitId: t.group_visit_id,
+                                  userId,
+                                  visitId: existing.id,
+                                }),
+                                // Clear the matching bell notif at the same time
+                                // so the badge decrements and the row vanishes on
+                                // next panel open (single-card handleTagToMyEntry
+                                // already does this; the modal was missed).
+                                resolveGroupVisitTaggedNotif(supabase, {
+                                  userId,
+                                  groupVisitId: t.group_visit_id,
+                                }),
+                              ]);
                             }
                             onDismiss(t.id);
                             if (tags.length <= 1) setShowAll(false);
@@ -336,9 +334,15 @@ export function DineTagsBanner({ tags, onDismiss, onAddType, entries, cafes, use
                         <button
                           type="button"
                           onClick={() => {
+                            // Don't pre-skip — the user is heading to /add to log
+                            // their visit. Auto-attach (server-side) will flip the
+                            // member row to 'logged' and clean up the bell notif
+                            // once the save fires. Pre-skipping would set
+                            // status='skipped', which auto_attach filters out
+                            // (m.status = 'pending'), leaving the user incorrectly
+                            // marked as skipped after a successful log.
                             setShowAll(false);
                             onDismiss(t.id);
-                            dismissDineTag(supabase, t.id);
                             onAddType(t.entry_type, t);
                           }}
                           style={{
@@ -351,10 +355,16 @@ export function DineTagsBanner({ tags, onDismiss, onAddType, entries, cafes, use
                       )}
                       <button
                         type="button"
-                        onClick={() => {
-                          onDismiss(t.id);
-                          dismissDineTag(supabase, t.id);
+                        onClick={async () => {
+                          onDismiss(t.id); // optimistic remove — instant UI
                           if (tags.length <= 1) setShowAll(false);
+                          await Promise.all([
+                            dismissDineTag(supabase, t.id),
+                            t.group_visit_id && resolveGroupVisitTaggedNotif(supabase, {
+                              userId,
+                              groupVisitId: t.group_visit_id,
+                            }),
+                          ].filter(Boolean));
                         }}
                         style={{
                           padding: "5px 10px", borderRadius: 7,
