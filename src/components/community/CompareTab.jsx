@@ -114,7 +114,7 @@ function BothRow({ row, isLast }) {
   );
 }
 
-function DiscoverRow({ row, subLine, badgeText, badgeTone }) {
+function DiscoverRow({ row, subLine }) {
   return (
     <div style={{
       display: "flex", alignItems: "center", gap: 12,
@@ -133,18 +133,9 @@ function DiscoverRow({ row, subLine, badgeText, badgeTone }) {
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
         }}>{subLine}</div>
       </div>
-      <span style={{
-        fontSize: 11, fontWeight: 600, padding: "5px 12px", borderRadius: 999,
-        background: badgeTone.bg, color: badgeTone.color,
-        border: `1px solid ${badgeTone.border}`,
-        whiteSpace: "nowrap", flexShrink: 0,
-      }}>{badgeText}</span>
     </div>
   );
 }
-
-const DISCOVER_TONE = { bg: "rgba(91,155,213,0.14)", color: "#5B9BD5", border: "rgba(91,155,213,0.4)" };
-const RECOMMEND_TONE = { bg: "rgba(151,196,89,0.14)", color: "#97C459", border: "rgba(151,196,89,0.4)" };
 
 const DEFAULT_WEIGHTS = { taste: 50, bpb: 40, wait: 10 };
 
@@ -520,8 +511,6 @@ export function CompareTab({ user, myWeights, username, primedTarget, onFollowCh
                         name: friendName, score: r.theirs.toFixed(2),
                       }),
                     ].filter(Boolean).join(" · ")}
-                    badgeText={t.discoverBadge}
-                    badgeTone={DISCOVER_TONE}
                   />
                 ))}
                 <ShowMoreButton
@@ -551,8 +540,6 @@ export function CompareTab({ user, myWeights, username, primedTarget, onFollowCh
                         score: r.mine.toFixed(2),
                       }),
                     ].filter(Boolean).join(" · ")}
-                    badgeText={t.recommendBadge}
-                    badgeTone={RECOMMEND_TONE}
                   />
                 ))}
                 <ShowMoreButton

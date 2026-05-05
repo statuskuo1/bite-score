@@ -111,10 +111,10 @@ export function RestForm({initial,initialDineWith=[],onSave,onCancel,onFormChang
           inputMode="numeric"
           value={f.visitDate || ""}
           onChange={(ev) => inp("visitDate", ev.target.value)}
-          placeholder="mm/dd/yy"
+          placeholder="mm/dd/yyyy"
           style={S.wb}
         />
-        {visitDateInvalid && <div style={S.err}>Use mm/dd/yy</div>}
+        {visitDateInvalid && <div style={S.err}>Use mm/dd/yyyy</div>}
       </div>
 
       {user && (
