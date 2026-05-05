@@ -59,7 +59,13 @@ import { usePaginatedList } from "./components/usePaginatedList.js";
 import { ShowMoreButton } from "./components/ShowMoreButton.jsx";
 import { NotificationPanel } from "./components/NotificationPanel.jsx";
 import { FeedPostSheet } from "./components/community/FeedPostSheet.jsx";
-import { insertDineTag, fetchUnloggedDineTags, countUnloggedDineTags, dismissDineTag, fetchCoDiners, fetchDinedWithByEntry } from "./utils/dineWithApi.js";
+import {
+  fetchUnloggedDineTags,
+  countUnloggedDineTags,
+  dismissDineTag,
+  fetchCoDiners,
+  fetchDinedWithByEntry,
+} from "./utils/groupVisitsApi.js";
 import {
   findCandidateGroupVisit,
   findAlreadyLoggedMatch,
@@ -70,6 +76,7 @@ import {
   tickGroupVisitsExpiry,
   autoAttachVisitToGroupVisits,
   findExpiredGroupVisitCandidates,
+  syncGroupVisitMembersOnEdit,
 } from "./utils/groupVisitsApi.js";
 import { DineTagsBanner } from "./components/DineTagsBanner.jsx";
 import { toUSD, fromUSD, CURRENCY_SYMBOLS } from "./utils/currency.js";
@@ -758,29 +765,20 @@ export default function App() {
   function handleDineTagTap(notif) {
     setShowNotifPanel(false);
     const meta = notif.meta || {};
-    // Always look up the dine_with_tags row directly — old notifications may
-    // be missing city/cuisine/entry_id in meta. Tagged user can see their own
-    // rows (RLS: tagged_id = auth.uid()).
-    let q = supabase
-      .from("dine_with_tags")
-      .select("city, cuisine, entry_id, entry_type")
-      .eq("tagged_id", user.id)
-      .eq("tagger_id", notif.from_user_id);
-    const lookupQ = meta.entry_id
-      ? q.eq("entry_id", meta.entry_id)
-      : q.ilike("restaurant_name", meta.restaurant_name || "")
-          .lte("created_at", notif.created_at)
-          .order("created_at", { ascending: false });
-    lookupQ.limit(1).maybeSingle().then(({ data: tag }) => {
-      applyDineTagPrefill({
-        restaurantName: meta.restaurant_name,
-        city: tag?.city || meta.city,
-        cuisine: tag?.cuisine || meta.cuisine,
-        taggerId: notif.from_user_id,
-        entryId: tag?.entry_id || meta.entry_id || null,
-        taggerProfile: notif.fromProfile,
-        entryType: tag?.entry_type || meta.entry_type || "restaurant",
-      });
+    // Legacy `dine_tag` tap — kept for notifs in the DB from before the
+    // 2026-05-04 refactor stopped inserting them. Pre-Phase 5 we used to
+    // enrich missing fields from the dine_with_tags row; that table is
+    // gone now, so we just trust whatever meta carries. Old rows may have
+    // missing city/cuisine — applyDineTagPrefill falls through to a places
+    // lookup for those.
+    applyDineTagPrefill({
+      restaurantName: meta.restaurant_name,
+      city: meta.city,
+      cuisine: meta.cuisine,
+      taggerId: notif.from_user_id,
+      entryId: meta.entry_id || null,
+      taggerProfile: notif.fromProfile,
+      entryType: meta.entry_type || "restaurant",
     });
   }
 
@@ -823,105 +821,51 @@ export default function App() {
   // Legacy tag-mutual handler kept for notifications stored in the DB from
   // before the 2026-05-04 tagging refactor. New `dine_tag` notifications are
   // no longer inserted (see src/_archive/dine-tag-notifications.md), so this
-  // is only reachable via old rows. Dismisses the pending dine_with_tags row
-  // and any matching outgoing tag so the banner clears; does NOT insert a
-  // `dine_tag_back` notification — tag-back is now a UI acknowledgement and
-  // the party-logged fan-out covers the "they know you were there" signal.
+  // is only reachable via old rows. As of the dine_with_tags deprecation
+  // (20260526) there's no dine_with_tags row to dismiss either — we just
+  // clear the local banner state and refresh the dinedWithMap. The
+  // group_visit auto-resolve trigger handles the "they know you were
+  // there" signal via the eventual group_visit_all_logged fan-out.
   async function handleDineTagMutualBack(notif) {
     if (!user?.id) return;
     const fromUserId = notif.from_user_id;
     const restaurantName = notif.meta?.restaurant_name || "";
-    const restaurantCity = (notif.meta?.city || "").trim();
-    let outgoingQ = supabase.from("dine_with_tags")
-      .select("id, entry_id, entry_type")
-      .eq("tagger_id", user.id).eq("tagged_id", fromUserId)
-      .ilike("restaurant_name", restaurantName);
-    if (restaurantCity) outgoingQ = outgoingQ.ilike("city", restaurantCity);
-    const [{ data: incomingTag }, { data: outgoingTag }] = await Promise.all([
-      supabase.from("dine_with_tags").select("id").eq("tagger_id", fromUserId).eq("tagged_id", user.id).ilike("restaurant_name", restaurantName).eq("dismissed", false).maybeSingle(),
-      outgoingQ.maybeSingle(),
-    ]);
-    if (!incomingTag) {
-      setDineTags((prev) => prev.filter((t) => t.tagger_id !== fromUserId || (t.restaurant_name || "").toLowerCase() !== restaurantName.toLowerCase()));
-      return;
-    }
-    await Promise.all([
-      dismissDineTag(supabase, incomingTag.id),
-      outgoingTag && dismissDineTag(supabase, outgoingTag.id),
-    ].filter(Boolean));
-    setDineTags((prev) => prev.filter((t) => t.tagger_id !== fromUserId || (t.restaurant_name || "").toLowerCase() !== restaurantName.toLowerCase()));
+    setDineTags((prev) => prev.filter((t) => t.tagger_id !== fromUserId
+      || (t.restaurant_name || "").toLowerCase() !== restaurantName.toLowerCase()));
     fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
   }
 
   /** "Tag them to my entry" action for `group_visit_tagged` (variant
-   *  `auto_linked`). The tagged user already has a matching visit logged at
-   *  this place — this handler attaches the tagger to that existing entry
-   *  (updates the co-diner list via `dine_with_tags`) and dismisses the
-   *  inbound tag row so the Add-screen banner clears.
+   *  `auto_linked`). The tagged user already has a matching visit logged
+   *  at this place — this handler attaches their existing visit to the
+   *  group_visit by flipping their member row to `status='logged'` with
+   *  `<kind>_visit_id` set. The auto-resolve trigger handles party-logged
+   *  fan-out when the last pending member resolves.
    *
-   *  Mechanics:
-   *    – Dismiss the pending `dine_with_tags` row powering the banner.
-   *    – Upsert a reciprocal `dine_with_tags` row tying the tagger onto
-   *      my existing entry (drives co-diner pills on feed + log cards).
-   *    – Stamp `meta.tagged_back: true` on the notif so the panel renders
-   *      past-tense next time it opens.
+   *  Pre-Phase-2 of the dine_with_tags deprecation, this also wrote a
+   *  reciprocal dine_with_tags row to drive feed/log co-diner pills.
+   *  After Phase 2, those pills read directly from group_visit_members
+   *  via fetch_co_diners_for_entries_v2, so the dine_with_tags write is
+   *  no longer needed — flipping the member row in joinExistingGroupVisit
+   *  achieves the same downstream effect through one canonical write.
    *
-   *  No `dine_tag_back` notification is inserted (removed 2026-05-04 — see
-   *  src/_archive/dine-tag-notifications.md). The auto-linked member was
-   *  already logged at create-time, so the parent group visit resolves as
-   *  soon as any remaining pending members log; when that happens the
-   *  Postgres trigger fans out `group_visit_all_logged` to everyone. */
+   *  Stamps `meta.tagged_back: true` on the notif so the panel renders
+   *  past-tense on next open. No `dine_tag_back` notification is inserted
+   *  (removed 2026-05-04). */
   async function handleGroupVisitMutualBack(notif) {
     if (!user?.id || !notif?.id) return;
     const fromUserId = notif.from_user_id;
     if (!fromUserId) return;
     const meta = notif.meta || {};
     if (meta.tagged_back) return;
-    const kind = meta.kind || "restaurant";
     const restaurantName = meta.restaurant_name || "";
-    const restaurantCity = (meta.city || "").trim();
     const myVisitId = meta.auto_linked_visit_id || null;
-    let dwtQ = supabase.from("dine_with_tags")
-      .select("id")
-      .eq("tagger_id", fromUserId)
-      .eq("tagged_id", user.id)
-      .ilike("restaurant_name", restaurantName)
-      .eq("dismissed", false);
-    if (restaurantCity) dwtQ = dwtQ.ilike("city", restaurantCity);
-    // Loop-closed: B (current user) tags A back at B's existing auto-linked
-    // visit. This row is what powers the co-diner pill on B's log entry +
-    // B's feed card via fetch_co_diners_for_entries / fetchDinedWithByEntry,
-    // which key off entry_id + tagged_id (dismissed flag is ignored).
-    //
-    // SELECT-then-INSERT (not upsert with onConflict) because the partial
-    // unique index `dine_with_tags_unique_entry_pair` (where entry_id is not
-    // null) can't be matched by PostgREST's ON CONFLICT inference — there's no
-    // way to send the partial WHERE clause, so the upsert returns HTTP 400.
-    const existingOutQ = myVisitId
-      ? supabase.from("dine_with_tags")
-        .select("id")
-        .eq("tagger_id", user.id)
-        .eq("tagged_id", fromUserId)
-        .eq("entry_id", myVisitId)
-        .maybeSingle()
-      : null;
-    const [{ data: incomingTag }, existingOutRes] = await Promise.all([
-      dwtQ.maybeSingle(),
-      existingOutQ || Promise.resolve({ data: null }),
-    ]);
+    const groupVisitId = meta.group_visit_id || null;
     await Promise.all([
-      incomingTag && dismissDineTag(supabase, incomingTag.id),
-      myVisitId && !existingOutRes?.data && supabase.from("dine_with_tags").insert({
-        tagger_id: user.id,
-        tagged_id: fromUserId,
-        entry_id: myVisitId,
-        entry_type: kind,
-        restaurant_name: restaurantName,
-        city: restaurantCity,
-        cuisine: "",
-        dismissed: true,
-      }).then(({ error: insErr }) => {
-        if (insErr) console.warn("[BITE] dine_with_tags insert (mutual back):", insErr.message);
+      groupVisitId && myVisitId && joinExistingGroupVisit(supabase, {
+        groupVisitId,
+        userId: user.id,
+        visitId: myVisitId,
       }),
       supabase.from("notifications")
         .update({ meta: { ...meta, tagged_back: true } })
@@ -931,8 +875,8 @@ export default function App() {
       fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
       // Tell FeedTab to refetch its co-diner enrichment for loaded posts.
       // RestRow / My Log refreshes via dinedWithMap above; FeedTab keeps its
-      // own coDinersByKey state fed by fetch_co_diners_for_entries that
-      // wouldn't otherwise see the new row until reload.
+      // own coDinersByKey state fed by the v2 RPC that wouldn't otherwise
+      // see the flipped status until reload.
       setCoDinersRefreshKey((k) => k + 1);
     }
     setDineTags((prev) => prev.filter((t) => t.tagger_id !== fromUserId
@@ -989,7 +933,12 @@ export default function App() {
     setDineTagsReady(false);
     if (!user?.id) return;
     try {
-      const raw = sessionStorage.getItem(`bite_dineTagsCache_${user.id}`);
+      // Cache key bumped to v2 alongside the dine_with_tags → group_visit_members
+      // consolidation (20260526). The cached shape carries member_id and
+      // group_visit_id fields the legacy banner consumer didn't, so reusing
+      // the old key would leave returning users with a banner that fails to
+      // tag-back / dismiss until the next refresh.
+      const raw = sessionStorage.getItem(`bite_dineTagsCache_v2_${user.id}`);
       if (raw) {
         const { tags, count } = JSON.parse(raw);
         setDineTags(tags || []);
@@ -1009,7 +958,7 @@ export default function App() {
     setDineTags(tags);
     setDineTagCount(count);
     setDineTagsReady(true);
-    try { sessionStorage.setItem(`bite_dineTagsCache_${user.id}`, JSON.stringify({ tags, count })); } catch {}
+    try { sessionStorage.setItem(`bite_dineTagsCache_v2_${user.id}`, JSON.stringify({ tags, count })); } catch {}
     setTasteBudIds(followingIds);
   }, [user?.id]);
 
@@ -2105,22 +2054,25 @@ export default function App() {
         const prevRestIds = new Set((editDineWith || []).map((p) => p.id));
         const newRestIds = new Set((e.dineWith || []).map((p) => p.id));
         const removedRestIds = [...prevRestIds].filter((id) => !newRestIds.has(id));
-        const newlyTaggedRest = (e.dineWith || []).filter((p) => !prevRestIds.has(p.id));
-        if (removedRestIds.length && e.id) {
-          // Untagging during edit: explicitly delete the rows. Notifications stay
-          // (IG / Strava convention — once delivered, notifications aren't recalled).
-          const { error: delErr } = await supabase.from("dine_with_tags").delete()
-            .eq("tagger_id", user.id).eq("entry_id", e.id).in("tagged_id", removedRestIds);
-          if (delErr) console.warn("[BITE] edit untag delete (rest):", delErr.message);
-        }
-        if (newlyTaggedRest.length && e.id) {
-          await Promise.all(newlyTaggedRest.map((p) => insertDineTag(supabase, {
-            taggerId: user.id, taggedId: p.id, entryId: e.id,
-            entryType: "restaurant", restaurantName: e.name, city: e.city || "", cuisine: e.cuisine || "",
-          })));
-        }
-        if (removedRestIds.length || newlyTaggedRest.length) {
+        const newlyTaggedRest = (e.dineWith || []).filter((p) => !prevRestIds.has(p.id)).map((p) => p.id);
+        // Sync group_visit_members to match the new dine-with picker. The
+        // helper handles: visit-date propagation (any editor), creator-only
+        // member adds/removes, un-expire-on-creator-add, full variant
+        // detection (standard/auto_linked/pick_visit), bell-notif cleanup
+        // for removed members, and auto-create when no group exists yet.
+        // See groupVisitsApi.js → syncGroupVisitMembersOnEdit for the spec.
+        if (e.id && (removedRestIds.length || newlyTaggedRest.length || e.visitedAt)) {
+          await syncGroupVisitMembersOnEdit(supabase, {
+            kind: "restaurant",
+            entryId: e.id,
+            editorId: user.id,
+            placeId: resolvedPlaceId,
+            visitedAt: e.visitedAt,
+            addedUserIds: newlyTaggedRest,
+            removedUserIds: removedRestIds,
+          });
           fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
+          setCoDinersRefreshKey((k) => k + 1);
         }
         setEditR(null); setEditDineWith([]);
       }} onCancel={()=>{setEditR(null);setEditDineWith([]);window.scrollTo({top:0,behavior:"smooth"});}} tasteStep={tasteHalfStep?0.5:0.1} onTasteStepChange={saveTasteStep}/>}
@@ -2161,20 +2113,19 @@ export default function App() {
         const prevCafeIds = new Set((editDineWith || []).map((p) => p.id));
         const newCafeIds = new Set((e.dineWith || []).map((p) => p.id));
         const removedCafeIds = [...prevCafeIds].filter((id) => !newCafeIds.has(id));
-        const newlyTaggedCafe = (e.dineWith || []).filter((p) => !prevCafeIds.has(p.id));
-        if (removedCafeIds.length && e.id) {
-          const { error: delErr } = await supabase.from("dine_with_tags").delete()
-            .eq("tagger_id", user.id).eq("entry_id", e.id).in("tagged_id", removedCafeIds);
-          if (delErr) console.warn("[BITE] edit untag delete (cafe):", delErr.message);
-        }
-        if (newlyTaggedCafe.length && e.id) {
-          await Promise.all(newlyTaggedCafe.map((p) => insertDineTag(supabase, {
-            taggerId: user.id, taggedId: p.id, entryId: e.id,
-            entryType: "cafe", restaurantName: e.name, city: e.city || "", cuisine: e.category || "",
-          })));
-        }
-        if (removedCafeIds.length || newlyTaggedCafe.length) {
+        const newlyTaggedCafe = (e.dineWith || []).filter((p) => !prevCafeIds.has(p.id)).map((p) => p.id);
+        if (e.id && (removedCafeIds.length || newlyTaggedCafe.length || e.visitedAt)) {
+          await syncGroupVisitMembersOnEdit(supabase, {
+            kind: "cafe",
+            entryId: e.id,
+            editorId: user.id,
+            placeId: resolvedPlaceId,
+            visitedAt: e.visitedAt,
+            addedUserIds: newlyTaggedCafe,
+            removedUserIds: removedCafeIds,
+          });
           fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
+          setCoDinersRefreshKey((k) => k + 1);
         }
         setEditC(null); setEditDineWith([]);
       }}
@@ -2193,17 +2144,19 @@ export default function App() {
         const prevIds = new Set((editDineWith||[]).map(p=>p.id));
         const newIds = new Set((e.dineWith||[]).map(p=>p.id));
         const removedIds = [...prevIds].filter((id) => !newIds.has(id));
-        const newlyTagged = (e.dineWith||[]).filter(p=>!prevIds.has(p.id));
-        if (removedIds.length && e.id) {
-          const { error: delErr } = await supabase.from("dine_with_tags").delete()
-            .eq("tagger_id", user.id).eq("entry_id", e.id).in("tagged_id", removedIds);
-          if (delErr) console.warn("[BITE] edit untag delete (cafe save+continue):", delErr.message);
-        }
-        if (newlyTagged.length && e.id) {
-          await Promise.all(newlyTagged.map(p=>insertDineTag(supabase,{taggerId:user.id,taggedId:p.id,entryId:e.id,entryType:"cafe",restaurantName:e.name,city:e.city||"",cuisine:e.category||""})));
-        }
-        if (removedIds.length || newlyTagged.length) {
+        const newlyTagged = (e.dineWith||[]).filter(p=>!prevIds.has(p.id)).map((p) => p.id);
+        if (e.id && (removedIds.length || newlyTagged.length || e.visitedAt)) {
+          await syncGroupVisitMembersOnEdit(supabase, {
+            kind: "cafe",
+            entryId: e.id,
+            editorId: user.id,
+            placeId: resolvedPlaceId,
+            visitedAt: e.visitedAt,
+            addedUserIds: newlyTagged,
+            removedUserIds: removedIds,
+          });
           fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
+          setCoDinersRefreshKey((k) => k + 1);
         }
         setEditC(null); setEditDineWith([]);
         setAddPrefill({ name: e.name, city: e.city||"", placeId: resolvedPlaceId||null, category: e.category });
@@ -2315,37 +2268,23 @@ export default function App() {
                       // Auto-remove from Want to Go now that the viewer has actually been.
                       // Fire-and-forget; removeWantToGo no-ops if the row doesn't exist.
                       removeWantToGo(supabase, user.id, { placeId, kind: "rest" });
-                      const toTag = (e.dineWith || []).filter(p => p.id !== sourceTaggerId);
-                      if (toTag.length) {
-                        // ARCHIVED 2026-05-04: see src/_archive/dine-tag-notifications.md
-                        // (Phase 1: restaurant tags via group_visits). The dine_with_tags
-                        // row still upserts to power feed co-diners + /add banner + LogTab
-                        // badge; only the duplicate `dine_tag` notification is suppressed.
-                        // The `group_visit_tagged` notif emitted by createGroupVisitForSave
-                        // below is the canonical signal to the tagged user.
-                        await Promise.all(toTag.map(p=>insertDineTag(supabase,{
-                          taggerId: user.id,
-                          taggedId: p.id,
-                          entryId: data.id,
-                          entryType: "restaurant",
-                          restaurantName: e.name,
-                          city: e.city||"",
-                          cuisine: e.cuisine||"",
-                        })));
-                        fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
-                      }
                       // ── Group visits ────────────────────────────────────────
-                      // Group visits layer on top of dine_with_tags; the
-                      // insertDineTag loop above stays so feed cards keep
-                      // rendering "dined with …" via the existing co-diners
-                      // RPC. runGroupVisitsForSave handles joining / candidate
-                      // search / SameDinnerSheet / createGroupVisit dispatch.
+                      // group_visit_members is now the sole "dined with" record
+                      // post-Phase-3 of the dine_with_tags deprecation. Feed
+                      // co-diner pills + /add banner + LogTab badge all read
+                      // from group_visit_members via the v2 RPCs (see
+                      // groupVisitsApi.js). createGroupVisit handles all the
+                      // necessary inserts (parent + members + group_visit_tagged
+                      // notifs); runGroupVisitsForSave dispatches between
+                      // joining a candidate group, creating a new one, or
+                      // joining an existing source group via the notif tap.
                       //
-                      // Scenario 4 fix: pass the UNFILTERED dineWith (excluding
-                      // self only) so the candidate search and createGroupVisit
-                      // include sourceTaggerId. The dine_tag insert loop above
-                      // keeps filtering sourceTaggerId — the loop closure for
-                      // dine_with_tags is handled separately below.
+                      // Pass the UNFILTERED dineWith (excluding self only) so
+                      // the candidate search and createGroupVisit include the
+                      // sourceTaggerId — that's what makes the loop-closure
+                      // (B logs after A tagged B → A's group_visit auto-resolves
+                      // and fans out group_visit_all_logged) work via the
+                      // Postgres trigger instead of an explicit reciprocal write.
                       const sourceGroupVisitId = addGroupVisitId;
                       setAddGroupVisitId(null);
                       const groupVisitTaggedIds = (e.dineWith || [])
@@ -2366,46 +2305,10 @@ export default function App() {
                         visitedAt: data.visited_at,
                         visitId: data.id,
                       });
-                      if (sourceTaggerId) {
-                        // ARCHIVED 2026-05-04: see src/_archive/dine-tag-notifications.md
-                        // (Phase 1: restaurant tags via group_visits). The
-                        // `dine_tag_accepted` notification insert was removed here —
-                        // `group_visit_logged` (fired by createGroupVisit / joinExistingGroupVisit
-                        // when the tagged user transitions to status='logged') is the
-                        // canonical signal to the original tagger. The dine_with_tags
-                        // upsert/dismiss below is kept so feed co-diners + banner
-                        // continue to work for restaurants.
-                        //
-                        // SELECT-then-INSERT (not upsert with onConflict) because
-                        // `dine_with_tags_unique_entry_pair` is a partial unique
-                        // index (where entry_id is not null) and PostgREST's ON
-                        // CONFLICT inference can't carry the partial WHERE clause,
-                        // so the upsert returns HTTP 400.
-                        const { data: existingLoopRow } = await supabase.from("dine_with_tags")
-                          .select("id")
-                          .eq("tagger_id", user.id)
-                          .eq("tagged_id", sourceTaggerId)
-                          .eq("entry_id", data.id)
-                          .maybeSingle();
-                        await Promise.all([
-                          !existingLoopRow && supabase.from("dine_with_tags").insert({
-                            tagger_id: user.id, tagged_id: sourceTaggerId,
-                            entry_id: data.id, entry_type: "restaurant",
-                            restaurant_name: e.name, city: e.city||"", cuisine: e.cuisine||"",
-                            dismissed: true,
-                          }).then(({ error: insErr }) => {
-                            if (insErr) console.warn("[BITE] dine_with_tags insert (restaurant loop):", insErr.message);
-                          }),
-                          // Loop closed — clear the original tag from this user's banner.
-                          supabase.from("dine_with_tags")
-                            .update({ dismissed: true })
-                            .eq("tagger_id", sourceTaggerId)
-                            .eq("tagged_id", user.id)
-                            .ilike("restaurant_name", e.name)
-                            .eq("dismissed", false),
-                        ].filter(Boolean));
-                        fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
-                      }
+                      // Refresh the local dinedWithMap so the "dined with" pill
+                      // on the new entry's RestRow + feed card reflects the
+                      // group_visit_members rows just inserted.
+                      fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
                       refreshDineTags();
                       formStateRef.current = null;
                       navigate("/log");
@@ -2435,36 +2338,11 @@ export default function App() {
                   const isFirstCafeEntry = st.entries.length === 0 && cafes.length === 0;
                   const inserted = await insertCafeEntry(e);
                   if (inserted && isFirstCafeEntry && !tasteBudsDone) setShowTasteBudsPrompt(true);
-                  const toTag = (e.dineWith || []).filter(p => p.id !== sourceTaggerId);
-                  if (toTag.length && inserted?.id) {
-                    try {
-                      // ARCHIVED 2026-05-04: see src/_archive/dine-tag-notifications.md
-                      // (Phase 2: cafe tags via group_visits). The dine_with_tags
-                      // row still upserts to power feed co-diners + /add banner +
-                      // LogTab badge; only the duplicate `dine_tag` notification
-                      // is suppressed. The `group_visit_tagged` notif emitted by
-                      // runGroupVisitsForSave below is the canonical signal.
-                      await Promise.all(toTag.map(p=>insertDineTag(supabase,{
-                        taggerId: user.id,
-                        taggedId: p.id,
-                        entryId: inserted.id,
-                        entryType: "cafe",
-                        restaurantName: e.name,
-                        city: e.city||"",
-                        cuisine: e.category||"",
-                      })));
-                      fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
-                    } catch (tagErr) {
-                      console.error("dine tag insert error:", tagErr);
-                    }
-                  }
                   // ── Group visits (cafes) ────────────────────────────────────
-                  // Same shape as the restaurant onSave block — see comments
-                  // there for the join / candidate / SameDinnerSheet dispatch
-                  // logic. Scenario 4 fix: use the UNFILTERED dineWith for
-                  // group-visit purposes (sourceTaggerId is included so the
-                  // candidate prompt fires when B opens /add via A's banner);
-                  // the dine_tag insert loop above keeps filtering it.
+                  // group_visit_members is now the sole "dined with" record
+                  // post-Phase-3 of the dine_with_tags deprecation. See the
+                  // restaurant onSave block above for the rationale; same
+                  // dispatch shape, just kind='cafe'.
                   const sourceGroupVisitId = addGroupVisitId;
                   setAddGroupVisitId(null);
                   if (inserted?.id) {
@@ -2486,45 +2364,9 @@ export default function App() {
                       visitedAt: inserted.visitedAt,
                       visitId: inserted.id,
                     });
-                  }
-                  if (sourceTaggerId && inserted?.id) {
-                    // ARCHIVED 2026-05-04: see src/_archive/dine-tag-notifications.md
-                    // (Phase 2: cafe tags via group_visits). The
-                    // `dine_tag_accepted` notification insert was removed here —
-                    // `group_visit_logged` (fired by createGroupVisit /
-                    // joinExistingGroupVisit when the tagged user transitions to
-                    // status='logged') is the canonical signal to the original
-                    // tagger. The dine_with_tags upsert/dismiss below is kept
-                    // so feed co-diners + banner continue to work for cafes.
-                    //
-                    // SELECT-then-INSERT (not upsert with onConflict) because
-                    // `dine_with_tags_unique_entry_pair` is a partial unique
-                    // index (where entry_id is not null) and PostgREST's ON
-                    // CONFLICT inference can't carry the partial WHERE clause,
-                    // so the upsert returns HTTP 400.
-                    const { data: existingLoopRow } = await supabase.from("dine_with_tags")
-                      .select("id")
-                      .eq("tagger_id", user.id)
-                      .eq("tagged_id", sourceTaggerId)
-                      .eq("entry_id", inserted.id)
-                      .maybeSingle();
-                    await Promise.all([
-                      !existingLoopRow && supabase.from("dine_with_tags").insert({
-                        tagger_id: user.id, tagged_id: sourceTaggerId,
-                        entry_id: inserted.id, entry_type: "cafe",
-                        restaurant_name: e.name, city: e.city||"", cuisine: e.category||"",
-                        dismissed: true,
-                      }).then(({ error: insErr }) => {
-                        if (insErr) console.warn("[BITE] dine_with_tags insert (cafe loop):", insErr.message);
-                      }),
-                      // Loop closed — clear the original tag from this user's banner.
-                      supabase.from("dine_with_tags")
-                        .update({ dismissed: true })
-                        .eq("tagger_id", sourceTaggerId)
-                        .eq("tagged_id", user.id)
-                        .ilike("restaurant_name", e.name)
-                        .eq("dismissed", false),
-                    ].filter(Boolean));
+                    // Refresh the local dinedWithMap so the "dined with" pill
+                    // on the new entry's CafeRow + feed card reflects the
+                    // group_visit_members rows just inserted.
                     fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
                   }
                   refreshDineTags();
@@ -2536,20 +2378,33 @@ export default function App() {
                   setAddInitialDineWith([]);
                   if (e.city) persistLastCity(e.city);
                   const inserted = await insertCafeEntry(e);
-                  const toTag = (e.dineWith || []).filter(p => p.id !== addTagTaggerId);
-                  if (toTag.length && inserted?.id) {
-                    try {
-                      await Promise.all(toTag.map(p=>insertDineTag(supabase,{
-                        taggerId: user.id,
-                        taggedId: p.id,
-                        entryId: inserted.id,
-                        entryType: "cafe",
+                  // Tag persistence: post-Phase-3 of the dine_with_tags
+                  // deprecation, group_visit_members is the sole "dined with"
+                  // record. Save+Continue used to write to dine_with_tags
+                  // only; we now run the same group_visits dispatch as the
+                  // parent onSave so each tagged friend gets their member row
+                  // + group_visit_tagged notif.
+                  if (inserted?.id) {
+                    const groupVisitTaggedIds = (e.dineWith || [])
+                      .map(p => p.id)
+                      .filter(id => id && id !== user.id);
+                    if (groupVisitTaggedIds.length) {
+                      await runGroupVisitsForSave({
+                        kind: "cafe",
+                        sourceGroupVisitId: null,
+                        creatorVisitId: inserted.id,
+                        placeId: inserted.placeId,
                         restaurantName: e.name,
-                        city: e.city||"",
-                        cuisine: e.category||"",
-                      })));
-                    } catch (tagErr) {
-                      console.error("dine tag insert error:", tagErr);
+                        visitedAt: inserted.visitedAt,
+                        taggedIds: groupVisitTaggedIds,
+                      });
+                      await runPostSaveGroupVisitBackfill({
+                        kind: "cafe",
+                        placeId: inserted.placeId,
+                        visitedAt: inserted.visitedAt,
+                        visitId: inserted.id,
+                      });
+                      fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
                     }
                   }
                   formStateRef.current = null;

@@ -24,10 +24,13 @@
  *      the user was tagged into (same mechanism as "tag them back", just
  *      driven by the save itself instead of a user action).
  *
- * Group visits LAYER ON TOP of `dine_with_tags`; they do not replace
- * co-diner tags. The save flow continues to call `insertDineTag(...)` for
- * each tagged friend so feed cards keep rendering "dined with …" via the
- * existing `fetch_co_diners_for_entries` RPC.
+ * As of the dine_with_tags deprecation
+ * (20260526_consolidate_to_group_visit_members /
+ * 20260527_drop_dine_with_tags), `group_visit_members` is the SOLE
+ * source of truth for co-diner relationships. Feed cards, the /add banner,
+ * the LogTab badge, and the CompareTab "dined together" filter all read
+ * from `group_visit_members` via the v2 RPCs (see helpers at the bottom
+ * of this file). The legacy `dine_with_tags` table no longer exists.
  *
  * Phase 2 (`20260523_group_visits_cafes.sql`) extends this to cafes (drinks
  * + sweets). Each function takes a `kind: 'restaurant' | 'cafe'` parameter
@@ -553,5 +556,497 @@ export async function findExpiredGroupVisitCandidates(client, { userId, kind, pl
   } catch (err) {
     console.warn("[BITE] find_expired_group_visit_candidates threw:", err);
     return [];
+  }
+}
+
+// =============================================================================
+// "Dined with" surface (Phase 2 of the dine_with_tags deprecation).
+//
+// These functions replace the legacy `dineWithApi.js` exports. They read
+// from `group_visit_members` instead of `dine_with_tags`, but preserve the
+// same return shapes so call sites can swap in incrementally.
+//
+// Backed by the v2 RPCs added in 20260526_consolidate_to_group_visit_members:
+//   – fetch_co_diners_for_entries_v2 (batched)
+//   – fetch_co_diners_v2             (single-entry, used by /add prefill)
+//   – fetch_pending_tags_for_user    (/add banner data)
+//   – count_pending_tags_for_user    (LogTab badge)
+//
+// Phase 5 drops the legacy `fetch_co_diners*` RPCs and the `_v2` suffix
+// can be removed at that point if desired (purely cosmetic — the names are
+// internal).
+// =============================================================================
+
+const NIL_UUID = "00000000-0000-0000-0000-000000000000";
+
+/**
+ * Resolve "dined with" co-diner profiles for a batch of feed posts.
+ *
+ * Replaces the dine_with_tags-backed `fetchCoDinersForPosts` from feedApi.js.
+ * The v2 RPC reads group_visit_members: for each entry_id, finds the
+ * group_visit it's tied to (via the entry owner's member row) and returns
+ * the OTHER members' profiles. Skipped members are excluded from the pill;
+ * pending members are included so the pre-attach window keeps showing
+ * tagged friends who haven't logged yet.
+ *
+ * `viewerId` is accepted for call-site symmetry but no longer forwarded —
+ * we want viewers to appear in their own "dined with" pill when they were
+ * tagged, so the RPC is invoked with no exclusion.
+ *
+ * Returns a Map keyed by `${kind}-${postId}` so the row component can do
+ * an O(1) lookup against the same key it uses for React `key=`.
+ *
+ * Fails soft: returns an empty Map on any RPC error (the dined-with row
+ * just won't render for affected posts).
+ */
+// eslint-disable-next-line no-unused-vars
+export async function fetchCoDinersForPosts(client, posts, viewerId) {
+  const out = new Map();
+  if (!posts?.length) return out;
+  const entryIds = posts.map((p) => p.id).filter(Boolean);
+  if (!entryIds.length) return out;
+
+  const { data, error } = await client.rpc("fetch_co_diners_for_entries_v2", {
+    p_entry_ids: entryIds,
+    p_exclude_id: NIL_UUID,
+  });
+  if (error) {
+    console.warn("[BITE] fetchCoDinersForPosts (v2):", error.message);
+    return out;
+  }
+  if (!data?.length) return out;
+
+  // The RPC returns one row per (entry_id, tagged user). A single entry
+  // could appear under multiple group_visits (in theory) so we dedupe on
+  // (entry, user_id) into a Map<entry_id, Map<user_id, profile>>.
+  const byEntry = new Map();
+  for (const row of data) {
+    if (!row?.entry_id || !row?.id) continue;
+    if (!byEntry.has(row.entry_id)) byEntry.set(row.entry_id, new Map());
+    byEntry.get(row.entry_id).set(row.id, {
+      id: row.id,
+      username: row.username,
+      display_name: row.display_name,
+      avatar_url: row.avatar_url,
+    });
+  }
+
+  // Re-key by `${kind}-${postId}` for compatibility with the existing
+  // FeedPostRow consumer.
+  for (const post of posts) {
+    if (!post?.id) continue;
+    const profiles = byEntry.get(post.id);
+    if (!profiles?.size) continue;
+    const key = `${post.kind || "restaurant"}-${post.id}`;
+    out.set(key, [...profiles.values()]);
+  }
+  return out;
+}
+
+/**
+ * Build a Map<entryId, Profile[]> of co-diners for each of the user's visits.
+ *
+ * Replaces dineWithApi.fetchDinedWithByEntry. Single round-trip via the
+ * batched v2 RPC over the user's own entry IDs (both restaurant + cafe).
+ *
+ * Loads the user's own restaurant_visits.id and cafe_visits.id, asks the
+ * RPC for co-diners on each, and rolls them up. We pass the user's own id
+ * as p_exclude_id so they don't appear in their own pill.
+ */
+export async function fetchDinedWithByEntry(client, userId) {
+  if (!userId) return new Map();
+
+  const [{ data: restRows, error: restErr }, { data: cafeRows, error: cafeErr }] = await Promise.all([
+    client.from("restaurant_visits").select("id").eq("user_id", userId),
+    client.from("cafe_visits").select("id").eq("user_id", userId),
+  ]);
+  if (restErr) console.warn("[BITE] fetchDinedWithByEntry rest ids:", restErr.message);
+  if (cafeErr) console.warn("[BITE] fetchDinedWithByEntry cafe ids:", cafeErr.message);
+
+  const entryIds = [
+    ...((restRows || []).map((r) => r.id)),
+    ...((cafeRows || []).map((r) => r.id)),
+  ].filter(Boolean);
+  if (!entryIds.length) return new Map();
+
+  const { data, error } = await client.rpc("fetch_co_diners_for_entries_v2", {
+    p_entry_ids: entryIds,
+    p_exclude_id: userId,
+  });
+  if (error) {
+    console.warn("[BITE] fetchDinedWithByEntry (v2):", error.message);
+    return new Map();
+  }
+
+  const map = new Map();
+  for (const row of data || []) {
+    if (!row?.entry_id || !row?.id) continue;
+    if (!map.has(row.entry_id)) map.set(row.entry_id, new Map());
+    map.get(row.entry_id).set(row.id, {
+      id: row.id,
+      username: row.username,
+      display_name: row.display_name,
+      avatar_url: row.avatar_url,
+    });
+  }
+  // Convert inner Maps to arrays for the consumer.
+  const out = new Map();
+  for (const [entryId, byId] of map) {
+    if (byId.size) out.set(entryId, [...byId.values()]);
+  }
+  return out;
+}
+
+/**
+ * Fetch profiles of everyone else dining with the entry owner on a given
+ * entry. Used by /add prefill (applyDineTagPrefill in App.jsx) to seed the
+ * dine-with picker with the rest of the party.
+ *
+ * Replaces dineWithApi.fetchCoDiners. The taggerId argument is ignored
+ * (kept for call-site signature symmetry during Phase 2 → Phase 3
+ * transition); the v2 RPC infers the canonical party from the
+ * group_visit_members row tied to the entry.
+ */
+// eslint-disable-next-line no-unused-vars
+export async function fetchCoDiners(client, { taggerId, entryId, excludeUserId }) {
+  if (!entryId) return [];
+  const { data, error } = await client.rpc("fetch_co_diners_v2", {
+    p_entry_id: entryId,
+    p_exclude_id: excludeUserId || null,
+  });
+  if (error) {
+    console.warn("[BITE] fetchCoDiners (v2):", error.message);
+    return [];
+  }
+  return data || [];
+}
+
+/**
+ * Fetch all pending tag prompts for a user. Powers the /add banner.
+ *
+ * Replaces dineWithApi.fetchUnloggedDineTags. Returns one row per pending
+ * group_visit_members row the user has, hydrated with the tagger's profile
+ * + the parent group_visit's display fields. Filters to status='pending'
+ * on both the member row AND the parent (so expired/resolved groups don't
+ * show up — they're handled by the retroactive prompt instead).
+ *
+ * Return shape mirrors the legacy fetchUnloggedDineTags shape so the
+ * DineTagsBanner consumer doesn't need prop changes:
+ *   { id (= member_id), entry_id (= null), entry_type, tagger_id,
+ *     tagged_id, restaurant_name, city, cuisine, dismissed (= false),
+ *     taggerProfile, visited_at }
+ *
+ * `cuisine` is no longer carried — group_visits doesn't store it. Banner
+ * already handles missing cuisine gracefully (falls through to a places
+ * lookup at prefill time via applyDineTagPrefill).
+ */
+export async function fetchUnloggedDineTags(client, userId) {
+  if (!userId) return [];
+  const { data, error } = await client.rpc("fetch_pending_tags_for_user", {
+    p_user_id: userId,
+  });
+  if (error) {
+    console.warn("[BITE] fetchUnloggedDineTags (v2):", error.message);
+    return [];
+  }
+  return (data || []).map((row) => ({
+    // `id` carries the member_id so dismissTag can target the right row.
+    id: row.member_id,
+    member_id: row.member_id,
+    group_visit_id: row.group_visit_id,
+    entry_id: null,
+    entry_type: row.kind === "cafe" ? "cafe" : "restaurant",
+    tagger_id: row.tagger_id,
+    tagged_id: userId,
+    restaurant_name: row.restaurant_name,
+    city: row.city || "",
+    cuisine: "",
+    dismissed: false,
+    visited_at: row.visited_at,
+    taggerProfile: row.tagger_id
+      ? {
+          id: row.tagger_id,
+          username: row.tagger_username,
+          display_name: row.tagger_display_name,
+          avatar_url: row.tagger_avatar_url,
+        }
+      : null,
+  }));
+}
+
+/**
+ * Count pending tag prompts for the LogTab badge.
+ *
+ * Replaces dineWithApi.countUnloggedDineTags.
+ */
+export async function countUnloggedDineTags(client, userId) {
+  if (!userId) return 0;
+  const { data, error } = await client.rpc("count_pending_tags_for_user", {
+    p_user_id: userId,
+  });
+  if (error) {
+    console.warn("[BITE] countUnloggedDineTags (v2):", error.message);
+    return 0;
+  }
+  return typeof data === "number" ? data : 0;
+}
+
+/**
+ * Dismiss a pending tag — flips the user's group_visit_members row to
+ * status='skipped'. RLS already permits `auth.uid() = user_id` updates.
+ *
+ * Replaces dineWithApi.dismissDineTag. Banner consumers pass either the
+ * member_id directly or the legacy `tag.id` (which we re-aliased to
+ * member_id in fetchUnloggedDineTags above), so this works in both shapes.
+ */
+export async function dismissDineTag(client, memberId) {
+  if (!memberId) return;
+  const { error } = await client
+    .from("group_visit_members")
+    .update({ status: "skipped" })
+    .eq("id", memberId);
+  if (error) console.warn("[BITE] dismissDineTag (v2):", error.message);
+}
+
+/**
+ * Edit-time sync of `group_visit_members` to match the new dine-with picker.
+ *
+ * Phase 4 of the dine_with_tags deprecation
+ * (20260526_consolidate_to_group_visit_members). The save flow has always
+ * propagated tag changes via createGroupVisit at create-time; this helper
+ * is the equivalent for edits.
+ *
+ * Behavior (see plan: cafe-group-backfill-cleanup → deprecate-dine-with-tags):
+ *
+ *   1. Look up the group_visit via `<kind>_visit_id = entryId` joined to the
+ *      editor's member row (the entry's owner). Three cases:
+ *        a. No group exists AND addedUserIds non-empty → fall through to
+ *           createGroupVisit (a fresh group, even if visitedAt is old).
+ *        b. Group exists, status='pending' → continue to step 2.
+ *        c. Group exists, status='expired' or 'resolved' AND editor is
+ *           creator AND addedUserIds non-empty → un-expire (pending,
+ *           resolved_at=null), then continue.
+ *
+ *   2. Visit-date propagation (any editor, regardless of creator):
+ *      if entry's visited_at differs from parent's, UPDATE parent to match.
+ *      Last writer wins. Decoupled from member ownership so non-creators
+ *      can still keep the day-7 expiry clock honest by fixing the date.
+ *
+ *   3. Member-mutation guard: if editor is NOT gv.created_by, skip
+ *      member adds/removes. Non-creator can still flip own status via
+ *      dismissDineTag / joinExistingGroupVisit elsewhere.
+ *
+ *   4. For each removedUserIds (creator only):
+ *        - DELETE group_visit_members WHERE group_visit_id, user_id, and
+ *          tagged_by = editor (RLS gates by tagged_by; our app guard above
+ *          is defense-in-depth).
+ *        - DELETE notifications WHERE user_id = X, type='group_visit_tagged',
+ *          meta.group_visit_id = gv.id (hard-delete the bell ping; UX call:
+ *          stale notifs lead to silent no-op join taps).
+ *      The AFTER DELETE trigger (Phase 1) handles auto-resolve fan-out.
+ *
+ *   5. For each addedUserIds (creator only):
+ *        - findAlreadyLoggedMatch to pick variant (standard/auto_linked/pick_visit).
+ *        - Upsert member row ON CONFLICT (group_visit_id, user_id) so re-adding
+ *          someone previously removed/skipped works cleanly.
+ *        - If variant=auto_linked, follow up with status='logged' + visit_id
+ *          (the AFTER UPDATE trigger may fire group_visit_all_logged if this
+ *          fills the last pending slot — same as create-time).
+ *        - INSERT one group_visit_tagged notification.
+ */
+export async function syncGroupVisitMembersOnEdit(client, {
+  kind,
+  entryId,
+  editorId,
+  placeId,
+  visitedAt,
+  addedUserIds,
+  removedUserIds,
+}) {
+  if (!entryId || !editorId) return;
+  const k = normalizeKind(kind);
+  const memberVisitCol = memberVisitColumnFor(k);
+  const placeCol = placeColumnFor(k);
+  const adds = (addedUserIds || []).filter(Boolean).filter((id) => id !== editorId);
+  const removes = (removedUserIds || []).filter(Boolean).filter((id) => id !== editorId);
+
+  try {
+    // 1. Find the editor's member row tied to this entry, hydrate the parent.
+    const { data: editorRows, error: editorErr } = await client
+      .from("group_visit_members")
+      .select(`group_visit_id, group_visits(${GROUP_VISIT_SELECT})`)
+      .eq("user_id", editorId)
+      .eq(memberVisitCol, entryId);
+    if (editorErr) {
+      console.warn("[BITE] syncGroupVisitMembersOnEdit lookup:", editorErr.message);
+      return;
+    }
+    const editorRow = (editorRows || [])[0];
+    const gv = editorRow?.group_visits || null;
+
+    // 1a. No group exists yet — auto-create if there are adds to make.
+    if (!gv) {
+      if (!adds.length || !placeId) return;
+      // findAlreadyLoggedMatch lets createGroupVisit pick variants per friend
+      // exactly as it does at original-save time.
+      const taggedMembers = await Promise.all(adds.map(async (userId) => {
+        const matches = await findAlreadyLoggedMatch(client, {
+          kind: k, userId, placeId, visitedAt,
+        });
+        let variant = "standard";
+        let visitId;
+        let candidateVisitIds;
+        if (matches.length === 1) {
+          variant = "auto_linked";
+          visitId = matches[0].id;
+        } else if (matches.length >= 2) {
+          variant = "pick_visit";
+          candidateVisitIds = matches.map((m) => m.id);
+        }
+        return {
+          userId, variant,
+          status: variant === "auto_linked" ? "logged" : "pending",
+          ...(visitId ? { visitId } : {}),
+          ...(candidateVisitIds ? { candidateVisitIds } : {}),
+        };
+      }));
+      await createGroupVisit(client, {
+        kind: k, creatorId: editorId, placeId,
+        restaurantName: "",
+        visitedAt: visitedAt || new Date().toISOString(),
+        creatorVisitId: entryId,
+        taggedMembers,
+      });
+      return;
+    }
+
+    // 2. Visit-date propagation. Any editor can keep the parent's clock
+    //    aligned with their own entry's date. Last writer wins.
+    if (visitedAt && gv.visited_at !== visitedAt) {
+      const { error: dateErr } = await client
+        .from("group_visits")
+        .update({ visited_at: visitedAt })
+        .eq("id", gv.id);
+      if (dateErr) console.warn("[BITE] syncGroupVisitMembersOnEdit date:", dateErr.message);
+    }
+
+    // 3. Member-mutation guard. Only the original creator mutates the guest
+    //    list. Non-creators can still flip their own status elsewhere.
+    if (gv.created_by !== editorId) return;
+
+    // 1c. Un-expire on creator-add against an expired/resolved parent.
+    if ((gv.status === "expired" || gv.status === "resolved") && adds.length) {
+      const { error: unexpErr } = await client
+        .from("group_visits")
+        .update({ status: "pending", resolved_at: null })
+        .eq("id", gv.id);
+      if (unexpErr) console.warn("[BITE] syncGroupVisitMembersOnEdit unexpire:", unexpErr.message);
+    } else if (gv.status !== "pending" && !adds.length) {
+      // Group is dormant and we have no adds to make — nothing to do.
+      return;
+    }
+
+    // 4. Removes. RLS gates DELETE by tagged_by = auth.uid(); our app guard
+    //    in step 3 already restricted us to creator-edits, so the canonical
+    //    creator-tagged rows match. Anyone other-tagged stays put.
+    if (removes.length) {
+      await Promise.all(removes.map(async (userId) => {
+        const { error: delMemErr } = await client
+          .from("group_visit_members")
+          .delete()
+          .eq("group_visit_id", gv.id)
+          .eq("user_id", userId)
+          .eq("tagged_by", editorId);
+        if (delMemErr) {
+          console.warn("[BITE] syncGroupVisitMembersOnEdit delete member:", delMemErr.message);
+        }
+        // Hard-delete the bell ping at the same time. Stale group_visit_tagged
+        // notifs lead to silent no-op joins (the join no-ops because there's
+        // no member row left). meta->>group_visit_id is the precise filter.
+        const { error: delNotErr } = await client
+          .from("notifications")
+          .delete()
+          .eq("user_id", userId)
+          .eq("type", "group_visit_tagged")
+          .eq("meta->>group_visit_id", gv.id);
+        if (delNotErr) {
+          console.warn("[BITE] syncGroupVisitMembersOnEdit delete notif:", delNotErr.message);
+        }
+      }));
+    }
+
+    // 5. Adds.
+    if (adds.length) {
+      await Promise.all(adds.map(async (userId) => {
+        // 5a. Variant detection mirrors createGroupVisit at create-time.
+        const matches = await findAlreadyLoggedMatch(client, {
+          kind: k, userId, placeId, visitedAt: visitedAt || gv.visited_at,
+        });
+        let variant = "standard";
+        let matchedVisitId = null;
+        let candidateVisitIds = null;
+        if (matches.length === 1) {
+          variant = "auto_linked";
+          matchedVisitId = matches[0].id;
+        } else if (matches.length >= 2) {
+          variant = "pick_visit";
+          candidateVisitIds = matches.map((m) => m.id);
+        }
+
+        // 5b. Upsert the member row. ON CONFLICT (group_visit_id, user_id)
+        //     resets status='pending', tagged_by=editor, notified_at=now()
+        //     so re-adding a previously-removed/skipped user works cleanly.
+        const { error: upsertErr } = await client
+          .from("group_visit_members")
+          .upsert({
+            group_visit_id: gv.id,
+            user_id: userId,
+            tagged_by: editorId,
+            status: "pending",
+            notified_at: new Date().toISOString(),
+            // Don't pre-set visit_id here; the auto-link UPDATE below
+            // handles that (and it's status='pending' until then anyway).
+          }, { onConflict: "group_visit_id,user_id" });
+        if (upsertErr) {
+          console.warn("[BITE] syncGroupVisitMembersOnEdit upsert member:", upsertErr.message);
+          return;
+        }
+
+        // 5c. Auto-link follow-up flips status to 'logged' + attaches the
+        //     matched visit_id. The AFTER UPDATE trigger may fire
+        //     group_visit_all_logged here if this fills the last pending slot.
+        if (variant === "auto_linked" && matchedVisitId) {
+          const { error: linkErr } = await client
+            .from("group_visit_members")
+            .update({ status: "logged", [memberVisitCol]: matchedVisitId })
+            .eq("group_visit_id", gv.id)
+            .eq("user_id", userId);
+          if (linkErr) {
+            console.warn("[BITE] syncGroupVisitMembersOnEdit auto-link:", linkErr.message);
+          }
+        }
+
+        // 5d. One group_visit_tagged notif per added user. Meta shape
+        //     mirrors createGroupVisit lines 291-308.
+        const meta = {
+          group_visit_id: gv.id,
+          kind: gv.kind,
+          place_id: gv[placeCol] || placeId,
+          restaurant_name: gv.restaurant_name || "",
+          visited_at: visitedAt || gv.visited_at,
+          variant,
+          ...(matchedVisitId ? { auto_linked_visit_id: matchedVisitId } : {}),
+          ...(candidateVisitIds?.length ? { candidate_visit_ids: candidateVisitIds } : {}),
+        };
+        await insertNotification(client, {
+          userId,
+          fromUserId: editorId,
+          type: "group_visit_tagged",
+          meta,
+        });
+      }));
+    }
+  } catch (err) {
+    console.warn("[BITE] syncGroupVisitMembersOnEdit threw:", err);
   }
 }

@@ -149,69 +149,15 @@ export async function fetchVisitByIdAndType(client, postId, postType) {
 }
 
 /**
- * Resolve "dined with" co-diner profiles for a batch of feed posts.
+ * Re-export of the v2 co-diners resolver.
  *
- * Calls the SECURITY DEFINER `fetch_co_diners_for_entries` RPC (added in
- * 20260514) so the viewer can see co-diners on someone else's post even
- * though `dine_with_tags` per-row RLS would otherwise hide those tags.
+ * As of Phase 2 of the dine_with_tags deprecation
+ * (20260526_consolidate_to_group_visit_members), this thin wrapper just
+ * forwards to `fetchCoDinersForPosts` in `groupVisitsApi.js`, which calls
+ * the v2 SECURITY DEFINER RPC `fetch_co_diners_for_entries_v2` reading
+ * from `group_visit_members` instead of `dine_with_tags`.
  *
- * We want the viewer to appear in their own "dined with" pill when they
- * were tagged, i.e. no exclusion. Passing `null` for `p_exclude_id` only
- * works against the body shipped in 20260521 — the original 20260514
- * body runs `dt.tagged_id <> NULL` which is `UNKNOWN` for every row in
- * Postgres, returning an empty result set.
- *
- * To stay decoupled from the migration's deploy order, we pass a NIL
- * UUID instead. No real `tagged_id` matches `'00000000-...'`, so both
- * the original and the NULL-tolerant function bodies return every
- * co-diner with no exclusion. (FeedPostRow renders the viewer as
- * `@username` to disambiguate from other co-diners' first names.)
- *
- * `viewerId` is accepted for call-site symmetry but no longer forwarded.
- *
- * Returns a Map keyed by `${kind}-${postId}` so the row component can do
- * an O(1) lookup against the same key it uses for React `key=`.
- *
- * Fails soft: returns an empty Map on any RPC error (the dined-with row
- * just won't render for affected posts).
+ * Existing callers (FeedTab, FeedPostSheet) keep importing from feedApi
+ * for now; Phase 5 will move the import path entirely.
  */
-const NIL_UUID = "00000000-0000-0000-0000-000000000000";
-
-// eslint-disable-next-line no-unused-vars
-export async function fetchCoDinersForPosts(client, posts, viewerId) {
-  const out = new Map();
-  if (!posts?.length) return out;
-  const entryIds = posts.map((p) => p.id).filter(Boolean);
-  if (!entryIds.length) return out;
-
-  const { data, error } = await client.rpc("fetch_co_diners_for_entries", {
-    p_entry_ids: entryIds,
-    p_exclude_id: NIL_UUID,
-  });
-  if (error) {
-    console.warn("[BITE] fetchCoDinersForPosts:", error.message);
-    return out;
-  }
-  if (!data?.length) return out;
-
-  /** The RPC returns one row per (entry_id, tagged user). Group locally
-   *  into a Map<entry_id, Map<profile_id, profile>> so duplicate
-   *  (entry, tagged) rows from a hosted DB that hasn't run the 20260516
-   *  cleanup migration yet still collapse to one entry per profile. Mirrors
-   *  the dedupe pattern in fetchDinedWithByEntry. */
-  const byEntry = new Map();
-  for (const row of data) {
-    if (!byEntry.has(row.entry_id)) byEntry.set(row.entry_id, new Map());
-    byEntry.get(row.entry_id).set(row.id, {
-      id: row.id,
-      username: row.username,
-      display_name: row.display_name,
-      avatar_url: row.avatar_url,
-    });
-  }
-  for (const post of posts) {
-    const m = byEntry.get(post.id);
-    if (m?.size) out.set(`${post.kind}-${post.id}`, [...m.values()]);
-  }
-  return out;
-}
+export { fetchCoDinersForPosts } from "./groupVisitsApi.js";

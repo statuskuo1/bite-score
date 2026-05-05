@@ -1,18 +1,20 @@
 import { useState } from "react";
 import { Avatar } from "./community/Avatar.jsx";
-import { dismissDineTag } from "../utils/dineWithApi.js";
+import { dismissDineTag, joinExistingGroupVisit } from "../utils/groupVisitsApi.js";
 import { supabase } from "../config/supabaseClient.js";
 
 /**
- * Banner shown on /add when the signed-in user has been tagged in
- * someone else's dine_with_tags row they haven't dismissed yet.
+ * Banner shown on /add when the signed-in user has a pending
+ * group_visit_members row (someone tagged them in a group visit they
+ * haven't logged yet). Sourced via fetch_pending_tags_for_user RPC.
  *
  * Shows one card at a time. Badge in the top-right shows total pending count.
  * Both actions advance to the next card automatically.
  *
  * Props:
- *   tags      - array returned by fetchUnloggedDineTags
- *   onDismiss - (tagId) => void — called after optimistic dismiss
+ *   tags      - array returned by fetchUnloggedDineTags (v2 shape with
+ *               member_id + group_visit_id surfaced)
+ *   onDismiss - (memberId) => void — called after optimistic dismiss
  *   onAddType - (type, tag) => void — jump to add form
  *   entries   - user's restaurant_visits (to detect already-logged places)
  *   cafes     - user's cafe_visits
@@ -55,14 +57,21 @@ export function DineTagsBanner({ tags, onDismiss, onAddType, entries, cafes, use
     onAddType(tag.entry_type, tag);
   }
 
-  // "Tag to my entry" — attaches the tagger onto the user's existing log at
-  // this place by upserting a reciprocal dine_with_tags row (drives co-diner
-  // pills on feed + log cards) and dismissing the inbound tag so the banner
-  // clears. No `dine_tag_back` notification is inserted (removed 2026-05-04
-  // — see src/_archive/dine-tag-notifications.md). The group_visit layer
-  // will handle any "whole party logged" fan-out when applicable.
+  // "Tag to my entry" — flips the user's pending group_visit_members row
+  // to status='logged' and attaches their existing visit_id, via
+  // joinExistingGroupVisit. The auto-resolve trigger then handles the
+  // "whole party logged" fan-out via group_visit_all_logged.
+  //
+  // Pre-Phase-2 of the dine_with_tags deprecation, this also wrote a
+  // reciprocal dine_with_tags row to drive feed/log co-diner pills.
+  // Post-Phase-2 those pills read directly from group_visit_members via
+  // fetch_co_diners_for_entries_v2, so flipping the member row is the
+  // sole canonical write that achieves the same downstream effect.
+  // existingEntryType is unused here but kept in the surrounding scope
+  // for future use (variant detection, etc).
   async function handleTagToMyEntry() {
     if (!existingEntry) return;
+    void existingEntryType;
     const dateStr = (() => {
       const d = new Date(existingEntry.visited_at || existingEntry.created_at);
       return isNaN(d) ? "" : " · " + d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -70,33 +79,13 @@ export function DineTagsBanner({ tags, onDismiss, onAddType, entries, cafes, use
     const msg = `@${who?.username || name} tagged to your ${tag.restaurant_name}${dateStr}`;
     setTaggedConfirm(msg);
 
-    // Check for existing outgoing link — prevents duplicate rows in scenarios
-    // where both users already independently tagged each other. Scope by
-    // entry_id when we have it so we don't false-match an unrelated past
-    // visit at a place with the same name.
-    const { data: existingOutgoing } = await supabase
-      .from("dine_with_tags")
-      .select("id")
-      .eq("tagger_id", userId)
-      .eq("tagged_id", tag.tagger_id)
-      .eq("entry_id", existingEntry.id)
-      .ilike("restaurant_name", tag.restaurant_name)
-      .maybeSingle();
-
-    await Promise.all([
-      dismissDineTag(supabase, tag.id),
-      existingOutgoing && dismissDineTag(supabase, existingOutgoing.id),
-      !existingOutgoing && supabase.from("dine_with_tags").upsert({
-        tagger_id: userId,
-        tagged_id: tag.tagger_id,
-        entry_id: existingEntry.id,
-        entry_type: existingEntryType,
-        restaurant_name: tag.restaurant_name,
-        city: tag.city || "",
-        cuisine: tag.cuisine || "",
-        dismissed: true,
-      }, { ignoreDuplicates: true }),
-    ].filter(Boolean));
+    if (tag.group_visit_id && userId) {
+      await joinExistingGroupVisit(supabase, {
+        groupVisitId: tag.group_visit_id,
+        userId,
+        visitId: existingEntry.id,
+      });
+    }
 
     setTimeout(() => { setTaggedConfirm(null); onDismiss(tag.id); }, 4000);
   }

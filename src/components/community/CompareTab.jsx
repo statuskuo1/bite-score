@@ -284,15 +284,41 @@ export function CompareTab({ user, myWeights, username, primedTarget, onFollowCh
     if (!user?.id || !target?.id) { setDinedTogetherPlaceIds(new Set()); return; }
     let cancelled = false;
     (async () => {
-      const { data: tags } = await supabase
-        .from("dine_with_tags")
-        .select("entry_id, entry_type")
-        .or(`and(tagger_id.eq.${user.id},tagged_id.eq.${target.id}),and(tagger_id.eq.${target.id},tagged_id.eq.${user.id})`)
-        .not("entry_id", "is", null);
+      // Find places where the viewer and the target both share a group_visit.
+      // Post-Phase-3 of the dine_with_tags deprecation, the source of truth
+      // is group_visit_members. Three round-trips:
+      //   1. all group_visit_ids the viewer is a member of
+      //   2. filter to those the target is ALSO a member of (intersection)
+      //   3. get logged member rows on those shared groups (either user) to
+      //      extract entry_ids → place_ids
+      const { data: viewerGroups } = await supabase
+        .from("group_visit_members")
+        .select("group_visit_id")
+        .eq("user_id", user.id);
       if (cancelled) return;
-      if (!tags?.length) { setDinedTogetherPlaceIds(new Set()); return; }
-      const restIds = tags.filter((r) => r.entry_type !== "cafe").map((r) => r.entry_id);
-      const cafeIds = tags.filter((r) => r.entry_type === "cafe").map((r) => r.entry_id);
+      const viewerGvIds = [...new Set((viewerGroups || []).map((r) => r.group_visit_id))];
+      if (!viewerGvIds.length) { setDinedTogetherPlaceIds(new Set()); return; }
+
+      const { data: sharedGroups } = await supabase
+        .from("group_visit_members")
+        .select("group_visit_id")
+        .eq("user_id", target.id)
+        .in("group_visit_id", viewerGvIds);
+      if (cancelled) return;
+      const sharedGvIds = [...new Set((sharedGroups || []).map((r) => r.group_visit_id))];
+      if (!sharedGvIds.length) { setDinedTogetherPlaceIds(new Set()); return; }
+
+      const { data: members } = await supabase
+        .from("group_visit_members")
+        .select("restaurant_visit_id, cafe_visit_id")
+        .in("group_visit_id", sharedGvIds)
+        .in("user_id", [user.id, target.id])
+        .eq("status", "logged");
+      if (cancelled) return;
+      const restIds = (members || []).map((r) => r.restaurant_visit_id).filter(Boolean);
+      const cafeIds = (members || []).map((r) => r.cafe_visit_id).filter(Boolean);
+      if (!restIds.length && !cafeIds.length) { setDinedTogetherPlaceIds(new Set()); return; }
+
       const [restRes, cafeRes] = await Promise.all([
         restIds.length ? supabase.from("restaurant_visits").select("place_id").in("id", restIds) : { data: [] },
         cafeIds.length ? supabase.from("cafe_visits").select("place_id").in("id", cafeIds) : { data: [] },

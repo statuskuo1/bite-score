@@ -2,10 +2,18 @@
 # notification paths
 
 Status: **Archived** — code paths below were removed from the active
-codebase on 2026-05-04 as part of the tagging notifications refactor. The
-underlying `dine_with_tags` rows are still written everywhere (they power
-feed co-diner avatars, the `/add` `DineTagsBanner`, and the LogTab
-unread-tags badge); only the notifications listed below were dropped.
+codebase on 2026-05-04 as part of the tagging notifications refactor.
+
+**Update (2026-05-04, dine_with_tags deprecation):** The
+`dine_with_tags` table itself was dropped in
+`20260527_drop_dine_with_tags.sql` — the snippets below reference a table
+that no longer exists. Reverting any of them now requires first restoring
+the table via `20260510_dine_with_tags.sql` +
+`20260516_dine_with_tags_unique.sql`, plus re-creating the legacy
+`fetch_co_diners*` RPCs (see `20260513_co_diners_rpc.sql` /
+`20260514_feed_reactions_and_co_diners_batch.sql` /
+`20260521_co_diners_no_exclude.sql`). Co-diner avatars + `/add` banner +
+LogTab badge are now driven by `group_visit_members` via the `_v2` RPCs.
 
 This file is the authoritative source of the removed snippets so a future
 revert is a copy-paste away. Do **not** import or call from this file —
