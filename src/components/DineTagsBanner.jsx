@@ -37,8 +37,7 @@ export function DineTagsBanner({ tags, onDismiss, onAddType, entries, cafes, use
 
   const tag = tags[0];
   const who = tag.taggerProfile;
-  const name = who?.display_name || who?.username || "Someone";
-  const handle = who?.username ? `@${who.username}` : "";
+  const handle = who?.username ? `@${who.username}` : "Someone";
   const count = tags.length;
 
   // Kind-aware lookup: only search the same-kind list as the tag. The
@@ -167,8 +166,7 @@ export function DineTagsBanner({ tags, onDismiss, onAddType, entries, cafes, use
               <Avatar profile={who} size={32} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, color: "#F1EFE8", lineHeight: 1.4 }}>
-                  <span style={{ fontWeight: 600 }}>{name}</span>
-                  {handle && <span style={{ color: "#888780", marginLeft: 4 }}>{handle}</span>}
+                  <span style={{ fontWeight: 600 }}>{handle}</span>
                   {" "}tagged you at
                 </div>
                 <div style={{ fontSize: 13, color: "#F0997B", fontWeight: 500, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -282,7 +280,7 @@ export function DineTagsBanner({ tags, onDismiss, onAddType, entries, cafes, use
             <div style={{ overflowY: "auto", padding: "0 16px", flex: 1 }}>
               {tags.map((t) => {
                 const tWho = t.taggerProfile;
-                const tName = tWho?.display_name || tWho?.username || "Someone";
+                const tHandle = tWho?.username ? `@${tWho.username}` : "Someone";
                 const existing = findExisting(t);
                 return (
                   <div key={t.id} style={{
@@ -292,7 +290,7 @@ export function DineTagsBanner({ tags, onDismiss, onAddType, entries, cafes, use
                     <Avatar profile={tWho} size={28} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 12, color: "#F1EFE8", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {tName}{tWho?.username ? ` @${tWho.username}` : ""}
+                        {tHandle}
                       </div>
                       <div style={{ fontSize: 12, color: "#F0997B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {t.restaurant_name}{t.city ? ` · ${t.city}` : ""}

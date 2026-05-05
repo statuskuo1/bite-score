@@ -23,10 +23,10 @@ export function SameDinnerSheet({ creatorUsername, restaurantName, visitedAt, on
         style={{ width: "100%", maxWidth: 320, background: "#1E1E1C", borderRadius: 16, padding: "24px 20px 20px", boxSizing: "border-box", boxShadow: "0 8px 32px rgba(0,0,0,0.6)" }}
       >
         <div style={{ fontSize: 16, fontWeight: 600, color: "#F1EFE8", marginBottom: 6 }}>
-          Same dinner?
+          Same visit?
         </div>
         <div style={{ fontSize: 13, color: "#888780", marginBottom: 24, lineHeight: 1.5 }}>
-          Is this the same dinner as
+          Is this the same visit as
           {creatorUsername ? <> <span style={{ color: "#F1EFE8" }}>@{creatorUsername}</span></> : " someone"}
           's visit
           {restaurantName ? <> at <span style={{ color: "#F1EFE8" }}>{restaurantName}</span></> : ""}
