@@ -1007,7 +1007,11 @@ export default function App() {
     }
   }
 
-  function completeOnboarding(navigateTo) {
+  function completeOnboarding(navigateTo, prefillCity) {
+    if (prefillCity) {
+      lastCity.current = prefillCity;
+      try { if (user?.id) localStorage.setItem(`bite_lastUsedCity_${user.id}`, prefillCity); } catch {}
+    }
     setOnboardingDone(true);
     if (user?.id) {
       supabase.from("profiles").update({ has_completed_onboarding: true }).eq("id", user.id);

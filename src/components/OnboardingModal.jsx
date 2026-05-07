@@ -121,7 +121,7 @@ export function OnboardingModal({ restaurantWeights, onWeightSave, onComplete, i
           <p style={{ fontSize: 13, color: "#C4C2BA", margin: "0 0 20px", lineHeight: 1.65, textAlign: "center" }}>
             Log your first BITE.
           </p>
-          <button type="button" style={CTA_BTN} onClick={() => onComplete("/add")}>
+          <button type="button" style={CTA_BTN} onClick={() => onComplete("/add", resolveCity(city))}>
             + Add Rating
           </button>
           <button type="button" style={SKIP_LINK} onClick={() => onComplete()}>
