@@ -1140,6 +1140,15 @@ export default function App() {
   const [sweetsSortAsc, setSweetsSortAsc] = useState(false);
   const [sweetsTiers, setSweetsTiers] = useState(new Set());
   const [sweetsCityFilter, setSweetsCityFilter] = useState(new Set());
+  const [guestSortBy, setGuestSortBy] = useState("bite");
+  const [guestSortAsc, setGuestSortAsc] = useState(false);
+  const [guestSearch, setGuestSearch] = useState("");
+  const [guestCafeSortBy, setGuestCafeSortBy] = useState("bite");
+  const [guestCafeSortAsc, setGuestCafeSortAsc] = useState(false);
+  const [guestCafeSearch, setGuestCafeSearch] = useState("");
+  const [guestSweetsSortBy, setGuestSweetsSortBy] = useState("bite");
+  const [guestSweetsSortAsc, setGuestSweetsSortAsc] = useState(false);
+  const [guestSweetsSearch, setGuestSweetsSearch] = useState("");
 
   useEffect(() => {
     if (!authReady) return;
@@ -1786,31 +1795,111 @@ export default function App() {
               onChange={v => navigate(v === "restaurants" ? "/log" : "/log/" + v)} />
           </div>
           <div style={{ borderBottom:"0.5px solid rgba(255,255,255,0.08)", marginBottom:12 }} />
-          {logTab === "restaurants" && guestEntries.map(e => {
-            const sc = calcBiteOutOf10(e.taste, e.cost, e.portions, e.wait, e.useR, e.repeatability, weights, e.currency_code||"USD");
+          {logTab === "restaurants" && (() => {
+            const q = guestSearch.trim().toLowerCase();
+            const filtered = q ? guestEntries.filter(e => e.name.toLowerCase().includes(q) || (e.city||"").toLowerCase().includes(q)) : guestEntries;
+            const sorted = [...filtered].sort((a,b)=>{
+              let d=0;
+              if(guestSortBy==="bite") d=(calcBiteOutOf10(b.taste,b.cost,b.portions,b.wait,b.useR,b.repeatability,weights,b.currency_code||"USD")??0)-(calcBiteOutOf10(a.taste,a.cost,a.portions,a.wait,a.useR,a.repeatability,weights,a.currency_code||"USD")??0);
+              else if(guestSortBy==="taste") d=b.taste-a.taste;
+              else if(guestSortBy==="bpb") d=(a.cost/a.portions)-(b.cost/b.portions);
+              else if(guestSortBy==="wait") d=a.wait-b.wait;
+              else if(guestSortBy==="repeat") d=b.repeatability-a.repeatability;
+              return guestSortAsc?-d:d;
+            });
             return (
-              <RestRow key={e.id} e={e}
-                display={{ val: sc!=null ? sc.toFixed(2) : "—", label: scoreLabel(sc,t), color: scoreColor(sc) }}
-                user={GUEST_USER} visits={1} group={[e]} weights={weights}
-                onEdit={entry => { setEditR(entry); setEditDineWith([]); window.scrollTo({top:0,behavior:"smooth"}); }}
-                onDelete={id => setGuestEntries(p => p.filter(x => x.id !== id))}
-              />
+              <>
+                <SortFilterToolbar
+                  viewBy={guestSortBy}
+                  onViewBy={setGuestSortBy}
+                  viewOptions={[["bite","BITE"],["taste",t.taste],["bpb",t.bangBuck],["wait",t.wait],["repeat",t.repeatability]]}
+                  search={guestSearch}
+                  onSearch={setGuestSearch}
+                  sortAsc={guestSortAsc}
+                  onToggleSortAsc={()=>setGuestSortAsc(a=>!a)}
+                />
+                {sorted.map(e => {
+                  const sc = calcBiteOutOf10(e.taste, e.cost, e.portions, e.wait, e.useR, e.repeatability, weights, e.currency_code||"USD");
+                  return (
+                    <RestRow key={e.id} e={e}
+                      display={{ val: sc!=null ? sc.toFixed(2) : "—", label: scoreLabel(sc,t), color: scoreColor(sc) }}
+                      user={GUEST_USER} visits={1} group={[e]} weights={weights}
+                      onEdit={entry => { setEditR(entry); setEditDineWith([]); window.scrollTo({top:0,behavior:"smooth"}); }}
+                      onDelete={id => setGuestEntries(p => p.filter(x => x.id !== id))}
+                    />
+                  );
+                })}
+              </>
             );
-          })}
-          {logTab === "drinks" && guestCafes.filter(e => e.category !== "Sweets").map(e => (
-            <CafeGroupRow key={e.id} group={[e]} cafeSortBy="bite" weights={drinkWeights}
-              user={GUEST_USER}
-              onEdit={entry => { setEditC(entry); setEditDineWith([]); window.scrollTo({top:0,behavior:"smooth"}); }}
-              onDelete={id => setGuestCafes(p => p.filter(x => x.id !== id))}
-            />
-          ))}
-          {logTab === "sweets" && guestCafes.filter(e => e.category === "Sweets").map(e => (
-            <CafeGroupRow key={e.id} group={[e]} cafeSortBy="bite" weights={sweetWeights}
-              user={GUEST_USER}
-              onEdit={entry => { setEditC(entry); setEditDineWith([]); window.scrollTo({top:0,behavior:"smooth"}); }}
-              onDelete={id => setGuestCafes(p => p.filter(x => x.id !== id))}
-            />
-          ))}
+          })()}
+          {logTab === "drinks" && (() => {
+            const drinks = guestCafes.filter(e => e.category !== "Sweets");
+            const q = guestCafeSearch.trim().toLowerCase();
+            const filtered = q ? drinks.filter(e => e.name.toLowerCase().includes(q) || e.order.toLowerCase().includes(q) || (e.city||"").toLowerCase().includes(q)) : drinks;
+            const sorted = [...filtered].sort((a,b)=>{
+              let d=0;
+              if(guestCafeSortBy==="bite") d=(calcCafeOutOf10(b.taste,b.cost,b.portions,b.wait,b.useR,b.repeatability,drinkWeights,b.currency_code||"USD")??0)-(calcCafeOutOf10(a.taste,a.cost,a.portions,a.wait,a.useR,a.repeatability,drinkWeights,a.currency_code||"USD")??0);
+              else if(guestCafeSortBy==="taste") d=b.taste-a.taste;
+              else if(guestCafeSortBy==="bpb") d=(a.cost/a.portions)-(b.cost/b.portions);
+              else if(guestCafeSortBy==="wait") d=a.wait-b.wait;
+              else if(guestCafeSortBy==="repeat") d=b.repeatability-a.repeatability;
+              return guestCafeSortAsc?-d:d;
+            });
+            return (
+              <>
+                <SortFilterToolbar
+                  viewBy={guestCafeSortBy}
+                  onViewBy={setGuestCafeSortBy}
+                  viewOptions={[["bite","BITE"],["taste",t.taste],["bpb",t.bangBuck],["wait",t.wait],["repeat",t.repeatability]]}
+                  search={guestCafeSearch}
+                  onSearch={setGuestCafeSearch}
+                  sortAsc={guestCafeSortAsc}
+                  onToggleSortAsc={()=>setGuestCafeSortAsc(a=>!a)}
+                />
+                {sorted.map(e => (
+                  <CafeGroupRow key={e.id} group={[e]} cafeSortBy={guestCafeSortBy} weights={drinkWeights}
+                    user={GUEST_USER}
+                    onEdit={entry => { setEditC(entry); setEditDineWith([]); window.scrollTo({top:0,behavior:"smooth"}); }}
+                    onDelete={id => setGuestCafes(p => p.filter(x => x.id !== id))}
+                  />
+                ))}
+              </>
+            );
+          })()}
+          {logTab === "sweets" && (() => {
+            const sweets = guestCafes.filter(e => e.category === "Sweets");
+            const q = guestSweetsSearch.trim().toLowerCase();
+            const filtered = q ? sweets.filter(e => e.name.toLowerCase().includes(q) || e.order.toLowerCase().includes(q) || (e.city||"").toLowerCase().includes(q)) : sweets;
+            const sorted = [...filtered].sort((a,b)=>{
+              let d=0;
+              if(guestSweetsSortBy==="bite") d=(calcCafeOutOf10(b.taste,b.cost,b.portions,b.wait,b.useR,b.repeatability,sweetWeights,b.currency_code||"USD")??0)-(calcCafeOutOf10(a.taste,a.cost,a.portions,a.wait,a.useR,a.repeatability,sweetWeights,a.currency_code||"USD")??0);
+              else if(guestSweetsSortBy==="taste") d=b.taste-a.taste;
+              else if(guestSweetsSortBy==="bpb") d=(a.cost/a.portions)-(b.cost/b.portions);
+              else if(guestSweetsSortBy==="wait") d=a.wait-b.wait;
+              else if(guestSweetsSortBy==="repeat") d=b.repeatability-a.repeatability;
+              return guestSweetsSortAsc?-d:d;
+            });
+            return (
+              <>
+                <SortFilterToolbar
+                  viewBy={guestSweetsSortBy}
+                  onViewBy={setGuestSweetsSortBy}
+                  viewOptions={[["bite","BITE"],["taste",t.taste],["bpb",t.bangBuck],["wait",t.wait],["repeat",t.repeatability]]}
+                  search={guestSweetsSearch}
+                  onSearch={setGuestSweetsSearch}
+                  sortAsc={guestSweetsSortAsc}
+                  onToggleSortAsc={()=>setGuestSweetsSortAsc(a=>!a)}
+                />
+                {sorted.map(e => (
+                  <CafeGroupRow key={e.id} group={[e]} cafeSortBy={guestSweetsSortBy} weights={sweetWeights}
+                    user={GUEST_USER}
+                    onEdit={entry => { setEditC(entry); setEditDineWith([]); window.scrollTo({top:0,behavior:"smooth"}); }}
+                    onDelete={id => setGuestCafes(p => p.filter(x => x.id !== id))}
+                  />
+                ))}
+              </>
+            );
+          })()}
         </div>
       )}
       {pathname.startsWith("/log")&&!editR&&!editC&&user&&!dbLoaded&&(

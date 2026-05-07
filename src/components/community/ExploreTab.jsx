@@ -41,6 +41,13 @@ export function ExploreTab({ user, myEntries, cafes = [], cafePlaces = [], resta
 
   return (
     <div>
+      <p style={{ fontSize: 12, color: "#888780", margin: "0 0 8px" }}>
+        {section === "global"
+          ? (t.communityHintGlobal || "Top places by community taste.")
+          : section === "want-to-go"
+          ? (t.exploreHintWantToGo || "Places you've saved to try.")
+          : (t.exploreHintTopPicks || "Top picks across your Taste Buds.")}
+      </p>
       <div style={{
         display: "flex", background: "#252523", borderRadius: 10, padding: 3,
         gap: 2, marginBottom: 12,
@@ -66,17 +73,6 @@ export function ExploreTab({ user, myEntries, cafes = [], cafePlaces = [], resta
           );
         })}
       </div>
-
-      {/* Section-aware hint — CommunityTab no longer renders one for /explore
-          so the copy can swap between Top Picks, Global, and Want to Go as
-          the user toggles. */}
-      <p style={{ fontSize: 12, color: "#888780", margin: "0 0 12px" }}>
-        {section === "global"
-          ? (t.communityHintGlobal || "Top places by community taste.")
-          : section === "want-to-go"
-          ? (t.exploreHintWantToGo || "Places you've saved to try.")
-          : (t.exploreHintTopPicks || "Top picks across your Taste Buds.")}
-      </p>
 
       {section === "top-picks" && (
         <ExploreTopPicksSection
