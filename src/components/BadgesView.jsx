@@ -3,41 +3,29 @@ import { evalBadges, BADGE_SECTIONS } from "../utils/badgeDefinitions.js";
 import { SectionLabel } from "./SectionLabel.jsx";
 import { S } from "../styles/sharedStyles.js";
 
-function HexBadge({ color, bgColor, earned }) {
-  const outerFill = earned ? color : "#2A2A28";
-  const innerStroke = earned ? color : "#333330";
-  const innerOpacity = earned ? 0.5 : 1;
+function hexagonPath(cx, cy, r) {
+  const pts = [];
+  for (let i = 0; i < 6; i++) {
+    const a = Math.PI / 180 * (60 * i - 30);
+    pts.push((cx + r * Math.cos(a)).toFixed(2) + "," + (cy + r * Math.sin(a)).toFixed(2));
+  }
+  return "M" + pts.join("L") + "Z";
+}
+
+function BadgeSVG({ emoji, earned, color, border, bg }) {
+  const cx = 32, cy = 36, r = 28;
+  const path = hexagonPath(cx, cy, r);
+  const innerPath = hexagonPath(cx, cy, r - 5);
+  const opacity = earned ? 1 : 0.35;
   return (
-    <svg viewBox="0 0 60 60" width="100%" style={{ display: "block" }}>
-      {/* outer hexagon */}
-      <polygon
-        points="30,4 52.5,17 52.5,43 30,56 7.5,43 7.5,17"
-        fill={outerFill}
-      />
-      {/* inner ring */}
-      <polygon
-        points="30,10 47.3,20 47.3,40 30,50 12.7,40 12.7,20"
-        fill="none"
-        stroke={innerStroke}
-        strokeWidth="1.5"
-        strokeOpacity={innerOpacity}
-      />
-      {/* pip circle */}
-      <circle
-        cx="49" cy="47" r="7"
-        fill={earned ? bgColor : "#1E1E1C"}
-        stroke={earned ? color : "#3A3A38"}
-        strokeWidth="1"
-      />
-      <text
-        x="49" y="50"
-        textAnchor="middle"
-        fontSize="8"
-        fontWeight="700"
-        fill={earned ? "#F1EFE8" : "#444"}
-      >
-        {earned ? "✓" : "○"}
-      </text>
+    <svg viewBox="0 0 64 72" width={64} height={72} xmlns="http://www.w3.org/2000/svg">
+      <path d={path} fill={bg} stroke={border} strokeWidth="1.5" opacity={opacity} />
+      {earned && <path d={innerPath} fill="none" stroke={border} strokeWidth="0.5" opacity="0.4" />}
+      <text x="32" y="41" textAnchor="middle" fontSize="20" opacity={opacity}>{emoji}</text>
+      {earned
+        ? <><circle cx="52" cy="58" r="8" fill={color} /><text x="52" y="62" textAnchor="middle" fontSize="10" fill="#141413">✓</text></>
+        : <><circle cx="52" cy="58" r="8" fill="#1E1E1C" stroke={border} strokeWidth="0.5" opacity="0.5" /><text x="52" y="62" textAnchor="middle" fontSize="9" fill="#888780">🔒</text></>
+      }
     </svg>
   );
 }
@@ -74,7 +62,7 @@ export function BadgesView({ entries, cafes, weights, questL }) {
                   style={{ textAlign: "center", cursor: "pointer" }}
                   onClick={() => setActiveBadgeId(b.id === activeBadgeId ? null : b.id)}
                 >
-                  <HexBadge color={b.color} bgColor={b.bgColor} earned={b.earned} />
+                  <BadgeSVG emoji={b.emoji} earned={b.earned} color={b.color} border={b.color} bg={b.bgColor} />
                   <div style={{ fontSize: 9, color: "#888780", marginTop: 4, lineHeight: 1.3, wordBreak: "break-word" }}>
                     {b.name}
                   </div>
