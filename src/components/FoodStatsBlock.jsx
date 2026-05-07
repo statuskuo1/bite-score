@@ -10,7 +10,6 @@ export function FoodStatsBlock({ stats, style }) {
     { emoji: "🌍", label: "Cuisines tried",    val: s.cuisines   != null ? `${s.cuisines} / 135`   : "—", color: "#97C459" },
     { emoji: "📍", label: "Cities explored",   val: s.cities     != null ? String(s.cities)         : "—", color: "#5B9BD5" },
     { emoji: "🗺",  label: "Regions explored",  val: s.regions    != null ? `${s.regions} / 17`      : "—", color: "#EF9F27" },
-    { emoji: "🏅", label: "Badges earned",      val: s.badges     != null ? `${s.badges} / 24`       : "—", color: "#EF9F27" },
   ];
 
   return (

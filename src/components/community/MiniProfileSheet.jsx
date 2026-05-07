@@ -112,7 +112,7 @@ export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClos
   const [confirmUnfollow, setConfirmUnfollow] = useState(false);
   const [freshWeights, setFreshWeights] = useState(null);
   const [rawVisits, setRawVisits] = useState(cachedVisits ?? []);
-  const [expandedSection, setExpandedSection] = useState(null);
+  const [profileSection, setProfileSection] = useState(null);
 
   useEffect(() => {
     if (!profile?.id) { setStats(null); setFreshWeights(null); return; }
@@ -240,60 +240,17 @@ export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClos
           <FoodStatsBlock stats={stats} style={{ marginBottom: 8 }} />
 
           {relation === "self" && (
-            <div style={{ marginBottom: 14 }}>
-              {[
-                { key: "quests", icon: "🗺", label: "Quests" },
-                { key: "badges", icon: "🏅", label: "Badges" },
-              ].map(({ key, icon, label }) => {
-                const open = expandedSection === key;
-                return (
-                  <div key={key} style={{ marginBottom: 8 }}>
-                    <button
-                      type="button"
-                      onClick={() => setExpandedSection(open ? null : key)}
-                      style={{
-                        width: "100%", display: "flex", alignItems: "center",
-                        justifyContent: "space-between", padding: "9px 12px",
-                        background: open ? "#252523" : "#1E1E1C",
-                        border: "0.5px solid rgba(255,255,255,0.1)",
-                        borderRadius: open ? "8px 8px 0 0" : 8,
-                        cursor: "pointer",
-                      }}
-                    >
-                      <span style={{ fontSize: 13, color: "#F1EFE8", fontWeight: 500 }}>
-                        {icon} {label}
-                      </span>
-                      <span style={{ fontSize: 13, color: "#888780", transition: "transform 0.2s", transform: open ? "rotate(90deg)" : "none" }}>›</span>
-                    </button>
-                    {open && (
-                      <div style={{
-                        background: "#252523",
-                        border: "0.5px solid rgba(255,255,255,0.1)",
-                        borderTop: "none",
-                        borderRadius: "0 0 8px 8px",
-                        padding: "12px 12px 4px",
-                      }}>
-                        {key === "quests" && (
-                          <QuestSheetBody
-                            entries={rawVisits}
-                            questL={questL || new Set()}
-                            toggleQ={toggleQ || (() => {})}
-                            onSuggestClick={null}
-                          />
-                        )}
-                        {key === "badges" && (
-                          <BadgesView
-                            entries={rawVisits}
-                            cafes={selfCafes || []}
-                            weights={normalizeWeights({ taste: profile?.pref_weight_taste, bpb: profile?.pref_weight_bpb, wait: profile?.pref_weight_wait })}
-                            questL={questL || new Set()}
-                          />
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+            <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+              {[["quests", "🗺 Quests"], ["badges", "🏅 Badges"]].map(([key, lbl]) => (
+                <button key={key} type="button" onClick={() => setProfileSection(key)}
+                  style={{
+                    flex: 1, padding: "9px 0", background: "#252523",
+                    border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 8,
+                    color: "#F1EFE8", fontSize: 12, fontWeight: 500, cursor: "pointer",
+                  }}>
+                  {lbl}
+                </button>
+              ))}
             </div>
           )}
 
@@ -415,7 +372,54 @@ export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClos
             </div>
           )}
         </div>
+
       </div>
+
+      {profileSection && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 400,
+          display: "flex", justifyContent: "center",
+        }}>
+          <div style={{
+            width: "100%", maxWidth: 640,
+            background: "#141413",
+            display: "flex", flexDirection: "column",
+            height: "100%",
+          }}>
+            <div style={{
+              display: "flex", alignItems: "center", gap: 12,
+              padding: "14px 16px", borderBottom: "0.5px solid rgba(255,255,255,0.1)",
+              flexShrink: 0,
+            }}>
+              <button type="button" onClick={() => setProfileSection(null)}
+                style={{ fontSize: 20, color: "#888780", background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 1 }}>
+                ←
+              </button>
+              <span style={{ fontSize: 16, fontWeight: 600, color: "#F1EFE8" }}>
+                {profileSection === "quests" ? "🗺 Quests" : "🏅 Badges"}
+              </span>
+            </div>
+            <div style={{ flex: 1, padding: "16px 16px 32px", overflowY: "auto" }}>
+              {profileSection === "quests" && (
+                <QuestSheetBody
+                  entries={rawVisits}
+                  questL={questL || new Set()}
+                  toggleQ={toggleQ || (() => {})}
+                  onSuggestClick={null}
+                />
+              )}
+              {profileSection === "badges" && (
+                <BadgesView
+                  entries={rawVisits}
+                  cafes={selfCafes || []}
+                  weights={normalizeWeights({ taste: profile?.pref_weight_taste, bpb: profile?.pref_weight_bpb, wait: profile?.pref_weight_wait })}
+                  questL={questL || new Set()}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {confirmUnfollow && (
         <UnfollowConfirmDialog
