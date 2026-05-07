@@ -208,6 +208,21 @@ export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClos
             <div style={{ fontSize: 13, color: "#C4C2BA", marginTop: 3 }}>
               @{profile.username || "–"}
             </div>
+            {relation === "self" && (
+              <div style={{ marginTop: 8, display: "flex", gap: 6, alignItems: "center", justifyContent: "center" }}>
+                {[["quests", "🗺 Quests", "#EF9F27", "rgba(239,159,39,0.3)", "#2A1E05"],
+                  ["badges", "🏅 Badges", "#AFA9EC", "rgba(175,169,236,0.3)", "#1E1A3A"]].map(([key, lbl, color, border, bg]) => (
+                  <button key={key} type="button" onClick={() => setProfileSection(key)}
+                    style={{
+                      fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 20,
+                      background: bg, color, border: `1px solid ${border}`,
+                      cursor: "pointer", whiteSpace: "nowrap",
+                    }}>
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+            )}
             {relation !== "self" && (relation === "taste_buds" || relation === "i_follow") && (
               <div style={{ marginTop: 8, display: "flex", gap: 6, alignItems: "center", justifyContent: "center" }}>
                 {relation === "taste_buds" && (
@@ -238,21 +253,6 @@ export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClos
           </div>
 
           <FoodStatsBlock stats={stats} style={{ marginBottom: 8 }} />
-
-          {relation === "self" && (
-            <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-              {[["quests", "🗺 Quests"], ["badges", "🏅 Badges"]].map(([key, lbl]) => (
-                <button key={key} type="button" onClick={() => setProfileSection(key)}
-                  style={{
-                    flex: 1, padding: "9px 0", background: "#252523",
-                    border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 8,
-                    color: "#F1EFE8", fontSize: 12, fontWeight: 500, cursor: "pointer",
-                  }}>
-                  {lbl}
-                </button>
-              ))}
-            </div>
-          )}
 
           {(() => {
             const src = freshWeights ?? profile;
