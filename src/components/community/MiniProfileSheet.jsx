@@ -112,7 +112,7 @@ export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClos
   const [confirmUnfollow, setConfirmUnfollow] = useState(false);
   const [freshWeights, setFreshWeights] = useState(null);
   const [rawVisits, setRawVisits] = useState(cachedVisits ?? []);
-  const [questBadgeTab, setQuestBadgeTab] = useState("quests");
+  const [expandedSection, setExpandedSection] = useState(null);
 
   useEffect(() => {
     if (!profile?.id) { setStats(null); setFreshWeights(null); return; }
@@ -241,35 +241,59 @@ export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClos
 
           {relation === "self" && (
             <div style={{ marginBottom: 14 }}>
-              <div style={{ display:"flex", background:"#252523", borderRadius:10, padding:3, gap:2, marginBottom:12 }}>
-                {[["quests","🗺 Quests"],["badges","🏅 Badges"]].map(([v,lbl]) => {
-                  const on = questBadgeTab === v;
-                  return (
-                    <button key={v} type="button" onClick={() => setQuestBadgeTab(v)}
-                      style={{ flex:1, padding:"6px 0", textAlign:"center", borderRadius:8, border:"none",
-                        background:on?"#3C1F13":"transparent", color:on?"#F0997B":"#888780",
-                        fontSize:11, fontWeight:on?700:500, cursor:"pointer", transition:"all 0.15s" }}>
-                      {lbl}
+              {[
+                { key: "quests", icon: "🗺", label: "Quests" },
+                { key: "badges", icon: "🏅", label: "Badges" },
+              ].map(({ key, icon, label }) => {
+                const open = expandedSection === key;
+                return (
+                  <div key={key} style={{ marginBottom: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedSection(open ? null : key)}
+                      style={{
+                        width: "100%", display: "flex", alignItems: "center",
+                        justifyContent: "space-between", padding: "9px 12px",
+                        background: open ? "#252523" : "#1E1E1C",
+                        border: "0.5px solid rgba(255,255,255,0.1)",
+                        borderRadius: open ? "8px 8px 0 0" : 8,
+                        cursor: "pointer",
+                      }}
+                    >
+                      <span style={{ fontSize: 13, color: "#F1EFE8", fontWeight: 500 }}>
+                        {icon} {label}
+                      </span>
+                      <span style={{ fontSize: 13, color: "#888780", transition: "transform 0.2s", transform: open ? "rotate(90deg)" : "none" }}>›</span>
                     </button>
-                  );
-                })}
-              </div>
-              {questBadgeTab === "quests" && (
-                <QuestSheetBody
-                  entries={rawVisits}
-                  questL={questL || new Set()}
-                  toggleQ={toggleQ || (() => {})}
-                  onSuggestClick={null}
-                />
-              )}
-              {questBadgeTab === "badges" && (
-                <BadgesView
-                  entries={rawVisits}
-                  cafes={selfCafes || []}
-                  weights={normalizeWeights({ taste: profile?.pref_weight_taste, bpb: profile?.pref_weight_bpb, wait: profile?.pref_weight_wait })}
-                  questL={questL || new Set()}
-                />
-              )}
+                    {open && (
+                      <div style={{
+                        background: "#252523",
+                        border: "0.5px solid rgba(255,255,255,0.1)",
+                        borderTop: "none",
+                        borderRadius: "0 0 8px 8px",
+                        padding: "12px 12px 4px",
+                      }}>
+                        {key === "quests" && (
+                          <QuestSheetBody
+                            entries={rawVisits}
+                            questL={questL || new Set()}
+                            toggleQ={toggleQ || (() => {})}
+                            onSuggestClick={null}
+                          />
+                        )}
+                        {key === "badges" && (
+                          <BadgesView
+                            entries={rawVisits}
+                            cafes={selfCafes || []}
+                            weights={normalizeWeights({ taste: profile?.pref_weight_taste, bpb: profile?.pref_weight_bpb, wait: profile?.pref_weight_wait })}
+                            questL={questL || new Set()}
+                          />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 
