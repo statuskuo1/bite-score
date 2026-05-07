@@ -146,7 +146,7 @@ export function PlaceStatsSheet({ post, restaurantWeights, drinkWeights, sweetWe
       if (!ids.length) return;
       const { data: profs } = await supabase
         .from("profiles")
-        .select("id, username, display_name, avatar_url")
+        .select("id, username, display_name, avatar_url, pref_weight_taste, pref_weight_bpb, pref_weight_wait, pref_weight_drink_taste, pref_weight_drink_bpb, pref_weight_drink_wait, pref_weight_sweet_taste, pref_weight_sweet_bpb, pref_weight_sweet_wait")
         .in("id", ids);
       if (cancelled) return;
       const m = {};
@@ -212,17 +212,31 @@ export function PlaceStatsSheet({ post, restaurantWeights, drinkWeights, sweetWe
 
   const tasteBudReviewers = useMemo(() => {
     if (!visits || !tasteBudsIds || !Object.keys(profiles).length) return [];
-    const best = {};
+    const best = {}; // uid → best BITE score
     for (const v of visits) {
       if (!v.user_id || !tasteBudsIds.has(v.user_id)) continue;
-      if (!Number.isFinite(+v.taste)) continue;
-      if (best[v.user_id] == null || +v.taste > best[v.user_id]) best[v.user_id] = +v.taste;
+      if (!Number.isFinite(+v.taste) || !+v.portions) continue;
+      const prof = profiles[v.user_id];
+      if (!prof) continue;
+      let wts;
+      if (post.kind === "rest") {
+        wts = { taste: prof.pref_weight_taste ?? null, bpb: prof.pref_weight_bpb ?? null, wait: prof.pref_weight_wait ?? null };
+      } else if (post.category === "Sweets") {
+        wts = { taste: prof.pref_weight_sweet_taste ?? null, bpb: prof.pref_weight_sweet_bpb ?? null, wait: prof.pref_weight_sweet_wait ?? null };
+      } else {
+        wts = { taste: prof.pref_weight_drink_taste ?? null, bpb: prof.pref_weight_drink_bpb ?? null, wait: prof.pref_weight_drink_wait ?? null };
+      }
+      const bite = post.kind === "rest"
+        ? calcBiteOutOf10(+v.taste, +v.cost, +v.portions, +v.wait, v.use_r, rr(+v.repeatability), wts, v.currency_code || "USD")
+        : calcCafeOutOf10(+v.taste, +v.cost, +v.portions, +v.wait, v.use_r, rr(+v.repeatability), wts, v.currency_code || "USD");
+      if (bite == null) continue;
+      if (best[v.user_id] == null || bite > best[v.user_id]) best[v.user_id] = bite;
     }
     return Object.entries(best)
       .sort((a, b) => b[1] - a[1])
-      .map(([uid, taste]) => ({ profile: profiles[uid], taste }))
+      .map(([uid, bite]) => ({ profile: profiles[uid], bite }))
       .filter(r => r.profile);
-  }, [visits, tasteBudsIds, profiles]);
+  }, [visits, tasteBudsIds, profiles, post.kind, post.category]);
 
   const words = useMemo(() => {
     if (!visits) return [];
@@ -421,14 +435,14 @@ export function PlaceStatsSheet({ post, restaurantWeights, drinkWeights, sweetWe
               overflowY: tasteBudReviewers.length > 3 ? "auto" : undefined,
               paddingRight: tasteBudReviewers.length > 3 ? 4 : undefined,
             }}>
-              {tasteBudReviewers.map(({ profile, taste }) => (
+              {tasteBudReviewers.map(({ profile, bite }) => (
                 <div key={profile.id} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
                   <Avatar profile={profile} size={26} />
                   <div style={{ flex: 1, fontSize: 13, color: "#C4C2BA", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {profile.display_name || profile.username}
                   </div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#F0997B", flexShrink: 0 }}>
-                    {taste.toFixed(1)}
+                  <div style={{ fontSize: 13, fontWeight: 600, color: scoreColor(bite), flexShrink: 0 }}>
+                    {bite != null ? bite.toFixed(2) : "—"}
                   </div>
                 </div>
               ))}

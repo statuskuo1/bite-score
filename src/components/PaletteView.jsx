@@ -48,7 +48,9 @@ export function PaletteView({
   const rg={};
   entries.forEach(e=>{const r=REGION_MAP[e.cuisine]||"Other";rg[r]=(rg[r]||0)+1;});
   const sorted=Object.entries(rg).sort((a,b)=>b[1]-a[1]);
-  const rows=[...sorted.slice(0,5),["Other",sorted.slice(5).reduce((a,[,n])=>a+n,0)]];
+  const namedSorted=sorted.filter(([r])=>r!=="Other");
+  const otherCount=(rg["Other"]||0)+namedSorted.slice(5).reduce((a,[,n])=>a+n,0);
+  const rows=[...namedSorted.slice(0,5),...(otherCount>0?[["Other",otherCount]]:[])];
   const slices=rows.map(([region,count])=>({region,count,color:region==="Other"?"#888780":(REGION_COLORS[region]||"#888780")}));
 
   const rCount=sorted.length;
@@ -95,7 +97,7 @@ export function PaletteView({
               {!editingW?(
                 <button type="button" onClick={()=>{setDraftW({...weights});setEditingW(true);}} style={btnGhost}>{t.editWeights}</button>
               ):(
-                <button type="button" onClick={()=>setEditingW(false)} style={{...btnGhost,color:"#888780",borderColor:"rgba(255,255,255,0.15)"}}>{t.cancel}</button>
+                <button type="button" onClick={()=>setEditingW(false)} style={{...btnGhost,color:"#888780",border:"1px solid rgba(255,255,255,0.15)"}}>{t.cancel}</button>
               )}
             </div>
             {editingW?(
