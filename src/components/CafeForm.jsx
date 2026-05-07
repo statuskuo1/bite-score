@@ -14,7 +14,7 @@ import { BEAN_ORIGINS, BEAN_ORIGIN_GROUPS } from "../constants/coffeeConstants.j
 import { CityInput } from "./CityInput.jsx";
 import { DineWithPicker } from "./DineWithPicker.jsx";
 import { getCurrencyForCity, CURRENCY_SYMBOLS } from "../utils/currency.js";
-import { parseVisitDateInput } from "../utils/visitDate.js";
+import { parseVisitDateInput, formatVisitDateInput } from "../utils/visitDate.js";
 
 function maskDate(raw) {
   const digits = raw.replace(/\D/g, "").slice(0, 8);
@@ -258,7 +258,7 @@ function BeanOriginDropdown({ active, onChange }) {
 
 export function CafeForm({initial,initialDineWith=[],onSave,onSaveAndContinue,onCancel,onFormChange,weights,addType,setAddType,existingCafes,existingCities,places,onPlaceCreated,user,tasteBudIds,tasteStep=0.1,onTasteStepChange}) {
   const {t} = useLang();
-  const [f, setF] = useState({...INIT_CAFE, ...initial});
+  const [f, setF] = useState(() => ({ ...INIT_CAFE, ...initial, visitDate: (initial.visitDate || formatVisitDateInput(initial.visitedAt) || "") }));
   const [sub, setSub] = useState(false);
   const [dineWith, setDineWith] = useState(initialDineWith);
   const [selectedPills, setSelectedPills] = useState([]);

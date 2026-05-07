@@ -1,9 +1,9 @@
-// posthog-node is a server-side SDK and cannot run in a browser (no `process`).
-// Stub until a browser-compatible SDK (posthog-js) is wired up.
-const posthog = {
-  identify: () => {},
-  capture: () => {},
-  captureException: () => {},
-};
+import posthog from 'posthog-js';
+
+posthog.init(import.meta.env.VITE_POSTHOG_KEY, {
+  api_host: import.meta.env.VITE_POSTHOG_HOST,
+  capture_exceptions: true,
+  capture_pageview: false,
+});
 
 export default posthog;

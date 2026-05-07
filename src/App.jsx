@@ -92,6 +92,7 @@ import { TasteBudsPromptSheet } from "./components/TasteBudsPromptSheet.jsx";
 import { removeWantToGo, listWantToGo } from "./utils/wantToGoApi.js";
 import { setWantToGoRows } from "./utils/sessionCache.js";
 import { formatVisitDateInput } from "./utils/visitDate.js";
+import posthog from "./config/posthog.js";
 const GUEST_PALETTE_ENTRIES = [
   {id:"gp1",name:"Lilia",             cuisine:"Italian",        letter:"I",city:"New York City",taste:9.2,cost:120,portions:2,wait:20,repeatability:3,useR:true,notes:""},
   {id:"gp2",name:"Don Angie",         cuisine:"Italian",        letter:"I",city:"New York City",taste:8.8,cost:95, portions:2,wait:15,repeatability:3,useR:true,notes:""},
@@ -480,11 +481,53 @@ export default function App() {
   /** Pre-fill the Add form from a `group_visit_tagged` notification. Mirror
    *  applyDineTagPrefill, but seed `addGroupVisitId` so the save handler
    *  calls joinExistingGroupVisit(...) instead of running candidate lookup
-   *  + createGroupVisit again. Kind-aware (restaurant vs cafe) since Phase 2. */
-  async function applyGroupVisitPrefill(groupVisitId) {
+   *  + createGroupVisit again. Kind-aware (restaurant vs cafe) since Phase 2.
+   *
+   *  `fallbackMeta` is the raw notification meta — used as a last resort when
+   *  fetchGroupVisitWithMembers returns null (e.g. RLS gap on tagged user). */
+  async function applyGroupVisitPrefill(groupVisitId, fallbackMeta) {
     if (!groupVisitId || !user?.id) return;
     const gv = await fetchGroupVisitWithMembers(supabase, groupVisitId);
-    if (!gv) return;
+    if (!gv) {
+      // Fallback: use notification meta to prefill what we know.
+      if (!fallbackMeta) return;
+      const kind = fallbackMeta.kind || "restaurant";
+      const isCafe = kind === "cafe";
+      const placeId = fallbackMeta.place_id;
+      const visitDate = formatVisitDateInput(fallbackMeta.visited_at);
+      if (isCafe) {
+        const { data: place } = placeId ? await supabase.from("cafe_places").select("name, city").eq("id", placeId).maybeSingle() : { data: null };
+        const resolvedCity = resolveCity(place?.city || "");
+        setAddPrefill({
+          name: fallbackMeta.restaurant_name || place?.name || "",
+          placeId: placeId || null,
+          ...(resolvedCity ? { city: resolvedCity } : {}),
+          ...(visitDate ? { visitDate } : {}),
+        });
+      } else {
+        const { data: place } = placeId ? await supabase.from("restaurant_places").select("name, city, cuisine, cuisine2, is_fusion").eq("id", placeId).maybeSingle() : { data: null };
+        const resolvedCity = resolveCity(place?.city || "");
+        const resolvedCuisine = place?.cuisine || "";
+        setAddPrefill({
+          name: fallbackMeta.restaurant_name || place?.name || "",
+          placeId: placeId || null,
+          ...(resolvedCity ? { city: resolvedCity } : {}),
+          ...(visitDate ? { visitDate } : {}),
+          cuisine: resolvedCuisine,
+          cuisine2: place?.cuisine2 || "",
+          isFusion: !!place?.is_fusion,
+          letter: (resolvedCuisine[0] || "").toUpperCase(),
+        });
+      }
+      setAddInitialDineWith([]);
+      setAddTagTaggerId(null);
+      setAddGroupVisitId(groupVisitId);
+      setAddDraftData(null);
+      setAddFormKey((k) => k + 1);
+      setAddType(isCafe ? "cafe" : "restaurant");
+      navigate("/add");
+      return;
+    }
     const isCafe = gv.kind === "cafe";
     if (isCafe) {
       // Cafes don't carry cuisine/fusion — just look up name/city for the
@@ -571,7 +614,7 @@ export default function App() {
     if (variant === "pick_visit") {
       const candidateIds = meta.candidate_visit_ids || [];
       if (!candidateIds.length) {
-        applyGroupVisitPrefill(groupVisitId);
+        applyGroupVisitPrefill(groupVisitId, meta);
         return;
       }
       Promise.all([
@@ -579,7 +622,7 @@ export default function App() {
         fetchGroupVisitWithMembers(supabase, groupVisitId),
       ]).then(([visits, gv]) => {
         if (!visits.length) {
-          applyGroupVisitPrefill(groupVisitId);
+          applyGroupVisitPrefill(groupVisitId, meta);
           return;
         }
         setPickVisitState({
@@ -592,7 +635,7 @@ export default function App() {
       });
       return;
     }
-    applyGroupVisitPrefill(groupVisitId);
+    applyGroupVisitPrefill(groupVisitId, meta);
   }
 
   // Legacy: group_visit_logged stopped being inserted on 2026-05-04 in
@@ -1997,6 +2040,7 @@ export default function App() {
                             if(!canMutateVisit(row,user))return;
                             setPendingDelete({onConfirm:async()=>{
                               try{await supabase.from("restaurant_visits").delete().eq("id",did);}catch(err){console.error("restaurant delete threw:",err);}
+                              posthog.capture("visit deleted", { kind: "restaurant", place_name: row?.name });
                               dispatch({type:"DEL",id:did});
                             }});
                           }}/>
@@ -2019,6 +2063,7 @@ export default function App() {
                             if(!canMutateVisit(row,user))return;
                             setPendingDelete({onConfirm:async()=>{
                               try{await supabase.from("restaurant_visits").delete().eq("id",did);}catch(err){console.error("restaurant delete threw:",err);}
+                              posthog.capture("visit deleted", { kind: "restaurant", place_name: row?.name });
                               dispatch({type:"DEL",id:did});
                             }});
                           }}/>
@@ -2426,7 +2471,11 @@ export default function App() {
               // path can't seed co-diners (entry_id is null for unlogged
               // tagged users) but won't crash.
               if (tag?.group_visit_id) {
-                applyGroupVisitPrefill(tag.group_visit_id);
+                applyGroupVisitPrefill(tag.group_visit_id, {
+                  kind: tag.entry_type || "restaurant",
+                  restaurant_name: tag.restaurant_name || "",
+                  visited_at: tag.visited_at || null,
+                });
                 return;
               }
               if (tag) {
@@ -2538,10 +2587,18 @@ export default function App() {
                       fetchDinedWithByEntry(supabase, user.id).then(setDinedWithMap);
                       refreshDineTags();
                       formStateRef.current = null;
+                      posthog.capture("restaurant visit logged", {
+                        place_name: e.name,
+                        cuisine: e.cuisine,
+                        city: e.city,
+                        taste_score: e.taste,
+                        dine_with_count: (e.dineWith || []).length,
+                      });
                       navigate("/log");
                     }
                   } catch (err) {
                     console.error("restaurant insert threw:", err);
+                    posthog.captureException(err);
                     setAddSaveErr(err?.message || "Save failed — check console");
                   }
                 }}
@@ -2598,6 +2655,15 @@ export default function App() {
                   }
                   refreshDineTags();
                   formStateRef.current = null;
+                  if (inserted?.id) {
+                    posthog.capture("cafe visit logged", {
+                      place_name: e.name,
+                      category: e.category,
+                      city: e.city,
+                      taste_score: e.taste,
+                      dine_with_count: (e.dineWith || []).length,
+                    });
+                  }
                   navigate(e.category==="Sweets"?"/log/sweets":"/log/drinks");
                 }}
                 onSaveAndContinue={async e=>{

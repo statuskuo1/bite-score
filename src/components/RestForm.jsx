@@ -13,7 +13,7 @@ import { FormScoreHeader } from "./FormScoreHeader.jsx";
 import { CityInput } from "./CityInput.jsx";
 import { DineWithPicker } from "./DineWithPicker.jsx";
 import { getCurrencyForCity, CURRENCY_SYMBOLS } from "../utils/currency.js";
-import { parseVisitDateInput } from "../utils/visitDate.js";
+import { parseVisitDateInput, formatVisitDateInput } from "../utils/visitDate.js";
 
 function maskDate(raw) {
   const digits = raw.replace(/\D/g, "").slice(0, 8);
@@ -25,7 +25,7 @@ function maskDate(raw) {
 export function RestForm({initial,initialDineWith=[],onSave,onCancel,onFormChange,weights,addType,setAddType,existingEntries,existingCities,places,onPlaceCreated,user,tasteBudIds,tasteStep=0.1,onTasteStepChange}) {
   const {t} = useLang();
   const isEdit = !!initial.id;
-  const [f,setF] = useState(initial);
+  const [f,setF] = useState(() => ({ ...initial, visitDate: initial.visitDate || formatVisitDateInput(initial.visitedAt) || "" }));
   const [sub,setSub] = useState(false);
   const [dineWith,setDineWith] = useState(initialDineWith);
   const [selectedPills,setSelectedPills] = useState([]);

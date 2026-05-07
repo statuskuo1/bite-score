@@ -179,7 +179,7 @@ async function insertNotification(client, { userId, fromUserId, type, meta }) {
     type,
     meta: meta || {},
   });
-  if (error) console.warn(`[BITE] insertNotification(${type}):`, error.message);
+  if (error && error.code !== "23505") console.warn(`[BITE] insertNotification(${type}):`, error.message);
 }
 
 /**

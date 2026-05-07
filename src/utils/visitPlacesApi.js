@@ -328,6 +328,7 @@ export function restaurantVisitUpdatePayload(placeId, e) {
     repeatability: e.repeatability,
     use_r: e.useR !== false,
     notes: e.notes || "",
+    ...(e.visitedAt ? { visited_at: e.visitedAt } : {}),
   };
 }
 
@@ -379,6 +380,7 @@ export function cafeVisitUpdatePayload(placeId, e) {
     repeatability: e.repeatability,
     use_r: e.useR !== false,
     notes: e.notes || "",
+    ...(e.visitedAt ? { visited_at: e.visitedAt } : {}),
   };
 }
 
