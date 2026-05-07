@@ -28,6 +28,7 @@ export function RestForm({initial,initialDineWith=[],onSave,onCancel,onFormChang
   const [f,setF] = useState(initial);
   const [sub,setSub] = useState(false);
   const [dineWith,setDineWith] = useState(initialDineWith);
+  const [selectedPills,setSelectedPills] = useState([]);
   useEffect(() => {
     if (!isEdit) onFormChange?.({ addType: "restaurant", f, dineWith });
   }, [f, dineWith]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -39,9 +40,14 @@ export function RestForm({initial,initialDineWith=[],onSave,onCancel,onFormChang
   const visitDateRaw = (f.visitDate || "").trim();
   const visitDateIso = visitDateRaw ? parseVisitDateInput(visitDateRaw) : null;
   const visitDateInvalid = !!visitDateRaw && !visitDateIso;
+  const NOTE_PILLS = ["great service","good ambiance","bad service","cozy","loud","date night","good for groups","beautiful presentation","unique","great drinks","great desserts","overrated"];
+  const togglePill = (pill) => setSelectedPills(prev => prev.includes(pill) ? prev.filter(p=>p!==pill) : [...prev,pill]);
+
   function save() {
-    if(!f.name||!f.cost||!f.city||visitDateInvalid){setSub(true);return;}
-    onSave({...f,placeId:f.placeId||null,taste:+f.taste,cost:+f.cost,currency_code:currencyCode,portions:+f.portions,wait:+f.wait,repeatability:+f.repeatability,dineWith,visitedAt:visitDateIso||null});
+    if(!f.name||!f.cost||!f.portions||!f.city||visitDateInvalid){setSub(true);return;}
+    const pillsText = selectedPills.join(", ");
+    const fullNotes = [pillsText, f.notes].filter(Boolean).join(" · ");
+    onSave({...f,placeId:f.placeId||null,taste:+f.taste,cost:+f.cost,currency_code:currencyCode,portions:+f.portions,wait:+f.wait,repeatability:+f.repeatability,dineWith,visitedAt:visitDateIso||null,notes:fullNotes});
   }
   return (
     <div style={{...S.card,marginBottom:12}}>
@@ -113,14 +119,26 @@ export function RestForm({initial,initialDineWith=[],onSave,onCancel,onFormChang
 
       <div style={S.mb16}>
         <FieldLabel>Visit date</FieldLabel>
-        <input
-          type="text"
-          inputMode="numeric"
-          value={f.visitDate || ""}
-          onChange={(ev) => inp("visitDate", maskDate(ev.target.value))}
-          placeholder="mm/dd/yyyy"
-          style={S.wb}
-        />
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={f.visitDate || ""}
+            onChange={(ev) => inp("visitDate", maskDate(ev.target.value))}
+            placeholder="mm/dd/yyyy"
+            style={{...S.wb,flex:1}}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              const d = new Date();
+              const mm = String(d.getMonth()+1).padStart(2,"0");
+              const dd = String(d.getDate()).padStart(2,"0");
+              inp("visitDate", `${mm}/${dd}/${d.getFullYear()}`);
+            }}
+            style={{flexShrink:0,padding:"8px 10px",borderRadius:8,background:"transparent",border:"0.5px solid rgba(255,255,255,0.15)",color:"#888780",fontSize:12,cursor:"pointer"}}
+          >Today</button>
+        </div>
         {visitDateInvalid && <div style={S.err}>Use mm/dd/yyyy</div>}
       </div>
 
@@ -139,7 +157,7 @@ export function RestForm({initial,initialDineWith=[],onSave,onCancel,onFormChang
       <div style={S.sec}><SectionLabel>{t.scoreInputs}</SectionLabel></div>
       <div style={S.mb16}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-          <FieldLabel style={{margin:0}}>Taste — <span style={{color:"#F0997B"}}>{f.taste} · {tasteLabel(f.taste,t)}</span></FieldLabel>
+          <FieldLabel style={{margin:0}}>Taste * — <span style={{color:"#F0997B"}}>{f.taste} · {tasteLabel(f.taste,t)}</span></FieldLabel>
           {onTasteStepChange&&<div style={{display:"flex",gap:4}}>
             {[0.1,0.5].map(s=>(
               <button key={s} onClick={()=>{
@@ -160,20 +178,39 @@ export function RestForm({initial,initialDineWith=[],onSave,onCancel,onFormChang
       </div>
       <div style={{display:"flex",gap:10,marginBottom:16}}>
         <div style={S.f1}>
-          <FieldLabel>{t.totalCost}</FieldLabel>
+          <FieldLabel>{t.totalCost} *</FieldLabel>
           <div style={{position:"relative"}}>
             <span style={{position:"absolute",left:9,top:"50%",transform:"translateY(-50%)",fontSize:13,color:"#888780",pointerEvents:"none",lineHeight:1}}>{currSymbol||"$"}</span>
             <input type="number" value={f.cost} onChange={e=>inp("cost",e.target.value)} style={{...S.wb,paddingLeft:8+(currSymbol||"$").length*8+6}}/>
           </div>
           {sub&&!f.cost&&<div style={S.err}>Required</div>}
         </div>
-        <div style={S.f1}><FieldLabel>{t.portions}</FieldLabel><input type="number" min="0.5" step="0.5" value={f.portions} onChange={e=>inp("portions",e.target.value)} style={S.wb}/></div>
-        <div style={S.f1}><FieldLabel>{t.waitMins}</FieldLabel><input type="number" min="0" step="1" value={f.wait} onChange={e=>inp("wait",e.target.value)} style={S.wb}/></div>
+        <div style={S.f1}>
+          <FieldLabel>{t.portions} *</FieldLabel>
+          <input type="number" min="0.5" step="0.5" value={f.portions} onChange={e=>inp("portions",e.target.value)} style={S.wb}/>
+          {sub&&!f.portions&&<div style={S.err}>Required</div>}
+        </div>
+        <div style={S.f1}><FieldLabel>{t.waitMins} *</FieldLabel><input type="number" min="0" step="1" value={f.wait} onChange={e=>inp("wait",e.target.value)} style={S.wb}/></div>
       </div>
       <div style={S.sec}><SectionLabel>{t.repeatability}</SectionLabel></div>
-      <div style={S.mb16}><FieldLabel>Repeatability — <span style={{color:"#F0997B"}}>{"⭐".repeat(f.repeatability)||"✕"}</span></FieldLabel><RepeatPicker value={f.repeatability} onChange={v=>inp("repeatability",v)}/></div>
+      <div style={S.mb16}><FieldLabel>Repeatability * — <span style={{color:"#F0997B"}}>{"⭐".repeat(f.repeatability)||"✕"}</span></FieldLabel><RepeatPicker value={f.repeatability} onChange={v=>inp("repeatability",v)}/></div>
       <div style={S.sec}><SectionLabel>{t.notes}</SectionLabel></div>
-      <div style={{marginBottom:20}}><textarea value={f.notes} onChange={e=>inp("notes",e.target.value)} placeholder={t.whatMemorable} rows={3} style={{width:"100%",boxSizing:"border-box",resize:"vertical"}}/></div>
+      <div style={{marginBottom:20}}>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
+          {NOTE_PILLS.map((pill) => {
+            const on = selectedPills.includes(pill);
+            return (
+              <button
+                key={pill}
+                type="button"
+                onClick={() => togglePill(pill)}
+                style={{padding:"4px 10px",borderRadius:20,fontSize:11,background:on?"#3C1F13":"transparent",border:"0.5px solid "+(on?"#F0997B":"rgba(255,255,255,0.15)"),color:on?"#F0997B":"#888780",cursor:"pointer"}}
+              >{pill}</button>
+            );
+          })}
+        </div>
+        <textarea value={f.notes} onChange={e=>inp("notes",e.target.value)} placeholder="anything else to add?" rows={3} style={{width:"100%",boxSizing:"border-box",resize:"vertical"}}/>
+      </div>
       <div style={S.row8}>
         <button onClick={onCancel} style={{flex:1,padding:"10px",background:"transparent",color:"#888780",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:8,fontSize:14,cursor:"pointer"}}>{t.cancel}</button>
         <button onClick={save} style={{flex:2,padding:"10px",background:"#F0997B",color:"#141413",border:"none",borderRadius:8,fontSize:15,fontWeight:500,cursor:"pointer"}}>{t.save}</button>

@@ -227,13 +227,31 @@ export function PlacePicker({
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
-      <input
-        value={value}
-        onChange={(e) => handleType(e.target.value)}
-        onFocus={() => setShow(true)}
-        placeholder={placeholder || "e.g. Birch Coffee"}
-        style={S.wb}
-      />
+      <div style={{ position: "relative" }}>
+        <input
+          value={value}
+          onChange={(e) => handleType(e.target.value)}
+          onFocus={() => setShow(true)}
+          placeholder={placeholder || "e.g. Birch Coffee"}
+          style={{ ...S.wb, paddingRight: value ? 28 : undefined }}
+        />
+        {value && (
+          <button
+            type="button"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              onChange({ name: "", placeId: null, city: null });
+              setShow(false);
+            }}
+            style={{
+              position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
+              background: "none", border: "none", cursor: "pointer",
+              color: "#888780", fontSize: 18, lineHeight: 1, padding: 0,
+              display: "flex", alignItems: "center",
+            }}
+          >×</button>
+        )}
+      </div>
       {dropdownVisible && (
         <div
           style={{
