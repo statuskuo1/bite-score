@@ -2755,6 +2755,10 @@ export default function App() {
           pref_weight_wait:  weights?.wait,
         }}
         relation="self"
+        cachedVisits={st.entries}
+        questL={questL}
+        toggleQ={toggleQ}
+        selfCafes={cafes}
         onClose={() => setShowSelfSheet(false)}
         onWeightTap={() => { setShowSelfSheet(false); navigate("/taste"); }}
         onEditProfile={() => { setShowSelfSheet(false); setShowAuthModal(true); }}

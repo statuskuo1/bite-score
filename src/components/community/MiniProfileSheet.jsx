@@ -5,6 +5,8 @@ import { profileStatsCache } from "../../utils/sessionCache.js";
 import { normalizeWeights, weightsToPercents } from "../../utils/scoring.js";
 import { Avatar } from "./Avatar.jsx";
 import { FoodStatsBlock } from "../FoodStatsBlock.jsx";
+import { QuestSheetBody } from "../QuestsPaletteSection.jsx";
+import { BadgesView } from "../BadgesView.jsx";
 
 /** Small inline badge span — purely informational, no interaction. */
 export function StatusBadge({ label, bg, color, border }) {
@@ -105,10 +107,12 @@ export function UnfollowConfirmDialog({ profile, isTasteBuds, busy, onConfirm, o
  *   onViewLog    — (profile) => void
  *   t            — translations object
  */
-export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClose, onCompareWith, onUnfollow, onFollow, onViewLog, onWeightTap, onEditProfile, onSignOut, t }) {
+export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClose, onCompareWith, onUnfollow, onFollow, onViewLog, onWeightTap, onEditProfile, onSignOut, t, questL, toggleQ, selfCafes }) {
   const [stats, setStats] = useState(null);
   const [confirmUnfollow, setConfirmUnfollow] = useState(false);
   const [freshWeights, setFreshWeights] = useState(null);
+  const [rawVisits, setRawVisits] = useState(cachedVisits ?? []);
+  const [questBadgeTab, setQuestBadgeTab] = useState("quests");
 
   useEffect(() => {
     if (!profile?.id) { setStats(null); setFreshWeights(null); return; }
@@ -126,6 +130,7 @@ export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClos
     }
 
     if (cachedVisits) {
+      setRawVisits(cachedVisits);
       const s = computeFoodStats(cachedVisits);
       setStats(s);
       profileStatsCache.set(profile.id, s);
@@ -141,6 +146,7 @@ export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClos
       const v = await fetchRestaurantVisitsForUser(supabase, profile.id);
       const s = computeFoodStats(v);
       if (!cancelled) {
+        setRawVisits(v);
         setStats(s);
         profileStatsCache.set(profile.id, s);
       }
@@ -180,6 +186,8 @@ export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClos
             padding: "1.35rem",
             boxSizing: "border-box",
             boxShadow: "0 8px 40px rgba(0,0,0,0.7)",
+            overflowY: "auto",
+            maxHeight: "90vh",
           }}
         >
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
@@ -230,6 +238,40 @@ export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClos
           </div>
 
           <FoodStatsBlock stats={stats} style={{ marginBottom: 8 }} />
+
+          {relation === "self" && (
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ display:"flex", background:"#252523", borderRadius:10, padding:3, gap:2, marginBottom:12 }}>
+                {[["quests","🗺 Quests"],["badges","🏅 Badges"]].map(([v,lbl]) => {
+                  const on = questBadgeTab === v;
+                  return (
+                    <button key={v} type="button" onClick={() => setQuestBadgeTab(v)}
+                      style={{ flex:1, padding:"6px 0", textAlign:"center", borderRadius:8, border:"none",
+                        background:on?"#3C1F13":"transparent", color:on?"#F0997B":"#888780",
+                        fontSize:11, fontWeight:on?700:500, cursor:"pointer", transition:"all 0.15s" }}>
+                      {lbl}
+                    </button>
+                  );
+                })}
+              </div>
+              {questBadgeTab === "quests" && (
+                <QuestSheetBody
+                  entries={rawVisits}
+                  questL={questL || new Set()}
+                  toggleQ={toggleQ || (() => {})}
+                  onSuggestClick={null}
+                />
+              )}
+              {questBadgeTab === "badges" && (
+                <BadgesView
+                  entries={rawVisits}
+                  cafes={selfCafes || []}
+                  weights={normalizeWeights({ taste: profile?.pref_weight_taste, bpb: profile?.pref_weight_bpb, wait: profile?.pref_weight_wait })}
+                  questL={questL || new Set()}
+                />
+              )}
+            </div>
+          )}
 
           {(() => {
             const src = freshWeights ?? profile;
