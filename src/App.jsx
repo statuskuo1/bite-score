@@ -158,6 +158,26 @@ function tombstoneTag(userId, tagId) {
   } catch {}
 }
 
+function SwipeHint({ userId, hint }) {
+  const key = `bite_swipe_hint_dismissed_${userId}`;
+  const [visible, setVisible] = useState(() => {
+    try { return !localStorage.getItem(key); } catch { return true; }
+  });
+  if (!visible) return null;
+  return (
+    <div style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:8,background:"rgba(240,153,123,0.08)",border:"0.5px solid rgba(240,153,123,0.3)",marginBottom:2}}>
+      <span style={{fontSize:15,animation:"swipeArrow 1.2s ease-in-out infinite"}}>👈</span>
+      <span style={{flex:1,fontSize:12,color:"#C8A090"}}>{hint}</span>
+      <button
+        type="button"
+        onClick={() => { try { localStorage.setItem(key,"1"); } catch {} setVisible(false); }}
+        style={{background:"none",border:"none",color:"#888780",fontSize:14,cursor:"pointer",padding:"0 2px",lineHeight:1}}
+      >✕</button>
+      <style>{`@keyframes swipeArrow{0%,100%{transform:translateX(0)}50%{transform:translateX(-4px)}}`}</style>
+    </div>
+  );
+}
+
 export default function App() {
   const { user, authReady, username, profile, refreshProfile } = useAuth();
   const navigate = useNavigate();
@@ -1962,7 +1982,7 @@ export default function App() {
             <div style={{marginBottom:8}}>
               <CategoryTabs active={logTab} onChange={(v) => navigate(v === "restaurants" ? "/log" : "/log/" + v)} />
             </div>
-            {user&&<p style={{fontSize:12,color:"#888780",margin:0}}>{t.swipeHint}</p>}
+            {user&&<SwipeHint userId={user.id} hint={t.swipeHint}/>}
           </div>
           <div style={{borderBottom:"0.5px solid rgba(255,255,255,0.08)",marginBottom:12}}/>
 
