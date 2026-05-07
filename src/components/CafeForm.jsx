@@ -292,7 +292,9 @@ export function CafeForm({initial,initialDineWith=[],onSave,onSaveAndContinue,on
 
   function buildEntry() {
     const pillsText = selectedPills.join(", ");
-    const fullNotes = [pillsText, f.notes].filter(Boolean).join(" · ");
+    const favPart = f.favOrder?.trim() ? `fav: ${f.favOrder.trim()}` : "";
+    const avoidPart = f.shouldntGet?.trim() ? `avoid: ${f.shouldntGet.trim()}` : "";
+    const fullNotes = [favPart, avoidPart, pillsText, f.notes].filter(Boolean).join(" · ");
     return {
       ...(isEdit ? {id: initial.id, ownerId: initial.ownerId ?? null} : {}),
       placeId: f.placeId || null,
@@ -537,6 +539,10 @@ export function CafeForm({initial,initialDineWith=[],onSave,onSaveAndContinue,on
 
       <div style={S.sec}><SectionLabel>{t.notes}</SectionLabel></div>
       <div style={{marginBottom:20}}>
+        <div style={{display:"flex",gap:10,marginBottom:12}}>
+          <div style={S.f1}><FieldLabel>Favourite order</FieldLabel><input type="text" value={f.favOrder||""} onChange={e=>inp("favOrder",e.target.value)} placeholder="e.g. Matcha latte" style={S.wb}/></div>
+          <div style={S.f1}><FieldLabel>Shouldn't Get</FieldLabel><input type="text" value={f.shouldntGet||""} onChange={e=>inp("shouldntGet",e.target.value)} placeholder="e.g. Croissant" style={S.wb}/></div>
+        </div>
         <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
           {NOTE_PILLS.map((pill) => {
             const on = selectedPills.includes(pill);

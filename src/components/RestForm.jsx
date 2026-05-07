@@ -46,7 +46,9 @@ export function RestForm({initial,initialDineWith=[],onSave,onCancel,onFormChang
   function save() {
     if(!f.name||!f.cost||!f.portions||!f.city||visitDateInvalid){setSub(true);return;}
     const pillsText = selectedPills.join(", ");
-    const fullNotes = [pillsText, f.notes].filter(Boolean).join(" · ");
+    const favPart = f.favOrder?.trim() ? `fav: ${f.favOrder.trim()}` : "";
+    const avoidPart = f.shouldntGet?.trim() ? `avoid: ${f.shouldntGet.trim()}` : "";
+    const fullNotes = [favPart, avoidPart, pillsText, f.notes].filter(Boolean).join(" · ");
     onSave({...f,placeId:f.placeId||null,taste:+f.taste,cost:+f.cost,currency_code:currencyCode,portions:+f.portions,wait:+f.wait,repeatability:+f.repeatability,dineWith,visitedAt:visitDateIso||null,notes:fullNotes});
   }
   return (
@@ -196,6 +198,10 @@ export function RestForm({initial,initialDineWith=[],onSave,onCancel,onFormChang
       <div style={S.mb16}><FieldLabel>Repeatability * — <span style={{color:"#F0997B"}}>{"⭐".repeat(f.repeatability)||"✕"}</span></FieldLabel><RepeatPicker value={f.repeatability} onChange={v=>inp("repeatability",v)}/></div>
       <div style={S.sec}><SectionLabel>{t.notes}</SectionLabel></div>
       <div style={{marginBottom:20}}>
+        <div style={{display:"flex",gap:10,marginBottom:12}}>
+          <div style={S.f1}><FieldLabel>Favourite order</FieldLabel><input type="text" value={f.favOrder||""} onChange={e=>inp("favOrder",e.target.value)} placeholder="e.g. Tagliatelle" style={S.wb}/></div>
+          <div style={S.f1}><FieldLabel>Shouldn't Get</FieldLabel><input type="text" value={f.shouldntGet||""} onChange={e=>inp("shouldntGet",e.target.value)} placeholder="e.g. Caesar salad" style={S.wb}/></div>
+        </div>
         <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
           {NOTE_PILLS.map((pill) => {
             const on = selectedPills.includes(pill);
