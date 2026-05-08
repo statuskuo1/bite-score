@@ -51,7 +51,6 @@ export function evalBadges(entries = [], cafes = [], weights, questL = new Set()
   const allRegionCount = Object.keys(CUISINE_REGIONS).length;
 
   const fusionEntry = entries.find(e => e.isFusion);
-  const cafeEntry = cafes[0];
 
   const eliteCount = entries.filter(e => (calcBiteOutOf10(e.taste, e.cost, e.portions, e.wait, e.useR, e.repeatability, wts, e.currency_code || "USD") ?? -1) >= 8).length;
   const toughCount = entries.filter(e => {
@@ -62,11 +61,15 @@ export function evalBadges(entries = [], cafes = [], weights, questL = new Set()
 
   return [
     // ── Milestones ──────────────────────────────────────────────────────
-    def("first-bite", "First Bite", "Log your first restaurant.", "Milestones", "🍴", () => ({
-      earned: entries.length >= 1,
-      earnedDate: isoDate(entries[0]?.visitedAt),
-      progress: `${entries.length} / 1`,
-    }), "Logged your first restaurant."),
+    def("first-bite", "First Bite", "Log your first restaurant or cafe.", "Milestones", "🍴", () => {
+      const firstTs = [entries[0]?.visitedAt, cafes[0]?.visitedAt].filter(Boolean).sort()[0] ?? null;
+      const totalLogs = entries.length + cafes.length;
+      return {
+        earned: totalLogs >= 1,
+        earnedDate: isoDate(firstTs),
+        progress: `${totalLogs} / 1`,
+      };
+    }, "Logged your first restaurant or cafe."),
     def("warmed-up", "Getting Warmed Up", "Log 10 restaurants.", "Milestones", "🔥", () => ({
       earned: entries.length >= 10,
       earnedDate: entries.length >= 10 ? isoDate(entries[9]?.visitedAt) : null,
@@ -87,11 +90,11 @@ export function evalBadges(entries = [], cafes = [], weights, questL = new Set()
       earnedDate: isoDate(fusionEntry?.visitedAt),
       progress: fusionEntry ? "1 / 1" : "0 / 1",
     }), "Logged your first fusion dish."),
-    def("cafe-crawler", "Cafe Crawler", "Log your first cafe visit.", "Milestones", "☕", () => ({
-      earned: cafes.length >= 1,
-      earnedDate: isoDate(cafeEntry?.visitedAt),
-      progress: `${cafes.length} / 1`,
-    }), "Logged your first cafe visit."),
+    def("cafe-crawler", "Cafe Crawler", "Log 25 cafe visits.", "Milestones", "☕", () => ({
+      earned: cafes.length >= 25,
+      earnedDate: cafes.length >= 25 ? isoDate(cafes[24]?.visitedAt) : null,
+      progress: `${cafes.length} / 25`,
+    }), "Logged 25 cafe visits."),
 
     // ── Streak ───────────────────────────────────────────────────────────
     def("on-a-roll", "On a Roll", "Log entries 2 weeks in a row.", "Streak", "🎯", () => ({
