@@ -13,6 +13,39 @@ function relativeTime(ts) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+// Milestone notifications: maps the meta.milestone key to the display
+// label rendered in the celebration message. Inserted by the
+// `tick_user_milestones` RPC; see 20260533_milestone_notifications.sql.
+const MILESTONE_LABELS = {
+  "1mo":  "ONE MONTH",
+  "6mo":  "SIX MONTHS",
+  "1yr":  "ONE YEAR",
+  "5yr":  "FIVE YEARS",
+  "10yr": "TEN YEARS",
+};
+
+function MilestoneGlyph({ size = 36 }) {
+  return (
+    <div
+      aria-hidden
+      style={{
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        background: "linear-gradient(135deg, #F0997B 0%, #EF9F27 100%)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: Math.round(size * 0.55),
+        lineHeight: 1,
+        flexShrink: 0,
+      }}
+    >
+      🎉
+    </div>
+  );
+}
+
 /**
  * Render a single notification row. After the 2026-05-04 tagging refactor
  * the live (new-write) types are:
@@ -72,12 +105,20 @@ function NotifRow({
   const isGroupVisitTagged = notif.type === "group_visit_tagged";
   const isGroupVisitAllLogged = notif.type === "group_visit_all_logged";
   const isHeartReaction = notif.type === "heart_reaction";
+  const isMilestone = notif.type === "milestone";
   // Legacy types — only for DB rows written before the refactor.
   const isDineTag = notif.type === "dine_tag";
   const isDineTagBack = notif.type === "dine_tag_back";
   const isDineTagAccepted = notif.type === "dine_tag_accepted";
   const isDineTagMutual = notif.type === "dine_tag_mutual";
   const isGroupVisitLogged = notif.type === "group_visit_logged";
+
+  // Milestone rows are self-addressed; from_user_id is the recipient
+  // themselves (placeholder for the NOT NULL FK). We render a celebration
+  // glyph instead of an avatar so the self-reference stays invisible.
+  const milestoneLabel = isMilestone
+    ? (MILESTONE_LABELS[notif.meta?.milestone] || null)
+    : null;
 
   const restaurantName = notif.meta?.restaurant_name || notif.meta?.place_name || "a place";
   // group_visit_tagged carries its variant on meta (set at insert time).
@@ -108,61 +149,68 @@ function NotifRow({
   }
 
   const someoneHandle = `@${p?.username || "someone"}`;
-  const message = isResolved
-    ? `${someoneHandle} tagged you at ${restaurantName}`
-    : isDineTag
-      ? `All bark no BITE 🐶 ${someoneHandle} tagged you at ${restaurantName}. Log your BITE?`
-      : isDineTagMutual
-        ? `${someoneHandle} tagged you at ${restaurantName}. Looks like you already logged! Tag them to your entry?`
-        : isDineTagBack
-          ? `${someoneHandle} tagged you back at ${restaurantName}. See their BITE Score`
-          : isDineTagAccepted
-            ? `${someoneHandle} tagged you back at ${restaurantName}. See their BITE Score`
-            : isHeartReaction
-              ? `${someoneHandle} hearted your BITE at ${restaurantName} ❤️`
-              : isGroupVisitTagged
-                ? groupVisitVariant === "auto_linked"
-                  ? `${someoneHandle} tagged you at ${restaurantName}. Looks like you already logged! Tag them to your entry?`
-                  : groupVisitVariant === "pick_visit"
-                    ? `You've been to ${restaurantName} a few times recently — which visit was with ${someoneHandle}?`
-                    : `All bark no BITE 🐶 ${someoneHandle} tagged you at ${restaurantName}. Log your BITE?`
-                : isGroupVisitAllLogged
-                  ? `🎉 Look at you! The whole party logged at ${restaurantName}.`
-                  : isGroupVisitLogged
-                    ? `${someoneHandle} logged their visit at ${restaurantName} with you.`
-                    : isTasteBuds
-                      ? `You and ${someoneHandle} are now Taste Buds! 🎉`
-                      : `${someoneHandle} followed you`;
-
-  const handleRowTap = isResolved
-    ? () => p && onOpenProfile(p)
-    : isGroupVisitAutoLinkedResolved
-      ? () => p && onOpenProfile(p)
+  const message = isMilestone
+    ? (milestoneLabel
+        ? `🎉 Congrats on ${milestoneLabel} ON BITE!`
+        : `🎉 Congrats on a new milestone on BITE!`)
+    : isResolved
+      ? `${someoneHandle} tagged you at ${restaurantName}`
       : isDineTag
-        ? () => onDineTagTap?.(notif)
+        ? `All bark no BITE 🐶 ${someoneHandle} tagged you at ${restaurantName}. Log your BITE?`
         : isDineTagMutual
-          ? () => { if (!taggedBack) setShowConfirm((v) => !v); }
-          : isGroupVisitAutoLinked
-            ? () => { if (!taggedBack) setShowConfirm((v) => !v); }
-            : isGroupVisitPickVisit
-              ? () => onGroupVisitTaggedTap?.(notif)
+          ? `${someoneHandle} tagged you at ${restaurantName}. Looks like you already logged! Tag them to your entry?`
+          : isDineTagBack
+            ? `${someoneHandle} tagged you back at ${restaurantName}. See their BITE Score`
+            : isDineTagAccepted
+              ? `${someoneHandle} tagged you back at ${restaurantName}. See their BITE Score`
               : isHeartReaction
-                ? () => onHeartTap?.(notif)
-                : isDineTagBack
-                  ? () => onDineTagBackTap?.(notif)
-                  : isDineTagAccepted
-                    ? () => onDineTagAcceptedTap?.(notif)
-                    : isGroupVisitTagged
-                      ? () => onGroupVisitTaggedTap?.(notif)
-                      : isGroupVisitAllLogged
-                        ? () => onGroupVisitAllLoggedTap?.(notif)
-                        : isGroupVisitLogged
-                          ? () => onGroupVisitLoggedTap?.(notif)
-                          : notif.type === "follow"
-                            ? () => onFollowTap?.(notif)
-                            : () => p && onOpenProfile(p);
+                ? `${someoneHandle} hearted your BITE at ${restaurantName} ❤️`
+                : isGroupVisitTagged
+                  ? groupVisitVariant === "auto_linked"
+                    ? `${someoneHandle} tagged you at ${restaurantName}. Looks like you already logged! Tag them to your entry?`
+                    : groupVisitVariant === "pick_visit"
+                      ? `You've been to ${restaurantName} a few times recently — which visit was with ${someoneHandle}?`
+                      : `All bark no BITE 🐶 ${someoneHandle} tagged you at ${restaurantName}. Log your BITE?`
+                  : isGroupVisitAllLogged
+                    ? `🎉 Look at you! The whole party logged at ${restaurantName}.`
+                    : isGroupVisitLogged
+                      ? `${someoneHandle} logged their visit at ${restaurantName} with you.`
+                      : isTasteBuds
+                        ? `You and ${someoneHandle} are now Taste Buds! 🎉`
+                        : `${someoneHandle} followed you`;
 
-  const messageIsInteractive = !isResolved
+  const handleRowTap = isMilestone
+    ? () => {}
+    : isResolved
+      ? () => p && onOpenProfile(p)
+      : isGroupVisitAutoLinkedResolved
+        ? () => p && onOpenProfile(p)
+        : isDineTag
+          ? () => onDineTagTap?.(notif)
+          : isDineTagMutual
+            ? () => { if (!taggedBack) setShowConfirm((v) => !v); }
+            : isGroupVisitAutoLinked
+              ? () => { if (!taggedBack) setShowConfirm((v) => !v); }
+              : isGroupVisitPickVisit
+                ? () => onGroupVisitTaggedTap?.(notif)
+                : isHeartReaction
+                  ? () => onHeartTap?.(notif)
+                  : isDineTagBack
+                    ? () => onDineTagBackTap?.(notif)
+                    : isDineTagAccepted
+                      ? () => onDineTagAcceptedTap?.(notif)
+                      : isGroupVisitTagged
+                        ? () => onGroupVisitTaggedTap?.(notif)
+                        : isGroupVisitAllLogged
+                          ? () => onGroupVisitAllLoggedTap?.(notif)
+                          : isGroupVisitLogged
+                            ? () => onGroupVisitLoggedTap?.(notif)
+                            : notif.type === "follow"
+                              ? () => onFollowTap?.(notif)
+                              : () => p && onOpenProfile(p);
+
+  const messageIsInteractive = !isMilestone
+    && !isResolved
     && !isGroupVisitAutoLinkedResolved
     && (isDineTagMutual || isDineTag || isHeartReaction || isGroupVisitTagged || isGroupVisitAllLogged || isGroupVisitLogged);
 
@@ -174,19 +222,24 @@ function NotifRow({
       borderBottom: "0.5px solid rgba(255,255,255,0.07)",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <button
-          type="button"
-          onClick={handleRowTap}
-          style={{ flexShrink: 0, background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 0 }}
-        >
-          <Avatar profile={p} size={36} />
-        </button>
+        {isMilestone ? (
+          <MilestoneGlyph size={36} />
+        ) : (
+          <button
+            type="button"
+            onClick={handleRowTap}
+            style={{ flexShrink: 0, background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 0 }}
+          >
+            <Avatar profile={p} size={36} />
+          </button>
+        )}
 
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13, color: "#F1EFE8", lineHeight: 1.4 }}>
             <button
               type="button"
               onClick={handleRowTap}
+              disabled={isMilestone}
               style={{ background: "none", border: "none", padding: 0, cursor: messageIsInteractive ? "pointer" : "default", color: (isResolved || isGroupVisitAutoLinkedResolved) ? "#888780" : "inherit", fontSize: "inherit", textAlign: "left" }}
             >
               {message}

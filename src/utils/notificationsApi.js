@@ -4,6 +4,12 @@
  * Notification types:
  *   "follow"     — someone followed you
  *   "taste_buds" — you and someone became mutual follows
+ *   "milestone"  — anniversary / month-aversary on profiles.created_at
+ *                  (1mo / 6mo / 1yr / 5yr / 10yr); inserted by the
+ *                  `tick_user_milestones` RPC. from_user_id is the
+ *                  recipient themselves (placeholder for the NOT NULL FK);
+ *                  the panel renders a celebration glyph instead of an
+ *                  avatar so the self-reference stays invisible.
  *
  * Each row is hydrated with `fromProfile` (id, username, display_name, avatar_url)
  * from the profiles table.
@@ -52,6 +58,21 @@ export async function markNotificationsRead(client, userId) {
     .eq("user_id", userId)
     .eq("read", false);
   if (error) console.warn("[BITE] markNotificationsRead:", error.message);
+}
+
+/**
+ * Fire-and-forget milestone sweep. Runs on every notif-panel open (and on
+ * post-action refetch) alongside `tickGroupVisitsExpiry`. The RPC is
+ * idempotent — backed by a partial unique index plus ON CONFLICT DO
+ * NOTHING — so repeated calls are cheap.
+ */
+export async function tickUserMilestones(client) {
+  try {
+    const { error } = await client.rpc("tick_user_milestones");
+    if (error) console.warn("[BITE] tick_user_milestones:", error.message);
+  } catch (err) {
+    console.warn("[BITE] tick_user_milestones threw:", err);
+  }
 }
 
 /**

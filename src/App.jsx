@@ -54,7 +54,7 @@ import { CommunityTab } from "./components/community/CommunityTab.jsx";
 import { SortFilterToolbar } from "./components/SortFilterToolbar.jsx";
 import { countUnseenFollowers, markFollowersSeen, followUser, unfollowUser, getRelation, fetchFollowingIds } from "./utils/followsApi.js";
 import { MiniProfileSheet } from "./components/community/MiniProfileSheet.jsx";
-import { countUnreadNotifications, fetchUnreadNotifications, markNotificationsRead } from "./utils/notificationsApi.js";
+import { countUnreadNotifications, fetchUnreadNotifications, markNotificationsRead, tickUserMilestones } from "./utils/notificationsApi.js";
 import { usePaginatedList } from "./components/usePaginatedList.js";
 import { ShowMoreButton } from "./components/ShowMoreButton.jsx";
 import { NotificationPanel } from "./components/NotificationPanel.jsx";
@@ -384,10 +384,15 @@ export default function App() {
     setShowNotifPanel(true);
     setNotifLoading(true);
     try {
-      // Day-7 sweep runs opportunistically here. Fire-and-forget; the
-      // notifications fetch below renders the post-sweep state because we
-      // await the tick first. Cheap (3 predicate-bound UPDATEs, partial idx).
-      await tickGroupVisitsExpiry(supabase);
+      // Opportunistic sweeps run here. Both are idempotent and cheap:
+      //  • day-7 group-visit expiry (3 predicate-bound UPDATEs, partial idx)
+      //  • milestone anniversary check (one SELECT + ON CONFLICT INSERTs)
+      // Awaited together so the notifications fetch below renders the
+      // post-sweep state.
+      await Promise.all([
+        tickGroupVisitsExpiry(supabase),
+        tickUserMilestones(supabase),
+      ]);
       const [rows, ids] = await Promise.all([
         fetchUnreadNotifications(supabase, user.id),
         fetchFollowingIds(supabase, user.id),
@@ -413,7 +418,10 @@ export default function App() {
     try {
       // Wait for the Postgres trigger to fire before fetching.
       await new Promise((r) => setTimeout(r, 700));
-      await tickGroupVisitsExpiry(supabase);
+      await Promise.all([
+        tickGroupVisitsExpiry(supabase),
+        tickUserMilestones(supabase),
+      ]);
       const [rows, ids] = await Promise.all([
         fetchUnreadNotifications(supabase, user.id),
         fetchFollowingIds(supabase, user.id),
