@@ -733,7 +733,7 @@ export default function App() {
           setFeedScrollTarget({ postId: member.visitId, postType: kind, kind: entryTypeToKind(kind) });
         }
         navigate("/community/feed");
-      });
+      }).catch(() => navigate("/community/feed"));
     } else {
       navigate("/community/feed");
     }
