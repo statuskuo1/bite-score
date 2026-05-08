@@ -726,16 +726,16 @@ export default function App() {
     const meta = notif?.meta || {};
     const kind = meta.kind || "restaurant";
     const groupVisitId = meta.group_visit_id;
+    // Navigate immediately (like other handlers) so the feed always opens.
+    // Then resolve the specific post in the background and set the scroll target.
+    navigate("/community/feed");
     if (groupVisitId && user?.id) {
       fetchGroupVisitWithMembers(supabase, groupVisitId).then((gv) => {
         const member = gv?.members?.find((m) => m.userId === user.id);
         if (member?.visitId) {
           setFeedScrollTarget({ postId: member.visitId, postType: kind, kind: entryTypeToKind(kind) });
         }
-        navigate("/community/feed");
-      }).catch(() => navigate("/community/feed"));
-    } else {
-      navigate("/community/feed");
+      }).catch(() => {});
     }
   }
 
