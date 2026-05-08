@@ -2873,7 +2873,11 @@ export default function App() {
       </>
       )}
 
-      <AuthModal open={showAuthModal} onClose={()=>setShowAuthModal(false)} />
+      <AuthModal
+        open={showAuthModal}
+        onClose={()=>setShowAuthModal(false)}
+        onBack={()=>{ setShowAuthModal(false); setShowSelfSheet(true); }}
+      />
       <ResetPasswordModal />
       {pendingDelete && (
         <ConfirmSheet

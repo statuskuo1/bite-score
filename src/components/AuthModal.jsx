@@ -87,7 +87,19 @@ function GoogleIcon() {
   );
 }
 
-export function AuthModal({ open, onClose }) {
+/**
+ * Auth + profile editor modal.
+ *
+ * `onBack` is the "go back to where I came from" affordance for the
+ * profile-edit view (entered via the self profile sheet's Edit profile
+ * button). When provided AND we're rendering the profile-edit view,
+ * Cancel / X / backdrop click route through `onBack` instead of
+ * `onClose` so the user lands back on the profile sheet rather than the
+ * bare app. All other modes (sign-in / sign-up / Google username step /
+ * verification pending) ignore `onBack` and dismiss via `onClose` as
+ * before.
+ */
+export function AuthModal({ open, onClose, onBack }) {
   const { t } = useLang();
   const { user, session, username, profile, refreshProfile } = useAuth();
   const navigate = useNavigate();
@@ -207,6 +219,11 @@ export function AuthModal({ open, onClose }) {
   );
 
   if (!open) return null;
+
+  // Profile-edit dismissal lands back on the profile sheet (via onBack)
+  // when the caller wired one; outside profile-edit mode we always close
+  // the modal stack outright.
+  const dismiss = (showProfileView && onBack) ? onBack : onClose;
 
   function switchMode(createMode) {
     setIsCreateMode(createMode);
@@ -513,7 +530,7 @@ export function AuthModal({ open, onClose }) {
 
   return (
     <div
-      onClick={onClose}
+      onClick={dismiss}
       style={{
         position: "fixed", inset: 0,
         background: "rgba(0,0,0,0.78)",
@@ -529,7 +546,7 @@ export function AuthModal({ open, onClose }) {
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 4 }}>
           <button
             type="button"
-            onClick={onClose}
+            onClick={dismiss}
             style={{ fontSize: 22, color: "#888780", background: "none", border: "none", cursor: "pointer", lineHeight: 1, padding: 0 }}
           >×</button>
         </div>
@@ -649,7 +666,7 @@ export function AuthModal({ open, onClose }) {
             )}
             <div style={{ display: "flex", gap: 8 }}>
               <button type="button"
-                onClick={onClose}
+                onClick={dismiss}
                 style={{ ...btn, flex: 1, marginBottom: 0, background: "transparent", color: "#C4C2BA", border: "0.5px solid rgba(255,255,255,0.2)" }}>
                 Cancel
               </button>
