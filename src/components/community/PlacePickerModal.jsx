@@ -127,8 +127,8 @@ export function PlacePickerModal({
     return () => { cancelled = true; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const myPlaceIds = useMemo(() => new Set(myVisits.map(v => v.placeId)), [myVisits]);
-  const theirPlaceIds = useMemo(() => new Set(theirVisits.map(v => v.placeId)), [theirVisits]);
+  const myPlaceIds = useMemo(() => new Set(myVisits.map(v => v.placeId).filter(Boolean)), [myVisits]);
+  const theirPlaceIds = useMemo(() => new Set(theirVisits.map(v => v.placeId).filter(Boolean)), [theirVisits]);
   const myAvgTaste = useMemo(() => arrAvg(myVisits.map(v => +v.taste)), [myVisits]);
   const theirAvgTaste = useMemo(() => arrAvg(theirVisits.map(v => +v.taste)), [theirVisits]);
 
@@ -148,6 +148,29 @@ export function PlacePickerModal({
       if (!v.placeId) continue;
       if (!m.has(v.placeId)) m.set(v.placeId, []);
       m.get(v.placeId).push(v);
+    }
+    return m;
+  }, [theirVisits]);
+
+  // Name-keyed fallback for visits without a placeId (legacy rows)
+  const myVisitsByName = useMemo(() => {
+    const m = new Map();
+    for (const v of myVisits) {
+      if (!v.name) continue;
+      const key = v.name.toLowerCase().trim();
+      if (!m.has(key)) m.set(key, []);
+      m.get(key).push(v);
+    }
+    return m;
+  }, [myVisits]);
+
+  const theirVisitsByName = useMemo(() => {
+    const m = new Map();
+    for (const v of theirVisits) {
+      if (!v.name) continue;
+      const key = v.name.toLowerCase().trim();
+      if (!m.has(key)) m.set(key, []);
+      m.get(key).push(v);
     }
     return m;
   }, [theirVisits]);
@@ -182,8 +205,9 @@ export function PlacePickerModal({
       .filter(place => {
         if (place.validCount < 1 || place.avgTaste == null) return false;
         if (place.avgTaste < myThreshold || place.avgTaste < theirThreshold) return false;
-        const inMine = myPlaceIds.has(place.placeId);
-        const inTheirs = theirPlaceIds.has(place.placeId);
+        const nameKey = place.name?.toLowerCase().trim();
+        const inMine = myPlaceIds.has(place.placeId) || (nameKey && myVisitsByName.has(nameKey));
+        const inTheirs = theirPlaceIds.has(place.placeId) || (nameKey && theirVisitsByName.has(nameKey));
         if (visitTab === "neither" && (inMine || inTheirs)) return false;
         if (visitTab === "onlyMine" && (!inMine || inTheirs)) return false;
         if (visitTab === "onlyTheirs" && (inMine || !inTheirs)) return false;
@@ -202,8 +226,9 @@ export function PlacePickerModal({
         return true;
       })
       .map(place => {
-        const myActual = myVisitsMap.get(place.placeId) || [];
-        const theirActual = theirVisitsMap.get(place.placeId) || [];
+        const nameKey = place.name?.toLowerCase().trim();
+        const myActual = myVisitsMap.get(place.placeId) || (nameKey && myVisitsByName.get(nameKey)) || [];
+        const theirActual = theirVisitsMap.get(place.placeId) || (nameKey && theirVisitsByName.get(nameKey)) || [];
         const s = scorePlace(place, myWts, theirWts, myActual, theirActual);
         return s ? { place, ...s } : null;
       })
@@ -213,7 +238,7 @@ export function PlacePickerModal({
   }, [ // eslint-disable-line react-hooks/exhaustive-deps
     cuisine, city, budget, visitTab, cacheReady,
     myAvgTaste, theirAvgTaste, myPlaceIds, theirPlaceIds,
-    myWeights, theirWeights, myVisitsMap, theirVisitsMap,
+    myWeights, theirWeights, myVisitsMap, theirVisitsMap, myVisitsByName, theirVisitsByName,
   ]);
 
   // Fallback: top globally scored places, no filters
@@ -221,15 +246,16 @@ export function PlacePickerModal({
     return (globalCache.restaurants || [])
       .filter(place => place.validCount >= 1 && place.avgTaste != null)
       .map(place => {
-        const myActual = myVisitsMap.get(place.placeId) || [];
-        const theirActual = theirVisitsMap.get(place.placeId) || [];
+        const nameKey = place.name?.toLowerCase().trim();
+        const myActual = myVisitsMap.get(place.placeId) || (nameKey && myVisitsByName.get(nameKey)) || [];
+        const theirActual = theirVisitsMap.get(place.placeId) || (nameKey && theirVisitsByName.get(nameKey)) || [];
         const s = scorePlace(place, myWts, theirWts, myActual, theirActual);
         return s ? { place, ...s } : null;
       })
       .filter(Boolean)
       .sort((a, b) => b.minScore - a.minScore)
       .slice(0, 3);
-  }, [cacheReady, myWeights, theirWeights, myVisitsMap, theirVisitsMap]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cacheReady, myWeights, theirWeights, myVisitsMap, theirVisitsMap, myVisitsByName, theirVisitsByName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset display to top 3 whenever ranked changes
   useEffect(() => {
