@@ -22,17 +22,15 @@ export function QuestSheetBody({ entries, questL, toggleQ, onSuggestClick }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
           <span style={{ fontSize: 16, fontWeight: 500, color: "#F1EFE8" }}>{t.aZQuest}</span>
         </div>
-        <p style={{ fontSize: 11, color: "#888780", margin: "0 0 10px" }}>Tap a letter after logging a cuisine to mark it complete.</p>
+        <p style={{ fontSize: 11, color: "#888780", margin: "0 0 10px" }}>Letters turn green automatically when you log a cuisine that starts with them.</p>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(36px,1fr))", gap: 6 }}>
           {ALPHABET.map((l) => {
-            const isQ = questL.has(l);
-            const isL = covered.has(l);
+            const done = covered.has(l);
             const entry = entries.find((e) => (e.letter || e.cuisine?.[0])?.toUpperCase() === l);
             return (
               <div
                 key={l}
                 title={entry ? entry.name : l}
-                onClick={() => toggleQ(l)}
                 style={{
                   height: 36,
                   borderRadius: 8,
@@ -41,11 +39,11 @@ export function QuestSheetBody({ entries, questL, toggleQ, onSuggestClick }) {
                   justifyContent: "center",
                   fontSize: 13,
                   fontWeight: 500,
-                  cursor: isL ? "pointer" : "default",
+                  cursor: "default",
                   transition: "all 0.15s",
-                  background: isQ ? "#1A2E0A" : "#141413",
-                  color: isQ ? "#97C459" : "#5C5C58",
-                  border: "0.5px solid " + (isQ ? "#97C459" : "rgba(255,255,255,0.08)"),
+                  background: done ? "#1A2E0A" : "#141413",
+                  color: done ? "#97C459" : "#5C5C58",
+                  border: "0.5px solid " + (done ? "#97C459" : "rgba(255,255,255,0.08)"),
                 }}
               >
                 {l}

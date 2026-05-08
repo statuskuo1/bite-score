@@ -1195,7 +1195,10 @@ export default function App() {
     try { const v = localStorage.getItem("bite_sweetWeights_bootstrap"); if (v) return normalizeWeights(JSON.parse(v)); } catch {}
     return { ...CAFE_WEIGHT_DEFAULTS };
   });
-  const [questL, setQuestL] = useState(new Set());
+  const questL = useMemo(
+    () => new Set(st.entries.map((e) => (e.letter || e.cuisine?.[0])?.toUpperCase()).filter(Boolean)),
+    [st.entries],
+  );
   const [cafeSortBy, setCafeSortBy] = useState("bite");
   const [cafeSortAsc, setCafeSortAsc] = useState(false);
   const [cafeFilterMilk, setCafeFilterMilk] = useState("");
@@ -1304,24 +1307,7 @@ export default function App() {
         const { data: sData, error: settingsErr } = await supabase.from("settings").select("*");
         if (settingsErr) console.warn("[BITE] settings:", settingsErr.message);
         if (cancelled) return;
-        if (sData) {
-          let questHandled = false;
-          if (user) {
-            try {
-              const raw = localStorage.getItem(`bite_questLetters_${user.id}`);
-              if (raw) {
-                setQuestL(new Set(JSON.parse(raw)));
-                questHandled = true;
-              }
-            } catch (e) {
-              console.error("quest letters localStorage:", e);
-            }
-          }
-          if (!questHandled) {
-            const ql = sData.find((s) => s.key === "questLetters");
-            if (ql) setQuestL(new Set(JSON.parse(ql.value)));
-          }
-        }
+        // questL is now auto-derived from entries (cuisine first letter), no load needed.
       } catch (err) {
         console.error("Supabase load error:", err);
       } finally {
@@ -1417,18 +1403,7 @@ export default function App() {
     }
   }
 
-  function toggleQ(l) {
-    const letterCovered = new Set(st.entries.map((e) => (e.letter || e.cuisine?.[0])?.toUpperCase()));
-    if (!letterCovered.has(l) || !user) return;
-    const next = new Set(questL);
-    next.has(l) ? next.delete(l) : next.add(l);
-    setQuestL(next);
-    try {
-      localStorage.setItem(`bite_questLetters_${user.id}`, JSON.stringify([...next]));
-    } catch (err) {
-      console.error("quest letters save:", err);
-    }
-  }
+  function toggleQ() {} // A-Z quest is now auto-derived from logged cuisines
 
   const sortedR = [...st.entries].sort((a,b)=>{
     let d=0;
