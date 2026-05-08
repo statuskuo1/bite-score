@@ -1,3 +1,5 @@
+import posthog from "../config/posthog.js";
+
 /**
  * Follows + Taste Buds API over `public.follows`.
  *
@@ -21,10 +23,12 @@
 export async function searchUsersByUsername(client, query, callerId, limit = 8) {
   const q = (query || "").toLowerCase().trim();
   if (!q) return [];
+  // Escape LIKE special chars in user input before interpolating into .or()
+  const esc = q.replace(/%/g, "\\%").replace(/_/g, "\\_");
   const { data, error } = await client
     .from("profiles")
     .select("id, username, display_name, avatar_url")
-    .ilike("username", `${q}%`)
+    .or(`username.ilike.${esc}%,display_name.ilike.${esc}%`)
     .neq("id", callerId)
     .limit(limit);
   if (error) {
@@ -75,6 +79,7 @@ export async function followUser(client, followerId, followingId) {
     .eq("following_id", followerId)
     .maybeSingle();
 
+  posthog.capture("user followed", { is_mutual: !!reverse });
   return { ok: true, code: "ok", data, isMutual: !!reverse };
 }
 
@@ -94,6 +99,7 @@ export async function unfollowUser(client, followerId, followingId) {
     console.warn("[BITE] unfollowUser error:", error);
     return { ok: false };
   }
+  posthog.capture("user unfollowed");
   return { ok: true };
 }
 
