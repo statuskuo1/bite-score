@@ -8,6 +8,17 @@ import { FoodStatsBlock } from "../FoodStatsBlock.jsx";
 import { QuestSheetBody } from "../QuestsPaletteSection.jsx";
 import { BadgesView } from "../BadgesView.jsx";
 
+// Render `profiles.created_at` as MM/DD/YYYY for the self-only "Joined"
+// line. Locale-independent so the slash format stays consistent.
+function formatJoinedDate(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${mm}/${dd}/${d.getFullYear()}`;
+}
+
 /** Small inline badge span — purely informational, no interaction. */
 export function StatusBadge({ label, bg, color, border }) {
   return (
@@ -208,6 +219,11 @@ export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClos
             <div style={{ fontSize: 13, color: "#C4C2BA", marginTop: 3 }}>
               @{profile.username || "–"}
             </div>
+            {relation === "self" && profile.created_at && formatJoinedDate(profile.created_at) && (
+              <div style={{ fontSize: 11, color: "#888780", marginTop: 4 }}>
+                Joined {formatJoinedDate(profile.created_at)}
+              </div>
+            )}
             {relation === "self" && (
               <div style={{ marginTop: 8, display: "flex", gap: 6, alignItems: "center", justifyContent: "center" }}>
                 {[["quests", "🗺 Quests", "#EF9F27", "rgba(239,159,39,0.3)", "#2A1E05"],
