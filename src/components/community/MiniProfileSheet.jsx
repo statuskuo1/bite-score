@@ -118,7 +118,7 @@ export function UnfollowConfirmDialog({ profile, isTasteBuds, busy, onConfirm, o
  *   onViewLog    — (profile) => void
  *   t            — translations object
  */
-export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClose, onCompareWith, onUnfollow, onFollow, onViewLog, onWeightTap, onEditProfile, onSignOut, t, questL, toggleQ, selfCafes }) {
+export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClose, onCompareWith, onUnfollow, onFollow, onViewLog, onWeightTap, onEditProfile, onSignOut, t, questL, toggleQ, selfCafes, followingCount = 0, tasteBudCount = 0 }) {
   const [stats, setStats] = useState(null);
   const [confirmUnfollow, setConfirmUnfollow] = useState(false);
   const [freshWeights, setFreshWeights] = useState(null);
@@ -430,6 +430,8 @@ export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClos
                   cafes={selfCafes || []}
                   weights={normalizeWeights({ taste: profile?.pref_weight_taste, bpb: profile?.pref_weight_bpb, wait: profile?.pref_weight_wait })}
                   questL={questL || new Set()}
+                  followingCount={followingCount}
+                  tasteBudCount={tasteBudCount}
                 />
               )}
             </div>

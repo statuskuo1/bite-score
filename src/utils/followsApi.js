@@ -228,6 +228,23 @@ export async function listTasteBuds(client, userId) {
 }
 
 /**
+ * Returns a Set of user IDs that are currently following `userId`.
+ * Lightweight — selects only `follower_id`, no profile hydration.
+ */
+export async function fetchFollowerIds(client, userId) {
+  if (!userId) return new Set();
+  const { data, error } = await client
+    .from("follows")
+    .select("follower_id")
+    .eq("following_id", userId);
+  if (error) {
+    console.warn("[BITE] fetchFollowerIds error:", error);
+    return new Set();
+  }
+  return new Set((data || []).map((r) => r.follower_id));
+}
+
+/**
  * Returns a Set of user IDs that `userId` is currently following.
  * Lightweight — selects only `following_id`, no profile hydration.
  */

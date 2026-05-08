@@ -12,7 +12,7 @@ function hexagonPath(cx, cy, r) {
   return "M" + pts.join("L") + "Z";
 }
 
-function BadgeSVG({ emoji, earned, color, border, bg }) {
+export function BadgeSVG({ emoji, earned, color, border, bg }) {
   const cx = 32, cy = 36, r = 28;
   const path = hexagonPath(cx, cy, r);
   const innerPath = hexagonPath(cx, cy, r - 5);
@@ -30,10 +30,10 @@ function BadgeSVG({ emoji, earned, color, border, bg }) {
   );
 }
 
-export function BadgesView({ entries, cafes, weights, questL }) {
+export function BadgesView({ entries, cafes, weights, questL, followingCount = 0, tasteBudCount = 0 }) {
   const badges = useMemo(
-    () => evalBadges(entries, cafes, weights, questL),
-    [entries, cafes, weights, questL],
+    () => evalBadges(entries, cafes, weights, questL, followingCount, tasteBudCount),
+    [entries, cafes, weights, questL, followingCount, tasteBudCount],
   );
   const earnedCount = badges.filter(b => b.earned).length;
   const [activeBadgeId, setActiveBadgeId] = useState(null);
@@ -42,7 +42,7 @@ export function BadgesView({ entries, cafes, weights, questL }) {
   return (
     <div>
       <div style={{ ...S.lbl, marginBottom: 14, color: "#888780" }}>
-        {earnedCount} / 24 badges earned
+        {earnedCount} / {badges.length} badges earned
       </div>
 
       {BADGE_SECTIONS.map(section => {

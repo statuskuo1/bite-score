@@ -52,7 +52,7 @@ import { ResetPasswordModal } from "./components/ResetPasswordModal.jsx";
 import { WeightSliders } from "./components/WeightSliders.jsx";
 import { CommunityTab } from "./components/community/CommunityTab.jsx";
 import { SortFilterToolbar } from "./components/SortFilterToolbar.jsx";
-import { countUnseenFollowers, markFollowersSeen, followUser, unfollowUser, getRelation, fetchFollowingIds } from "./utils/followsApi.js";
+import { countUnseenFollowers, markFollowersSeen, followUser, unfollowUser, getRelation, fetchFollowingIds, fetchFollowerIds } from "./utils/followsApi.js";
 import { MiniProfileSheet } from "./components/community/MiniProfileSheet.jsx";
 import { countUnreadNotifications, fetchUnreadNotifications, markNotificationsRead, tickUserMilestones } from "./utils/notificationsApi.js";
 import { usePaginatedList } from "./components/usePaginatedList.js";
@@ -89,6 +89,8 @@ import { PickVisitSheet } from "./components/PickVisitSheet.jsx";
 import { RetroAttachSheet } from "./components/RetroAttachSheet.jsx";
 import { OnboardingModal } from "./components/OnboardingModal.jsx";
 import { TasteBudsPromptSheet } from "./components/TasteBudsPromptSheet.jsx";
+import { evalBadges } from "./utils/badgeDefinitions.js";
+import { BadgeSVG } from "./components/BadgesView.jsx";
 import { removeWantToGo, listWantToGo } from "./utils/wantToGoApi.js";
 import { setWantToGoRows } from "./utils/sessionCache.js";
 import { formatVisitDateInput } from "./utils/visitDate.js";
@@ -261,12 +263,16 @@ export default function App() {
   const formStateRef = useRef(null);
   const [addDraftData, setAddDraftData] = useState(null);
   const [tasteBudIds, setTasteBudIds] = useState(() => new Set());
+  const [mutualFollowCount, setMutualFollowCount] = useState(0);
   const [homeCurrency, setHomeCurrency] = useState("USD");
   const [onboardingDone, setOnboardingDone] = useState(null);
   const [tasteBudsDone, setTasteBudsDone] = useState(true);
   const [tasteHalfStep, setTasteHalfStep] = useState(false);
   const [showTasteBudsPrompt, setShowTasteBudsPrompt] = useState(false);
   const [showGuestOnboarding, setShowGuestOnboarding] = useState(true);
+  const [showBadgesCard, setShowBadgesCard] = useState(false);
+  const [earnedBadgeQueue, setEarnedBadgeQueue] = useState([]);
+  const [badgeModal, setBadgeModal] = useState(null);
   const guestReachedSignIn = useRef(false);
   const [guestEntries, setGuestEntries] = useState(() => GUEST_REST_ENTRIES);
   const [guestCafes,   setGuestCafes]   = useState(() => GUEST_CAFE_ENTRIES);
@@ -274,6 +280,7 @@ export default function App() {
   const [extCompareTarget, setExtCompareTarget] = useState(null);
   const lastLogPath = useRef("/log");
   const lastTastePath = useRef("/taste");
+  const pendingBadgesCard = useRef(null);
   /** Mandarin localization is temporarily stashed while EN gets polish.
    *  `T.zh` and components' `lang === "zh"` branches are intentionally preserved
    *  so reviving = restore lang state + UI toggles. See
@@ -340,7 +347,7 @@ export default function App() {
     let locallyDone = false;
     try { locallyDone = !!localStorage.getItem(`bite_welcomeDismissed_${user?.id}`); } catch {}
     setOnboardingDone(locallyDone || (profile.has_completed_onboarding ?? true));
-    setTasteBudsDone(profile.has_seen_taste_buds_prompt ?? true);
+    setTasteBudsDone(profile.has_seen_taste_buds_prompt ?? false);
   }, [profile?.has_completed_onboarding, profile?.has_seen_taste_buds_prompt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Persist "seen" the moment the signed-in OnboardingModal first renders so a
@@ -354,11 +361,18 @@ export default function App() {
       .then(({ error }) => { if (error) console.warn("[BITE] mark onboarding seen:", error.message); });
   }, [user?.id, onboardingDone, authReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
+
+
   useEffect(() => {
     if (!user?.id) { lastCity.current = ""; return; }
     try {
       lastCity.current = resolveCity(localStorage.getItem(`bite_lastUsedCity_${user.id}`) || "") || "";
     } catch { lastCity.current = ""; }
+    // Restore pending badges card destination across page reloads
+    try {
+      const pending = sessionStorage.getItem(`bite_pendingBadgesCard_${user.id}`);
+      if (pending) pendingBadgesCard.current = pending;
+    } catch {}
   }, [user?.id]);
 
   const refreshUnseenFollowers = useCallback(async () => {
@@ -410,6 +424,7 @@ export default function App() {
     if (!user?.id) return { ok: false };
     const res = await followUser(supabase, user.id, targetId);
     await refreshSocialCounts();
+    refreshDineTags();
     return res;
   }
 
@@ -513,7 +528,7 @@ export default function App() {
    *
    *  `fallbackMeta` is the raw notification meta — used as a last resort when
    *  fetchGroupVisitWithMembers returns null (e.g. RLS gap on tagged user). */
-  async function applyGroupVisitPrefill(groupVisitId, fallbackMeta) {
+  async function applyGroupVisitPrefill(groupVisitId, fallbackMeta, creatorProfile) {
     if (!groupVisitId || !user?.id) return;
     const gv = await fetchGroupVisitWithMembers(supabase, groupVisitId);
     if (!gv) {
@@ -547,7 +562,9 @@ export default function App() {
           letter: (resolvedCuisine[0] || "").toUpperCase(),
         });
       }
-      setAddInitialDineWith([]);
+      // Include the creator in dine-with if we have their profile from the notif.
+      const fallbackDineWith = creatorProfile?.id && creatorProfile.id !== user.id ? [creatorProfile] : [];
+      setAddInitialDineWith(fallbackDineWith);
       setAddTagTaggerId(null);
       setAddGroupVisitId(groupVisitId);
       setAddDraftData(null);
@@ -606,6 +623,12 @@ export default function App() {
         return (a.profile?.username || "").localeCompare(b.profile?.username || "");
       })
       .map((m) => m.profile);
+    // If the creator's profile wasn't in group_visit_members (e.g. RLS gap),
+    // fall back to the notif's fromProfile so the tagger always appears.
+    const creatorAlreadyIn = others.some(p => p?.id === gv.createdBy);
+    if (!creatorAlreadyIn && creatorProfile?.id && creatorProfile.id !== user.id) {
+      others.unshift(creatorProfile);
+    }
     setAddInitialDineWith(others);
     // No reverse-tag semantics for group visits — clear addTagTaggerId so the
     // save flow doesn't try to insert a `dine_tag_accepted` notification.
@@ -642,7 +665,7 @@ export default function App() {
     if (variant === "pick_visit") {
       const candidateIds = meta.candidate_visit_ids || [];
       if (!candidateIds.length) {
-        applyGroupVisitPrefill(groupVisitId, meta);
+        applyGroupVisitPrefill(groupVisitId, meta, notif.fromProfile);
         return;
       }
       Promise.all([
@@ -650,7 +673,7 @@ export default function App() {
         fetchGroupVisitWithMembers(supabase, groupVisitId),
       ]).then(([visits, gv]) => {
         if (!visits.length) {
-          applyGroupVisitPrefill(groupVisitId, meta);
+          applyGroupVisitPrefill(groupVisitId, meta, notif.fromProfile);
           return;
         }
         setPickVisitState({
@@ -663,7 +686,7 @@ export default function App() {
       });
       return;
     }
-    applyGroupVisitPrefill(groupVisitId, meta);
+    applyGroupVisitPrefill(groupVisitId, meta, notif.fromProfile);
   }
 
   // Legacy: group_visit_logged stopped being inserted on 2026-05-04 in
@@ -1001,6 +1024,7 @@ export default function App() {
       const rel = await getRelation(supabase, user.id, targetId);
       setNotifSheetRelation(rel);
       refreshSocialCounts();
+      refreshDineTags();
     } finally {
       setNotifSheetBusy(false);
     }
@@ -1013,6 +1037,7 @@ export default function App() {
       await unfollowUser(supabase, user.id, targetId);
       setNotifSheetProfile(null);
       refreshSocialCounts();
+      refreshDineTags();
     } finally {
       setNotifSheetBusy(false);
     }
@@ -1057,10 +1082,11 @@ export default function App() {
 
   const refreshDineTags = useCallback(async () => {
     if (!user?.id) { setDineTags([]); setDineTagCount(0); setDineTagsReady(true); return; }
-    const [tags, count, followingIds] = await Promise.all([
+    const [tags, count, followingIds, followerIds] = await Promise.all([
       fetchUnloggedDineTags(supabase, user.id),
       countUnloggedDineTags(supabase, user.id),
       fetchFollowingIds(supabase, user.id),
+      fetchFollowerIds(supabase, user.id),
     ]);
     const dismissed = getTombstonedIds(user.id);
     const filteredTags = dismissed.size ? tags.filter((t) => !dismissed.has(t.id)) : tags;
@@ -1072,9 +1098,15 @@ export default function App() {
     setDineTagsReady(true);
     try { sessionStorage.setItem(`bite_dineTagsCache_v2_${user.id}`, JSON.stringify({ tags: filteredTags, count: adjustedCount })); } catch {}
     setTasteBudIds(followingIds);
+    setMutualFollowCount([...followingIds].filter(id => followerIds.has(id)).length);
   }, [user?.id]);
 
   useEffect(() => { refreshDineTags(); }, [refreshDineTags]);
+
+  const handleFollowChange = useCallback(() => {
+    refreshSocialCounts();
+    refreshDineTags();
+  }, [refreshSocialCounts, refreshDineTags]);
 
   function dismissGuestOnboarding(openSignIn) {
     setShowGuestOnboarding(false);
@@ -1094,6 +1126,10 @@ export default function App() {
       supabase.from("profiles").update({ has_completed_onboarding: true }).eq("id", user.id);
       try { localStorage.setItem(`bite_welcomeDismissed_${user.id}`, "1"); } catch {}
     }
+    if (navigateTo === "/add" && prefillCity) {
+      setAddFormKey(k => k + 1);
+      setAddPrefill({ city: prefillCity });
+    }
     refreshProfile();
     navigate(navigateTo || "/log");
   }
@@ -1109,7 +1145,15 @@ export default function App() {
     setShowTasteBudsPrompt(false);
     setTasteBudsDone(true);
     if (user?.id) supabase.from("profiles").update({ has_seen_taste_buds_prompt: true }).eq("id", user.id);
-    if (navigateTo) navigate(navigateTo);
+    // Only queue the badges card if the user actually has a first entry logged
+    if (st.entries.length === 0 && cafes.length === 0) return;
+    if (navigateTo) {
+      pendingBadgesCard.current = navigateTo;
+      try { if (user?.id) sessionStorage.setItem(`bite_pendingBadgesCard_${user.id}`, navigateTo); } catch {}
+      navigate(navigateTo);
+    } else {
+      try { if (user?.id && !localStorage.getItem(`bite_badges_card_${user.id}`)) setShowBadgesCard(true); } catch { setShowBadgesCard(true); }
+    }
   }
 
   // Redirect / → /log (signed-in) or /community/feed (guest).
@@ -1144,6 +1188,19 @@ export default function App() {
 
   useEffect(() => {
     if (pathname.startsWith("/log")) lastLogPath.current = pathname;
+    if (pendingBadgesCard.current !== null && !pathname.startsWith(pendingBadgesCard.current) && user?.id) {
+      pendingBadgesCard.current = null;
+      const uid = user.id;
+      try { sessionStorage.removeItem(`bite_pendingBadgesCard_${uid}`); } catch {}
+      // Fetch fresh following IDs so first-follow is accurate regardless of
+      // whether refreshDineTags resolved before navigation.
+      fetchFollowingIds(supabase, uid).then(ids => {
+        setTasteBudIds(ids);
+        try { if (!localStorage.getItem(`bite_badges_card_${uid}`)) setShowBadgesCard(true); } catch { setShowBadgesCard(true); }
+      }).catch(() => {
+        try { if (!localStorage.getItem(`bite_badges_card_${uid}`)) setShowBadgesCard(true); } catch { setShowBadgesCard(true); }
+      });
+    }
     if (pathname.startsWith("/taste")) lastTastePath.current = pathname;
     if (pathname !== "/add") {
       // Save draft if form has meaningful content
@@ -1213,6 +1270,39 @@ export default function App() {
     () => new Set(st.entries.map((e) => (e.letter || e.cuisine?.[0])?.toUpperCase()).filter(Boolean)),
     [st.entries],
   );
+
+  // Detect newly earned badges and queue a modal for each one.
+  // Must be after questL (useMemo above) to avoid temporal dead zone.
+  useEffect(() => {
+    if (!user?.id) return;
+    const badges = evalBadges(st.entries, cafes, weights, questL, tasteBudIds.size, mutualFollowCount);
+    const key = `bite_seen_badges_${user.id}`;
+    let seen;
+    try {
+      const stored = localStorage.getItem(key);
+      seen = stored ? new Set(JSON.parse(stored)) : null;
+    } catch { seen = null; }
+    if (seen === null) {
+      const allEarned = badges.filter(b => b.earned).map(b => b.id);
+      try { localStorage.setItem(key, JSON.stringify(allEarned)); } catch {}
+      return;
+    }
+    const ONBOARDING_BADGE_IDS = new Set(["first-bite", "first-follow"]);
+    const newlyEarned = badges.filter(b => b.earned && !seen.has(b.id) && !ONBOARDING_BADGE_IDS.has(b.id));
+    if (!newlyEarned.length) return;
+    for (const b of newlyEarned) seen.add(b.id);
+    try { localStorage.setItem(key, JSON.stringify([...seen])); } catch {}
+    setEarnedBadgeQueue(prev => [...prev, ...newlyEarned]);
+  }, [user?.id, st.entries, cafes, questL, weights, tasteBudIds.size, mutualFollowCount]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Drain the queue one badge at a time.
+  useEffect(() => {
+    if (badgeModal || earnedBadgeQueue.length === 0) return;
+    const [next, ...rest] = earnedBadgeQueue;
+    setBadgeModal(next);
+    setEarnedBadgeQueue(rest);
+  }, [earnedBadgeQueue, badgeModal]);
+
   const [cafeSortBy, setCafeSortBy] = useState("bite");
   const [cafeSortAsc, setCafeSortAsc] = useState(false);
   const [cafeFilterMilk, setCafeFilterMilk] = useState("");
@@ -2256,7 +2346,7 @@ export default function App() {
           sweetWeights={sweetWeights}
           unseenFollowers={unseenFollowers}
           onMarkFollowersSeen={handleMarkFollowersSeen}
-          onFollowChange={refreshSocialCounts}
+          onFollowChange={handleFollowChange}
           externalUserLogTarget={extUserLogTarget}
           onExternalUserLogConsumed={() => setExtUserLogTarget(null)}
           externalCompareTarget={extCompareTarget}
@@ -2795,6 +2885,75 @@ export default function App() {
         onHomeCitySave={handleHomeCitySave}
       />
     )}
+    {badgeModal && (
+      <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.82)", zIndex: 501, display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem" }}>
+        <div style={{ background: "#1E1E1C", borderRadius: 16, padding: "28px 24px 24px", maxWidth: 360, width: "100%", border: "0.5px solid rgba(255,255,255,0.12)", boxSizing: "border-box", textAlign: "center" }}>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
+            <BadgeSVG emoji={badgeModal.emoji} earned color={badgeModal.color} border={badgeModal.color} bg={badgeModal.bgColor} />
+          </div>
+          <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: badgeModal.color, marginBottom: 6 }}>Badge Earned</div>
+          <h2 style={{ fontSize: 20, fontWeight: 700, color: "#F1EFE8", margin: "0 0 8px", lineHeight: 1.3 }}>{badgeModal.name}</h2>
+          <p style={{ fontSize: 13, color: "#C4C2BA", margin: "0 0 24px", lineHeight: 1.6 }}>{badgeModal.earnedDesc}</p>
+          <button
+            type="button"
+            onClick={() => setBadgeModal(null)}
+            style={{ width: "100%", padding: 12, background: badgeModal.color, color: "#141413", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+          >
+            Awesome! 🎉
+          </button>
+        </div>
+      </div>
+    )}
+    {showBadgesCard && (() => {
+      const ONBOARDING_BADGE_IDS = ["first-bite", "first-follow"];
+      const cardBadges = evalBadges(st.entries, cafes, weights, questL, tasteBudIds.size, mutualFollowCount)
+        .filter(b => ONBOARDING_BADGE_IDS.includes(b.id) && b.earned);
+      const dismissCard = (andOpen) => {
+        setShowBadgesCard(false);
+        try { if (user?.id) localStorage.setItem(`bite_badges_card_${user.id}`, "1"); } catch {}
+        if (andOpen) setShowSelfSheet(true);
+      };
+      if (cardBadges.length === 0) { dismissCard(false); return null; }
+      return (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.82)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem" }}>
+          <div style={{ background: "#1E1E1C", borderRadius: 16, padding: "28px 24px 24px", maxWidth: 380, width: "100%", border: "0.5px solid rgba(255,255,255,0.12)", boxSizing: "border-box", maxHeight: "85vh", overflowY: "auto" }}>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: "#F1EFE8", margin: "0 0 18px", textAlign: "center", lineHeight: 1.3 }}>
+              Congrats on earning your<br />first badges!
+            </h2>
+            {cardBadges.length > 0 && (
+              <div style={{ display: "flex", justifyContent: "center", gap: 24, marginBottom: 20 }}>
+                {cardBadges.map(b => (
+                  <div key={b.id} style={{ textAlign: "center", width: 64 }}>
+                    <BadgeSVG emoji={b.emoji} earned color={b.color} border={b.color} bg={b.bgColor} />
+                    <div style={{ fontSize: 9, color: "#C4C2BA", marginTop: 4, lineHeight: 1.3, wordBreak: "break-word" }}>{b.name}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p style={{ fontSize: 13, color: "#C4C2BA", margin: "0 0 6px", textAlign: "center", lineHeight: 1.6 }}>
+              Tap your profile to see other badges<br />you can earn to get points!
+            </p>
+            <p style={{ fontSize: 11, color: "#888780", margin: "0 0 20px", textAlign: "center", fontStyle: "italic" }}>
+              Points will be redeemable (coming soon)
+            </p>
+            <button
+              type="button"
+              onClick={() => dismissCard(true)}
+              style={{ width: "100%", padding: 12, background: "#F0997B", color: "#141413", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer", marginBottom: 8 }}
+            >
+              See my badges →
+            </button>
+            <button
+              type="button"
+              onClick={() => dismissCard(false)}
+              style={{ display: "block", width: "100%", textAlign: "center", fontSize: 12, color: "#888780", background: "none", border: "none", cursor: "pointer", padding: "6px 0" }}
+            >
+              Maybe later
+            </button>
+          </div>
+        </div>
+      );
+    })()}
     {showTasteBudsPrompt && (
       <TasteBudsPromptSheet
         onFindFriends={() => dismissTasteBudsPrompt("/community/people/discover")}
@@ -2842,6 +3001,8 @@ export default function App() {
         onWeightTap={() => { setShowSelfSheet(false); navigate("/taste"); }}
         onEditProfile={() => { setShowSelfSheet(false); setShowAuthModal(true); }}
         onSignOut={async () => { setShowSelfSheet(false); await supabase.auth.signOut(); }}
+        followingCount={tasteBudIds.size}
+        tasteBudCount={mutualFollowCount}
         t={t}
       />
     )}
