@@ -273,6 +273,9 @@ export function PlacePickerModal({
   }
 
   function buildReason({ place }) {
+    const nameKey = place.name?.toLowerCase().trim();
+    const myBeenHere = myPlaceIds.has(place.placeId) || (nameKey && myVisitsByName.has(nameKey));
+    const theirBeenHere = theirPlaceIds.has(place.placeId) || (nameKey && theirVisitsByName.has(nameKey));
     const myCv = myVisits.filter(v => v.cuisine === place.cuisine);
     const thCv = theirVisits.filter(v => v.cuisine === place.cuisine);
     const myAvgC = myCv.length ? arrAvg(myCv.map(v => +v.taste)) : null;
@@ -281,16 +284,22 @@ export function PlacePickerModal({
     const thFn = firstName(friendName);
 
     if (myCv.length >= 2 && myAvgC >= 7.5 && thCv.length >= 2 && thAvgC >= 7.5) {
-      return `${myFn} rates ${place.cuisine} ${myAvgC.toFixed(1)} on avg. ${thFn} has been ${thCv.length} times.`;
+      return `${myFn} rates ${place.cuisine} ${myAvgC.toFixed(1)} on avg. ${thFn} rates it ${thAvgC.toFixed(1)}.`;
     }
     if (myCv.length === 0 && thCv.length === 0) {
       return `${place.cuisine} scores well for both of you — neither of you has tried this one.`;
     }
     if (myCv.length > 0 && thCv.length === 0) {
-      return `${myFn} loved it here (${myAvgC.toFixed(1)}). First time for ${thFn}.`;
+      if (myBeenHere) {
+        return `${myFn} rated it ${myAvgC.toFixed(1)}. First time for ${thFn}.`;
+      }
+      return `${myFn} loves ${place.cuisine} (avg ${myAvgC.toFixed(1)}). New spot for both of you.`;
     }
     if (thCv.length > 0 && myCv.length === 0) {
-      return `${thFn} loved it here (${thAvgC.toFixed(1)}). First time for ${myFn}.`;
+      if (theirBeenHere) {
+        return `${thFn} rated it ${thAvgC.toFixed(1)}. First time for ${myFn}.`;
+      }
+      return `${thFn} loves ${place.cuisine} (avg ${thAvgC.toFixed(1)}). New spot for both of you.`;
     }
     return null;
   }
