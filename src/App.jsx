@@ -681,12 +681,18 @@ export default function App() {
     setShowNotifPanel(false);
     const meta = notif?.meta || {};
     const kind = meta.kind || "restaurant";
-    // If we have an entry_id we can deep-link to the feed post; otherwise
-    // fall back to the feed root so the user at least gets there.
-    if (meta.entry_id) {
-      setFeedScrollTarget({ postId: meta.entry_id, postType: kind, kind: entryTypeToKind(kind) });
+    const groupVisitId = meta.group_visit_id;
+    if (groupVisitId && user?.id) {
+      fetchGroupVisitWithMembers(supabase, groupVisitId).then((gv) => {
+        const member = gv?.members?.find((m) => m.userId === user.id);
+        if (member?.visitId) {
+          setFeedScrollTarget({ postId: member.visitId, postType: kind, kind: entryTypeToKind(kind) });
+        }
+        navigate("/community/feed");
+      });
+    } else {
+      navigate("/community/feed");
     }
-    navigate("/community/feed");
   }
 
   /** After a fresh save with tagged friends and no candidate group match (or

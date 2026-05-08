@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { PlacePickerModal } from "./PlacePickerModal.jsx";
+import { PlaceStatsSheet } from "./PlaceStatsSheet.jsx";
 import { useLang } from "../../contexts/LangContext.jsx";
 import { supabase } from "../../config/supabaseClient.js";
 import { listTasteBuds, unfollowUser } from "../../utils/followsApi.js";
@@ -93,13 +94,17 @@ function Score({ value, color }) {
   );
 }
 
-function BothRow({ row, isLast }) {
+function BothRow({ row, isLast, onClick }) {
   return (
-    <div style={{
-      display: "flex", alignItems: "center", gap: 12,
-      padding: "10px 12px",
-      borderBottom: isLast ? "none" : "0.5px solid rgba(255,255,255,0.06)",
-    }}>
+    <div
+      onClick={onClick}
+      style={{
+        display: "flex", alignItems: "center", gap: 12,
+        padding: "10px 12px",
+        borderBottom: isLast ? "none" : "0.5px solid rgba(255,255,255,0.06)",
+        cursor: onClick ? "pointer" : undefined,
+      }}
+    >
       <div style={FLAG_BOX_STYLE}>{flagFor(row.cuisine, row.name)}</div>
       <div style={{
         flex: 1, minWidth: 0, fontSize: 14, fontWeight: 500, color: "#F1EFE8",
@@ -114,14 +119,18 @@ function BothRow({ row, isLast }) {
   );
 }
 
-function DiscoverRow({ row, subLine }) {
+function DiscoverRow({ row, subLine, onClick }) {
   return (
-    <div style={{
-      display: "flex", alignItems: "center", gap: 12,
-      padding: "10px 12px", marginBottom: 6,
-      background: "#1E1E1C", border: "0.5px solid rgba(255,255,255,0.08)",
-      borderRadius: 10,
-    }}>
+    <div
+      onClick={onClick}
+      style={{
+        display: "flex", alignItems: "center", gap: 12,
+        padding: "10px 12px", marginBottom: 6,
+        background: "#1E1E1C", border: "0.5px solid rgba(255,255,255,0.08)",
+        borderRadius: 10,
+        cursor: onClick ? "pointer" : undefined,
+      }}
+    >
       <div style={FLAG_BOX_STYLE}>{flagFor(row.cuisine, row.name)}</div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
@@ -181,6 +190,7 @@ export function CompareTab({ user, myWeights, username, primedTarget, onFollowCh
   const navigate = useNavigate();
   const { t } = useLang();
   const [buds, setBuds] = useState([]);
+  const [selectedPlace, setSelectedPlace] = useState(null);
   /** Source of truth for the comparison is the `username` prop (from the URL).
    *  `target` mirrors the resolved profile; the lazy initializer accepts the
    *  primed handoff when its username matches so we paint the 1:1 view without
@@ -398,6 +408,7 @@ export function CompareTab({ user, myWeights, username, primedTarget, onFollowCh
   const onlyMine = overlap?.onlyMine || [];
 
   return (
+    <>
     <div>
       <button
         type="button"
@@ -495,7 +506,7 @@ export function CompareTab({ user, myWeights, username, primedTarget, onFollowCh
                   borderRadius: 12, overflow: "hidden",
                 }}>
                   {bothPage.visible.map((r, i) => (
-                    <BothRow key={r.placeId} row={r} isLast={i === bothPage.visible.length - 1} />
+                    <BothRow key={r.placeId} row={r} isLast={i === bothPage.visible.length - 1} onClick={r.placeId ? () => setSelectedPlace(r) : undefined} />
                   ))}
                 </div>
                 <ShowMoreButton
@@ -537,6 +548,7 @@ export function CompareTab({ user, myWeights, username, primedTarget, onFollowCh
                         name: friendName, score: r.theirs.toFixed(2),
                       }),
                     ].filter(Boolean).join(" · ")}
+                    onClick={r.placeId ? () => setSelectedPlace(r) : undefined}
                   />
                 ))}
                 <ShowMoreButton
@@ -566,6 +578,7 @@ export function CompareTab({ user, myWeights, username, primedTarget, onFollowCh
                         score: r.mine.toFixed(2),
                       }),
                     ].filter(Boolean).join(" · ")}
+                    onClick={r.placeId ? () => setSelectedPlace(r) : undefined}
                   />
                 ))}
                 <ShowMoreButton
@@ -580,5 +593,20 @@ export function CompareTab({ user, myWeights, username, primedTarget, onFollowCh
       )}
 
     </div>
+
+    {selectedPlace && (
+      <PlaceStatsSheet
+        post={{
+          placeId: selectedPlace.placeId,
+          kind: "rest",
+          name: selectedPlace.name,
+          cuisine: selectedPlace.cuisine,
+          city: selectedPlace.city,
+        }}
+        restaurantWeights={myWeights}
+        onClose={() => setSelectedPlace(null)}
+      />
+    )}
+    </>
   );
 }

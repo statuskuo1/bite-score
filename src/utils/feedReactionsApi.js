@@ -1,3 +1,5 @@
+import posthog from "../config/posthog.js";
+
 /**
  * Feed reactions: hearts only (for now).
  *
@@ -218,6 +220,8 @@ export async function toggleHeart(client, viewerId, post, currentlyMine) {
   /** Notify the post owner. Skip self-hearts and skip silently on any
    *  notification failure — the heart itself succeeded, so we don't want
    *  to surface a false rollback to the optimistic UI. */
+  posthog.capture("feed post hearted", { post_type: dbType, place_name: post.name || "" });
+
   if (post.ownerId && post.ownerId !== viewerId) {
     const { error: nErr } = await client.from("notifications").insert({
       user_id: post.ownerId,

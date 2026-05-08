@@ -9,6 +9,7 @@ import { CityInput } from "./CityInput.jsx";
 import { listFollows } from "../utils/followsApi.js";
 import { computeFoodStats, fetchRestaurantVisitsForUser } from "../utils/visitPlacesApi.js";
 import { FoodStatsBlock } from "./FoodStatsBlock.jsx";
+import posthog from "../config/posthog.js";
 
 const redirectBase = () => window.location.origin.replace(/\/$/, "");
 
@@ -252,9 +253,13 @@ export function AuthModal({ open, onClose }) {
     try {
       const resolved = await resolveIdentifierToEmail(trimmed);
       if (!resolved) { setErr(t.authInvalidLogin); return; }
-      const { error } = await supabase.auth.signInWithPassword({ email: resolved, password });
+      const { data: signInData, error } = await supabase.auth.signInWithPassword({ email: resolved, password });
       if (error) throw error;
       setPassword("");
+      if (signInData?.user?.id) {
+        posthog.identify(signInData.user.id, { email: signInData.user.email });
+        posthog.capture("user signed in", { method: "email" });
+      }
       onClose();
     } catch (e) {
       console.error(e);
@@ -285,6 +290,10 @@ export function AuthModal({ open, onClose }) {
       });
       if (error) throw error;
       setPassword("");
+      if (data?.user?.id) {
+        posthog.identify(data.user.id, { email: data.user.email });
+        posthog.capture("user signed up", { method: "email" });
+      }
       if (data?.session) { onClose(); return; }
       setPendingVerificationEmail(trimmed);
       setResendCooldown(30);
@@ -417,13 +426,16 @@ export function AuthModal({ open, onClose }) {
     setBusy(true);
     setErr("");
     try {
+      posthog.capture("user signed out");
       await supabase.auth.signOut();
+      posthog.reset();
       setEmail("");
       setPassword("");
       setResetSent(false);
       onClose();
     } catch (e) {
       console.error(e);
+      posthog.captureException(e);
       setErr(e.message || t.authErrorGeneric);
     } finally {
       setBusy(false);

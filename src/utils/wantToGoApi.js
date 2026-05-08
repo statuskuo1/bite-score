@@ -2,6 +2,7 @@ import {
   upsertWantToGoRow,
   removeWantToGoRow,
 } from "./sessionCache.js";
+import posthog from "../config/posthog.js";
 
 const UPSERT_OPTS = { onConflict: "user_id,place_id,kind", ignoreDuplicates: true };
 
@@ -64,6 +65,7 @@ export async function addWantToGo(client, userId, { placeId, kind, name, cuisine
     category: category || null,
     created_at: new Date().toISOString(),
   });
+  posthog.capture("place saved to want to go", { kind, place_name: name, city: city || null });
   return { ok: true };
 }
 
@@ -79,6 +81,7 @@ export async function removeWantToGo(client, userId, { placeId, kind }) {
     return { ok: false };
   }
   removeWantToGoRow(placeId, kind);
+  posthog.capture("place removed from want to go", { kind });
   return { ok: true };
 }
 
