@@ -351,7 +351,7 @@ export function PlacePickerModal({
           textTransform: "uppercase", letterSpacing: "0.06em",
           marginBottom: 4,
         }}>
-          BITE Score
+          Est. BITE Score
         </div>
         <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
           <span style={{
@@ -359,14 +359,14 @@ export function PlacePickerModal({
             background: "rgba(240,153,123,0.14)", color: "#F0997B",
             border: "1px solid rgba(240,153,123,0.3)",
           }}>
-            {myFn}: {scoreA.toFixed(1)}
+            {myFn}: ~{scoreA.toFixed(1)}
           </span>
           <span style={{
             fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 999,
             background: "rgba(91,155,213,0.14)", color: "#5B9BD5",
             border: "1px solid rgba(91,155,213,0.3)",
           }}>
-            {thFn}: {scoreB.toFixed(1)}
+            {thFn}: ~{scoreB.toFixed(1)}
           </span>
         </div>
 
