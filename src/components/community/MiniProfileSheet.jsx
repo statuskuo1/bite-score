@@ -124,6 +124,7 @@ export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClos
   const [freshWeights, setFreshWeights] = useState(null);
   const [rawVisits, setRawVisits] = useState(cachedVisits ?? []);
   const [profileSection, setProfileSection] = useState(null);
+  const [showCompareLockedMsg, setShowCompareLockedMsg] = useState(false);
 
   useEffect(() => {
     if (!profile?.id) { setStats(null); setFreshWeights(null); return; }
@@ -173,7 +174,7 @@ export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClos
   if (!profile) return null;
 
   const name = profile.display_name || profile.username || "—";
-  const canCompare = relation === "taste_buds" || relation === "i_follow";
+  const canCompare = relation === "taste_buds";
 
   return (
     <>
@@ -341,30 +342,41 @@ export function MiniProfileSheet({ profile, relation, busy, cachedVisits, onClos
               </button>
             </div>
           ) : (relation === "i_follow" || relation === "taste_buds") ? (
-            <div style={{ display: "flex", gap: 8 }}>
-              <button
-                type="button"
-                onClick={() => { onViewLog?.({ ...profile, ...(freshWeights ?? {}) }); onClose?.(); }}
-                style={{
-                  flex: 1, padding: "12px 14px", borderRadius: 10,
-                  background: "#3C1F13", border: "1px solid rgba(240,153,123,0.4)",
-                  color: "#F0997B", fontSize: 14, fontWeight: 600, cursor: "pointer",
-                }}
-              >
-                {t.viewLog || "View log"}
-              </button>
-              {canCompare && (
+            <div>
+              <div style={{ display: "flex", gap: 8 }}>
                 <button
                   type="button"
-                  onClick={() => { onCompareWith?.(profile); onClose?.(); }}
+                  onClick={() => { onViewLog?.({ ...profile, ...(freshWeights ?? {}) }); onClose?.(); }}
+                  style={{
+                    flex: 1, padding: "12px 14px", borderRadius: 10,
+                    background: "#3C1F13", border: "1px solid rgba(240,153,123,0.4)",
+                    color: "#F0997B", fontSize: 14, fontWeight: 600, cursor: "pointer",
+                  }}
+                >
+                  {t.viewLog || "View log"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (canCompare) { onCompareWith?.(profile); onClose?.(); }
+                    else setShowCompareLockedMsg(true);
+                  }}
                   style={{
                     flex: 1, padding: "12px 14px", borderRadius: 10,
                     background: "transparent", border: "0.5px solid rgba(255,255,255,0.2)",
-                    color: "#C4C2BA", fontSize: 14, fontWeight: 500, cursor: "pointer",
+                    color: canCompare ? "#C4C2BA" : "#444441",
+                    fontSize: 14, fontWeight: 500,
+                    cursor: canCompare ? "pointer" : "default",
+                    opacity: canCompare ? 1 : 0.45,
                   }}
                 >
                   {t.compareSub || "Compare"}
                 </button>
+              </div>
+              {showCompareLockedMsg && (
+                <p style={{ fontSize: 12, color: "#888780", margin: "8px 0 0", textAlign: "center" }}>
+                  You have to be Taste Buds to access this feature.
+                </p>
               )}
             </div>
           ) : (
