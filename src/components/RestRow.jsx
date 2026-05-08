@@ -7,7 +7,7 @@ import { EntryCard } from "./EntryCard.jsx";
 import { VisitsModal } from "./VisitsModal.jsx";
 import { formatCost } from "../utils/currency.js";
 
-export function RestRow({ e, display, onEdit, onDelete, user, visits = 1, group, weights, showAuthor = false, homeCurrency = "USD", dinedWithForEntry, rank }) {
+export function RestRow({ e, display, onEdit, onDelete, user, visits = 1, group, weights, showAuthor = false, homeCurrency = "USD", dinedWithForEntry, viewerProfile, rank }) {
   const { t } = useLang();
   const [showVisits, setShowVisits] = useState(false);
   const flag = FLAGS[e.cuisine] || (e.letter || e.cuisine?.[0])?.toUpperCase() || "?";
@@ -60,6 +60,7 @@ export function RestRow({ e, display, onEdit, onDelete, user, visits = 1, group,
           ["Repeat", v.useR ? ("⭐".repeat(v.repeatability) || "✕") : t.off],
         ]}
         getDiners={getDiners}
+        viewerProfile={viewerProfile}
         onEdit={(v) => { onEdit(v); window.scrollTo({ top: 0, behavior: "smooth" }); }}
         onDelete={onDelete}
       />
@@ -85,6 +86,7 @@ export function RestRow({ e, display, onEdit, onDelete, user, visits = 1, group,
         diners={unionDiners}
         post={{ placeId: e.placeId || null, kind: "rest" }}
         viewerId={user?.id}
+        viewerProfile={viewerProfile}
         mutable={swipeOk}
         onEdit={() => {
           if (visits > 1) {

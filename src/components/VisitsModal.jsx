@@ -13,6 +13,7 @@ export function VisitsModal({
   scoreColorFn,
   getRows,
   getDiners,
+  viewerProfile,
   suffix,
   kind = "rest",
   onEdit,
@@ -74,6 +75,7 @@ export function VisitsModal({
                   diners={getDiners ? getDiners(v.id) : []}
                   post={{ placeId: v.placeId || null, kind }}
                   viewerId={user?.id}
+                  viewerProfile={viewerProfile}
                   mutable={canMutateVisit(v, user)}
                   onEdit={() => { onClose(); onEdit(v); }}
                   onDelete={() => { onDelete(v.id); if (total === 1) onClose(); }}

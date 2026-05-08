@@ -425,6 +425,14 @@ export function FeedPostRow({
   const heartInteractive = typeof onToggleHeart === "function";
   const othersInteractive = typeof onOpenOthers === "function";
 
+  /** Full dining party for the comparison sheet — author prepended so the
+   *  sheet renders every member of the meal (party of N → N rows). The
+   *  inline AvatarStack + dinedWithSummary keep using `orderedDiners`
+   *  because the post header already shows the author; only the modal
+   *  needs the full set. Dedupe on id is defensive; the v2 RPC currently
+   *  excludes the entry owner from `coDiners`. */
+  const partyForSheet = [author, ...orderedDiners.filter((p) => p.id !== author.id)];
+
   /** Single source of truth for "open the party comparison sheet for this
    *  card". Used by every tappable token in the dined-with row + the avatar
    *  stack so the payload (post + ordered profiles) stays consistent. Null
@@ -434,8 +442,8 @@ export function FeedPostRow({
     ? () => onOpenOthers({
         kind: "co_diners",
         post,
-        profiles: orderedDiners,
-        title: "Dined with",
+        profiles: partyForSheet,
+        title: "Dining Party",
       })
     : null;
 

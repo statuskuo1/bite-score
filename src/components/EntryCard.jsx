@@ -18,12 +18,19 @@ import { OthersListSheet } from "./community/OthersListSheet.jsx";
  *   score        { val, label, color } — right-aligned big-number display
  *   expandedRows [[label, value], ...] for the expanded panel grid
  *   notes        free-text shown under the expanded grid
- *   diners       co-diner profile array — drives the "With" cell + sheet
+ *   diners       co-diner profile array — drives the "With" cell + sheet.
+ *                Excludes the entry owner (data layer filters them); the
+ *                "With" preview reads as "Friend1 +N" intentionally — the
+ *                row chrome is already the owner's, so they're implicit.
  *   post         optional { placeId, kind } so the diners sheet can show
  *                each co-diner's BITE for this place. Without it the sheet
  *                still lists names; the BITE column reads "—".
  *   viewerId     optional — currently unused but reserved for future
  *                viewer-aware behavior (e.g. "you" labels)
+ *   viewerProfile optional { id, username, display_name, avatar_url } —
+ *                the entry owner. Prepended (deduped) to the diners list
+ *                when the comparison sheet opens so the full dining party
+ *                is visible (party of N renders N rows).
  *   mutable      bool — controls swipe affordance
  *   onEdit       () => void — invoked by swipe "Edit"
  *   onDelete     () => void — invoked by swipe "Delete"
@@ -41,6 +48,7 @@ export function EntryCard({
   post,
   // eslint-disable-next-line no-unused-vars
   viewerId,
+  viewerProfile,
   mutable,
   onEdit,
   onDelete,
@@ -158,12 +166,17 @@ export function EntryCard({
         )}
       </div>
       {/* Portal the diners sheet to <body> so SwipeRow's transform/overflow
-          doesn't trap a position:fixed overlay inside this row's box. */}
+          doesn't trap a position:fixed overlay inside this row's box.
+          Prepend the entry owner so the sheet shows the full dining party
+          (a party of N renders N rows). Dedupe defensively in case the
+          data layer ever stops filtering the owner from `diners`. */}
       {showDiners && diners?.length > 0 && typeof document !== "undefined" && createPortal(
         <OthersListSheet
           post={post || { placeId: null, kind: "rest" }}
-          profiles={diners}
-          title="Dined with"
+          profiles={viewerProfile?.id
+            ? [viewerProfile, ...diners.filter((d) => d.id !== viewerProfile.id)]
+            : diners}
+          title="Dining Party"
           onClose={() => setShowDiners(false)}
         />,
         document.body,
