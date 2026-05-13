@@ -23,6 +23,35 @@ function maskDate(raw) {
   return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
 }
 
+const NOTE_PILLS = ["cozy","wifi","no laptops","work friendly","loud","great service","bad service","good ambiance","bathroom","outdoor seating","date spot","dog friendly","overrated"];
+
+/**
+ * Inverse of `buildEntry()` notes concat (`fav: X · avoid: Y · pill1, pill2 · free`).
+ * Used to repopulate the dedicated inputs on edit so we don't dump everything
+ * into the free-text textarea and lose structure on round-trip.
+ */
+function parseSavedNotes(notes, pillVocab) {
+  if (!notes) return { favOrder: "", shouldntGet: "", pills: [], rest: "" };
+  const segs = notes.split(" · ");
+  let favOrder = "", shouldntGet = "";
+  const leftover = [];
+  for (const seg of segs) {
+    if (seg.startsWith("fav: ")) favOrder = seg.slice(5).trim();
+    else if (seg.startsWith("avoid: ")) shouldntGet = seg.slice(7).trim();
+    else leftover.push(seg);
+  }
+  let pills = [], rest = "";
+  if (leftover.length) {
+    const tokens = leftover[0].split(",").map(s => s.trim()).filter(Boolean);
+    if (tokens.length && tokens.every(tok => pillVocab.includes(tok))) {
+      pills = tokens;
+      rest = leftover.slice(1).join(" · ");
+    } else {
+      rest = leftover.join(" · ");
+    }
+  }
+  return { favOrder, shouldntGet, pills, rest };
+}
 
 const ROAST_LEVELS = [
   { value: "Light", labelKey: "roastLight" },
@@ -258,15 +287,28 @@ function BeanOriginDropdown({ active, onChange }) {
 
 export function CafeForm({initial,initialDineWith=[],onSave,onSaveAndContinue,onCancel,onFormChange,weights,addType,setAddType,existingCafes,existingCities,places,onPlaceCreated,user,tasteBudIds,tasteStep=0.1,onTasteStepChange}) {
   const {t} = useLang();
-  const [f, setF] = useState(() => ({ ...INIT_CAFE, ...initial, visitDate: (initial.visitDate || formatVisitDateInput(initial.visitedAt) || "") }));
+  const isEdit = !!initial.id;
+  const [f, setF] = useState(() => {
+    const base = { ...INIT_CAFE, ...initial, visitDate: (initial.visitDate || formatVisitDateInput(initial.visitedAt) || "") };
+    if (!isEdit) return base;
+    const parsed = parseSavedNotes(initial.notes, NOTE_PILLS);
+    return {
+      ...base,
+      favOrder: initial.favOrder ?? parsed.favOrder,
+      shouldntGet: initial.shouldntGet ?? parsed.shouldntGet,
+      notes: parsed.rest,
+    };
+  });
   const [sub, setSub] = useState(false);
   const [dineWith, setDineWith] = useState(initialDineWith);
-  const [selectedPills, setSelectedPills] = useState([]);
+  const [selectedPills, setSelectedPills] = useState(() => {
+    if (!isEdit) return [];
+    return parseSavedNotes(initial.notes, NOTE_PILLS).pills;
+  });
   const [currencyCode, setCurrencyCode] = useState(() => initial.currency_code || getCurrencyForCity(initial.city || ""));
   const currSymbol = CURRENCY_SYMBOLS[currencyCode] || currencyCode;
   const inp = (k, v) => setF(p => ({...p, [k]: v}));
   const score = calcCafeOutOf10(+f.taste,+f.cost,+f.portions,+f.wait,f.useR,+f.repeatability,weights,currencyCode);
-  const isEdit = !!initial.id;
   useEffect(() => {
     if (!isEdit) onFormChange?.({ addType: "cafe", f, dineWith });
   }, [f, dineWith]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -318,7 +360,6 @@ export function CafeForm({initial,initialDineWith=[],onSave,onSaveAndContinue,on
     return true;
   }
 
-  const NOTE_PILLS = ["cozy","wifi","no laptops","work friendly","loud","great service","bad service","good ambiance","bathroom","outdoor seating","date spot","dog friendly","overrated"];
   function save() {
     if (!validate()) return;
     onSave(buildEntry());

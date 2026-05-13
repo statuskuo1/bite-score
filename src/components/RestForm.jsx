@@ -22,13 +22,56 @@ function maskDate(raw) {
   return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
 }
 
+const NOTE_PILLS = ["great service","good ambiance","bad service","cozy","loud","date night","good for groups","beautiful presentation","unique","great drinks","great desserts","overrated"];
+
+/**
+ * Inverse of the `save()` notes concat (`fav: X · avoid: Y · pill1, pill2 · free`).
+ * Used to repopulate the dedicated inputs on edit so we don't dump everything
+ * into the free-text textarea and lose structure on round-trip.
+ */
+function parseSavedNotes(notes, pillVocab) {
+  if (!notes) return { favOrder: "", shouldntGet: "", pills: [], rest: "" };
+  const segs = notes.split(" · ");
+  let favOrder = "", shouldntGet = "";
+  const leftover = [];
+  for (const seg of segs) {
+    if (seg.startsWith("fav: ")) favOrder = seg.slice(5).trim();
+    else if (seg.startsWith("avoid: ")) shouldntGet = seg.slice(7).trim();
+    else leftover.push(seg);
+  }
+  let pills = [], rest = "";
+  if (leftover.length) {
+    const tokens = leftover[0].split(",").map(s => s.trim()).filter(Boolean);
+    if (tokens.length && tokens.every(tok => pillVocab.includes(tok))) {
+      pills = tokens;
+      rest = leftover.slice(1).join(" · ");
+    } else {
+      rest = leftover.join(" · ");
+    }
+  }
+  return { favOrder, shouldntGet, pills, rest };
+}
+
 export function RestForm({initial,initialDineWith=[],onSave,onCancel,onFormChange,weights,addType,setAddType,existingEntries,existingCities,places,onPlaceCreated,user,tasteBudIds,tasteStep=0.1,onTasteStepChange}) {
   const {t} = useLang();
   const isEdit = !!initial.id;
-  const [f,setF] = useState(() => ({ ...initial, visitDate: initial.visitDate || formatVisitDateInput(initial.visitedAt) || "" }));
+  const [f,setF] = useState(() => {
+    const base = { ...initial, visitDate: initial.visitDate || formatVisitDateInput(initial.visitedAt) || "" };
+    if (!isEdit) return base;
+    const parsed = parseSavedNotes(initial.notes, NOTE_PILLS);
+    return {
+      ...base,
+      favOrder: initial.favOrder ?? parsed.favOrder,
+      shouldntGet: initial.shouldntGet ?? parsed.shouldntGet,
+      notes: parsed.rest,
+    };
+  });
   const [sub,setSub] = useState(false);
   const [dineWith,setDineWith] = useState(initialDineWith);
-  const [selectedPills,setSelectedPills] = useState([]);
+  const [selectedPills,setSelectedPills] = useState(() => {
+    if (!isEdit) return [];
+    return parseSavedNotes(initial.notes, NOTE_PILLS).pills;
+  });
   useEffect(() => {
     if (!isEdit) onFormChange?.({ addType: "restaurant", f, dineWith });
   }, [f, dineWith]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -40,7 +83,6 @@ export function RestForm({initial,initialDineWith=[],onSave,onCancel,onFormChang
   const visitDateRaw = (f.visitDate || "").trim();
   const visitDateIso = visitDateRaw ? parseVisitDateInput(visitDateRaw) : null;
   const visitDateInvalid = !!visitDateRaw && !visitDateIso;
-  const NOTE_PILLS = ["great service","good ambiance","bad service","cozy","loud","date night","good for groups","beautiful presentation","unique","great drinks","great desserts","overrated"];
   const togglePill = (pill) => setSelectedPills(prev => prev.includes(pill) ? prev.filter(p=>p!==pill) : [...prev,pill]);
 
   function save() {

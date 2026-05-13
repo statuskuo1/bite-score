@@ -81,41 +81,6 @@ function parsePeopleSay(notesArr) {
   return { favItems: topN(favCounts, 4), avoidItems: topN(avoidCounts, 3), vibeWords: topN(vibeCounts, 5) };
 }
 
-/**
- * Extract likely dish names: sequences of mid-sentence capitalized words
- * (e.g., "Pad Thai", "Tonkotsu Ramen", "Dan Dan Noodles"). Mid-sentence caps
- * in food notes almost always signal a proper dish name.
- */
-function topDishes(notesArr, limit = 6) {
-  const counts = {};
-  for (const note of notesArr) {
-    if (!note) continue;
-    const words = note.split(/\s+/);
-    let i = 0;
-    while (i < words.length) {
-      if (i > 0 && /^[A-Z][a-z]{1,}/.test(words[i])) {
-        const seq = [words[i].replace(/[^a-zA-Z]/g, "")];
-        let j = i + 1;
-        while (j < words.length && /^[A-Z][a-z]{1,}/.test(words[j])) {
-          seq.push(words[j].replace(/[^a-zA-Z]/g, ""));
-          j++;
-        }
-        const key = seq.join(" ").toLowerCase();
-        if (key.length >= 3 && !STOP_WORDS.has(seq[0].toLowerCase())) {
-          counts[key] = (counts[key] || 0) + 1;
-        }
-        i = j;
-      } else {
-        i++;
-      }
-    }
-  }
-  return Object.entries(counts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, limit)
-    .map(([w]) => w.replace(/\b\w/g, (c) => c.toUpperCase()));
-}
-
 function StatCell({ label, value, sub }) {
   return (
     <div style={{ background: "#252523", borderRadius: 10, padding: "10px 12px" }}>
@@ -267,11 +232,6 @@ export function PlaceStatsSheet({ post, restaurantWeights, drinkWeights, sweetWe
   const peopleSay = useMemo(() => {
     if (!visits) return { favItems: [], avoidItems: [], vibeWords: [] };
     return parsePeopleSay(visits.map(v => v.notes).filter(Boolean));
-  }, [visits]);
-
-  const dishes = useMemo(() => {
-    if (!visits) return [];
-    return topDishes(visits.map(v => v.notes).filter(Boolean));
   }, [visits]);
 
   const flag = post.kind === "rest"
@@ -476,33 +436,19 @@ export function PlaceStatsSheet({ post, restaurantWeights, drinkWeights, sweetWe
           </div>
         )}
 
-        {/* Popular dishes — mid-sentence capitalized words from notes */}
-        {dishes.length >= 2 && (
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 10, color: "#888780", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
-              Popular dishes
-            </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {dishes.map(w => (
-                <span key={w} style={{
-                  padding: "4px 12px", borderRadius: 999,
-                  background: "#1A2A1A",
-                  border: "0.5px solid rgba(125,191,142,0.3)",
-                  fontSize: 12, color: "#7DBF8E",
-                }}>
-                  {w}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* People say */}
         {(peopleSay.favItems.length > 0 || peopleSay.avoidItems.length > 0 || peopleSay.vibeWords.length >= 3) && (
           <div>
             <div style={{ fontSize: 10, color: "#888780", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
               People say
             </div>
+            {peopleSay.vibeWords.length >= 3 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                {peopleSay.vibeWords.map(w => (
+                  <span key={w} style={{ padding: "4px 12px", borderRadius: 999, background: "#252523", border: "0.5px solid rgba(255,255,255,0.1)", fontSize: 12, color: "#C4C2BA" }}>{w}</span>
+                ))}
+              </div>
+            )}
             {peopleSay.favItems.length > 0 && (
               <div style={{ marginBottom: 8 }}>
                 <div style={{ fontSize: 10, color: "#7DBF8E", marginBottom: 5 }}>Favourite</div>
@@ -514,20 +460,13 @@ export function PlaceStatsSheet({ post, restaurantWeights, drinkWeights, sweetWe
               </div>
             )}
             {peopleSay.avoidItems.length > 0 && (
-              <div style={{ marginBottom: 8 }}>
+              <div>
                 <div style={{ fontSize: 10, color: "#F0997B", marginBottom: 5 }}>Avoid</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                   {peopleSay.avoidItems.map(w => (
                     <span key={w} style={{ padding: "4px 12px", borderRadius: 999, background: "#2A1A0A", border: "0.5px solid rgba(240,153,123,0.3)", fontSize: 12, color: "#F0997B" }}>{w}</span>
                   ))}
                 </div>
-              </div>
-            )}
-            {peopleSay.vibeWords.length >= 3 && (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {peopleSay.vibeWords.map(w => (
-                  <span key={w} style={{ padding: "4px 12px", borderRadius: 999, background: "#252523", border: "0.5px solid rgba(255,255,255,0.1)", fontSize: 12, color: "#C4C2BA" }}>{w}</span>
-                ))}
               </div>
             )}
           </div>
