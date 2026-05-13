@@ -26,10 +26,10 @@ export function TasteBudsPromptSheet({ onFindFriends, onDismiss }) {
           <MouthLogo />
         </div>
         <h2 style={{ fontSize: 22, fontWeight: 500, color: "#F1EFE8", margin: "0 0 8px", textAlign: "center", lineHeight: 1.3 }}>
-          Your first BITE! 🎉
+          Find your Taste Buds! 🎉
         </h2>
         <p style={{ fontSize: 13, fontWeight: 400, color: "#888780", margin: "0 0 24px", lineHeight: 1.8, textAlign: "center" }}>
-          See how your friends rate the same places.<br />Find your Taste Buds.
+          Follow friends to compare scores<br />and see their BITEs.
         </p>
         <button
           type="button"
@@ -41,7 +41,7 @@ export function TasteBudsPromptSheet({ onFindFriends, onDismiss }) {
             fontSize: 14, fontWeight: 600, cursor: "pointer",
           }}
         >
-          Find friends
+          Follow someone →
         </button>
         <button
           type="button"

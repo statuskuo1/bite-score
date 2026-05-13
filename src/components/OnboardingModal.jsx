@@ -69,11 +69,12 @@ function ProgressDots({ card, total, onGoTo }) {
   );
 }
 
-export function OnboardingModal({ restaurantWeights, onWeightSave, onComplete, isGuest, onHomeCitySave, startAtCard = 0 }) {
+export function OnboardingModal({ restaurantWeights, onWeightSave, onComplete, isGuest, onHomeCitySave, startAtCard = 0, skipAddRating = false }) {
   const { t } = useLang();
   const [card, setCard] = useState(startAtCard);
   const [draftW, setDraftW] = useState(() => normalizeWeights(restaurantWeights));
   const [city, setCity] = useState("");
+  const [skipped, setSkipped] = useState(false);
 
   function draftUpd(k, v) {
     const nv = Math.round(Math.min(10, Math.max(1, +v)));
@@ -100,6 +101,7 @@ export function OnboardingModal({ restaurantWeights, onWeightSave, onComplete, i
             onClick={() => {
               const resolved = resolveCity(city);
               if (resolved) onHomeCitySave(resolved);
+              if (skipAddRating) { onComplete(); return; }
               setCard(1);
             }}
           >
@@ -112,6 +114,26 @@ export function OnboardingModal({ restaurantWeights, onWeightSave, onComplete, i
   }
 
   if (!isGuest && card === 1) {
+    if (skipped) {
+      return (
+        <div style={OVERLAY}>
+          <div style={CARD}>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: "#F1EFE8", margin: "0 0 12px", textAlign: "center", lineHeight: 1.3 }}>
+              Complete tasks to<br />earn badges! 🏆
+            </h2>
+            <p style={{ fontSize: 13, color: "#888780", margin: "0 0 24px", lineHeight: 1.6, textAlign: "center" }}>
+              Log a rating, follow friends, and more<br />to unlock badges and earn points.
+            </p>
+            <button type="button" style={CTA_BTN} onClick={() => onComplete("profile")}>
+              See profile →
+            </button>
+            <button type="button" style={SKIP_LINK} onClick={() => onComplete()}>
+              Maybe later
+            </button>
+          </div>
+        </div>
+      );
+    }
     return (
       <div style={OVERLAY}>
         <div style={CARD}>
@@ -124,7 +146,7 @@ export function OnboardingModal({ restaurantWeights, onWeightSave, onComplete, i
           <button type="button" style={CTA_BTN} onClick={() => onComplete("/add", resolveCity(city))}>
             + Add Rating
           </button>
-          <button type="button" style={SKIP_LINK} onClick={() => onComplete()}>
+          <button type="button" style={SKIP_LINK} onClick={() => setSkipped(true)}>
             I'll do it later
           </button>
           <ProgressDots card={1} total={2} onGoTo={setCard} />

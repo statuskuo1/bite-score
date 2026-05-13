@@ -39,20 +39,46 @@ function rr(v) {
   return Math.max(0, Math.min(3, Math.round(v)));
 }
 
-/** Extract general vibe words (most frequent non-stopwords). */
-function topWords(notesArr, limit = 5) {
-  const counts = {};
+function isPhrase(s) {
+  return s.split(/\s+/).length <= 4 && !/[.!?]/.test(s);
+}
+
+function parsePeopleSay(notesArr) {
+  const favCounts = {}, avoidCounts = {}, vibeCounts = {};
+
+  function countPhrase(map, raw) {
+    const key = raw.toLowerCase().replace(/[^a-z\s]/g, "").trim();
+    if (key.length >= 3 && !STOP_WORDS.has(key.split(/\s+/)[0]))
+      map[key] = (map[key] || 0) + 1;
+  }
+
   for (const note of notesArr) {
     if (!note) continue;
-    for (const w of note.toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/)) {
-      if (w.length < 3 || STOP_WORDS.has(w)) continue;
-      counts[w] = (counts[w] || 0) + 1;
+    for (const seg of note.split(" · ")) {
+      if (seg.startsWith("fav: ")) {
+        seg.slice(5).split(",").map(s => s.trim()).filter(Boolean).forEach(item => countPhrase(favCounts, item));
+      } else if (seg.startsWith("avoid: ")) {
+        seg.slice(7).split(",").map(s => s.trim()).filter(Boolean).forEach(item => countPhrase(avoidCounts, item));
+      } else {
+        for (const piece of seg.split(",").map(s => s.trim()).filter(Boolean)) {
+          if (isPhrase(piece)) {
+            countPhrase(vibeCounts, piece);
+          } else {
+            for (const w of piece.toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/)) {
+              if (w.length >= 3 && !STOP_WORDS.has(w))
+                vibeCounts[w] = (vibeCounts[w] || 0) + 1;
+            }
+          }
+        }
+      }
     }
   }
-  return Object.entries(counts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, limit)
-    .map(([w]) => w);
+
+  const topN = (map, n) =>
+    Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, n)
+      .map(([k]) => k.replace(/\b\w/g, c => c.toUpperCase()));
+
+  return { favItems: topN(favCounts, 4), avoidItems: topN(avoidCounts, 3), vibeWords: topN(vibeCounts, 5) };
 }
 
 /**
@@ -238,9 +264,9 @@ export function PlaceStatsSheet({ post, restaurantWeights, drinkWeights, sweetWe
       .filter(r => r.profile);
   }, [visits, tasteBudsIds, profiles, post.kind, post.category]);
 
-  const words = useMemo(() => {
-    if (!visits) return [];
-    return topWords(visits.map(v => v.notes).filter(Boolean));
+  const peopleSay = useMemo(() => {
+    if (!visits) return { favItems: [], avoidItems: [], vibeWords: [] };
+    return parsePeopleSay(visits.map(v => v.notes).filter(Boolean));
   }, [visits]);
 
   const dishes = useMemo(() => {
@@ -471,24 +497,39 @@ export function PlaceStatsSheet({ post, restaurantWeights, drinkWeights, sweetWe
           </div>
         )}
 
-        {/* Vibe words */}
-        {words.length >= 3 && (
+        {/* People say */}
+        {(peopleSay.favItems.length > 0 || peopleSay.avoidItems.length > 0 || peopleSay.vibeWords.length >= 3) && (
           <div>
             <div style={{ fontSize: 10, color: "#888780", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
               People say
             </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {words.map(w => (
-                <span key={w} style={{
-                  padding: "4px 12px", borderRadius: 999,
-                  background: "#252523",
-                  border: "0.5px solid rgba(255,255,255,0.1)",
-                  fontSize: 12, color: "#C4C2BA",
-                }}>
-                  {w}
-                </span>
-              ))}
-            </div>
+            {peopleSay.favItems.length > 0 && (
+              <div style={{ marginBottom: 8 }}>
+                <div style={{ fontSize: 10, color: "#7DBF8E", marginBottom: 5 }}>Favourite</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {peopleSay.favItems.map(w => (
+                    <span key={w} style={{ padding: "4px 12px", borderRadius: 999, background: "#1A2A1A", border: "0.5px solid rgba(125,191,142,0.3)", fontSize: 12, color: "#7DBF8E" }}>{w}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {peopleSay.avoidItems.length > 0 && (
+              <div style={{ marginBottom: 8 }}>
+                <div style={{ fontSize: 10, color: "#F0997B", marginBottom: 5 }}>Avoid</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {peopleSay.avoidItems.map(w => (
+                    <span key={w} style={{ padding: "4px 12px", borderRadius: 999, background: "#2A1A0A", border: "0.5px solid rgba(240,153,123,0.3)", fontSize: 12, color: "#F0997B" }}>{w}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {peopleSay.vibeWords.length >= 3 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {peopleSay.vibeWords.map(w => (
+                  <span key={w} style={{ padding: "4px 12px", borderRadius: 999, background: "#252523", border: "0.5px solid rgba(255,255,255,0.1)", fontSize: 12, color: "#C4C2BA" }}>{w}</span>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

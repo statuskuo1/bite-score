@@ -294,6 +294,7 @@ export default function App() {
   const lastLogPath = useRef("/log");
   const lastTastePath = useRef("/taste");
   const pendingBadgesCard = useRef(null);
+  const pendingFollowBadge = useRef(false);
   /** Mandarin localization is temporarily stashed while EN gets polish.
    *  `T.zh` and components' `lang === "zh"` branches are intentionally preserved
    *  so reviving = restore lang state + UI toggles. See
@@ -1116,6 +1117,13 @@ export default function App() {
 
   useEffect(() => { refreshDineTags(); }, [refreshDineTags]);
 
+  useEffect(() => {
+    if (!pendingFollowBadge.current || !tasteBudIds.size || !user?.id) return;
+    pendingFollowBadge.current = false;
+    const uid = user.id;
+    try { if (!localStorage.getItem(`bite_badges_card_${uid}`)) setShowBadgesCard(true); } catch { setShowBadgesCard(true); }
+  }, [tasteBudIds, user?.id]);
+
   const handleFollowChange = useCallback(() => {
     refreshSocialCounts();
     refreshDineTags();
@@ -1143,6 +1151,12 @@ export default function App() {
       setAddFormKey(k => k + 1);
       setAddPrefill({ city: prefillCity });
     }
+    if (navigateTo === "profile") {
+      refreshProfile();
+      navigate("/log");
+      setShowSelfSheet(true);
+      return;
+    }
     refreshProfile();
     navigate(navigateTo || "/log");
   }
@@ -1161,8 +1175,7 @@ export default function App() {
     // Only queue the badges card if the user actually has a first entry logged
     if (st.entries.length === 0 && cafes.length === 0) return;
     if (navigateTo) {
-      pendingBadgesCard.current = navigateTo;
-      try { if (user?.id) sessionStorage.setItem(`bite_pendingBadgesCard_${user.id}`, navigateTo); } catch {}
+      pendingFollowBadge.current = true;
       navigate(navigateTo);
     } else {
       try { if (user?.id && !localStorage.getItem(`bite_badges_card_${user.id}`)) setShowBadgesCard(true); } catch { setShowBadgesCard(true); }
@@ -2650,7 +2663,7 @@ export default function App() {
                     if (data) {
                       const isFirstEntry = st.entries.length === 0 && cafes.length === 0;
                       dispatch({ type: "ADD", e: mapRestaurantVisitRow(data) });
-                      if (isFirstEntry && !tasteBudsDone) setShowTasteBudsPrompt(true);
+                      if (isFirstEntry && !tasteBudsDone && tasteBudIds.size === 0) setShowTasteBudsPrompt(true);
                       if (user?.id) { try { localStorage.removeItem(`bite_addRating_draft_${user.id}`); } catch {} }
                       setAddDraftData(null);
                       // Auto-remove from Want to Go now that the viewer has actually been.
@@ -2733,7 +2746,7 @@ export default function App() {
                   if (e.city) persistLastCity(e.city);
                   const isFirstCafeEntry = st.entries.length === 0 && cafes.length === 0;
                   const inserted = await insertCafeEntry(e);
-                  if (inserted && isFirstCafeEntry && !tasteBudsDone) setShowTasteBudsPrompt(true);
+                  if (inserted && isFirstCafeEntry && !tasteBudsDone && tasteBudIds.size === 0) setShowTasteBudsPrompt(true);
                   // ── Group visits (cafes) ────────────────────────────────────
                   // group_visit_members is now the sole "dined with" record
                   // post-Phase-3 of the dine_with_tags deprecation. See the
@@ -2900,6 +2913,7 @@ export default function App() {
         onWeightSave={replaceRestaurantWeights}
         onComplete={completeOnboarding}
         onHomeCitySave={handleHomeCitySave}
+        skipAddRating={st.entries.length > 0 || cafes.length > 0}
       />
     )}
     {badgeModal && (
@@ -2935,10 +2949,10 @@ export default function App() {
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.82)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem" }}>
           <div style={{ background: "#1E1E1C", borderRadius: 16, padding: "28px 24px 24px", maxWidth: 380, width: "100%", border: "0.5px solid rgba(255,255,255,0.12)", boxSizing: "border-box", maxHeight: "85vh", overflowY: "auto" }}>
             <h2 style={{ fontSize: 20, fontWeight: 700, color: "#F1EFE8", margin: "0 0 18px", textAlign: "center", lineHeight: 1.3 }}>
-              Congrats on earning your<br />first badges!
+              Congrats on earning your<br />first {cardBadges.length === 1 ? "badge" : "badges"}! 🎉
             </h2>
             {cardBadges.length > 0 && (
-              <div style={{ display: "flex", justifyContent: "center", gap: 24, marginBottom: 20 }}>
+              <div style={{ display: "flex", justifyContent: "center", gap: 24, marginBottom: 16 }}>
                 {cardBadges.map(b => (
                   <div key={b.id} style={{ textAlign: "center", width: 64 }}>
                     <BadgeSVG emoji={b.emoji} earned color={b.color} border={b.color} bg={b.bgColor} />
@@ -2947,6 +2961,9 @@ export default function App() {
                 ))}
               </div>
             )}
+            <p style={{ fontSize: 13, fontWeight: 600, color: "#F1EFE8", margin: "0 0 16px", textAlign: "center" }}>
+              Badges earned: {cardBadges.map(b => b.name).join(" & ")}
+            </p>
             <p style={{ fontSize: 13, color: "#C4C2BA", margin: "0 0 6px", textAlign: "center", lineHeight: 1.6 }}>
               Tap your profile to see other badges<br />you can earn to get points!
             </p>
