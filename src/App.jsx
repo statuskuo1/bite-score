@@ -2961,11 +2961,8 @@ export default function App() {
                 ))}
               </div>
             )}
-            <p style={{ fontSize: 13, color: "#C4C2BA", margin: "0 0 6px", textAlign: "center", lineHeight: 1.6 }}>
-              Tap your profile to see other badges<br />you can earn to get points!
-            </p>
-            <p style={{ fontSize: 11, color: "#888780", margin: "0 0 20px", textAlign: "center", fontStyle: "italic" }}>
-              Points will be redeemable (coming soon)
+            <p style={{ fontSize: 13, color: "#C4C2BA", margin: "0 0 20px", textAlign: "center", lineHeight: 1.6 }}>
+              Tap your profile to see other badges<br />you can earn to get points! (redeemable soon)
             </p>
             <button
               type="button"
