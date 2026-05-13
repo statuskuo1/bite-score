@@ -2952,7 +2952,7 @@ export default function App() {
               Congrats on earning your<br />first {cardBadges.length === 1 ? "badge" : "badges"}! 🎉
             </h2>
             {cardBadges.length > 0 && (
-              <div style={{ display: "flex", justifyContent: "center", gap: 24, marginBottom: 16 }}>
+              <div style={{ display: "flex", justifyContent: "center", gap: 24, marginBottom: 20 }}>
                 {cardBadges.map(b => (
                   <div key={b.id} style={{ textAlign: "center", width: 64 }}>
                     <BadgeSVG emoji={b.emoji} earned color={b.color} border={b.color} bg={b.bgColor} />
@@ -2961,9 +2961,6 @@ export default function App() {
                 ))}
               </div>
             )}
-            <p style={{ fontSize: 13, fontWeight: 600, color: "#F1EFE8", margin: "0 0 16px", textAlign: "center" }}>
-              Badges earned: {cardBadges.map(b => b.name).join(" & ")}
-            </p>
             <p style={{ fontSize: 13, color: "#C4C2BA", margin: "0 0 6px", textAlign: "center", lineHeight: 1.6 }}>
               Tap your profile to see other badges<br />you can earn to get points!
             </p>
