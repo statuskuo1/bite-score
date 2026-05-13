@@ -247,6 +247,7 @@ export function CommunityTab({ user, myEntries, cafes = [], cafePlaces = [], myR
         user={user}
         targetProfile={userLogTarget}
         restaurantWeights={restaurantWeights}
+        drinkWeights={drinkWeights}
         onBack={() => setUserLogTarget(null)}
       />
     );
