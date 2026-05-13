@@ -67,6 +67,7 @@ export function RestForm({initial,initialDineWith=[],onSave,onCancel,onFormChang
     };
   });
   const [sub,setSub] = useState(false);
+  const [portionHint,setPortionHint] = useState(false);
   const [dineWith,setDineWith] = useState(initialDineWith);
   const [selectedPills,setSelectedPills] = useState(() => {
     if (!isEdit) return [];
@@ -230,7 +231,11 @@ export function RestForm({initial,initialDineWith=[],onSave,onCancel,onFormChang
           {sub&&!f.cost&&<div style={S.err}>Required</div>}
         </div>
         <div style={S.f1}>
-          <FieldLabel>{t.portions} *</FieldLabel>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
+            <FieldLabel>{t.portions} *</FieldLabel>
+            <button type="button" onClick={()=>setPortionHint(h=>!h)} style={{background:"none",border:"none",padding:0,cursor:"pointer",fontSize:13,color:portionHint?"#F0997B":"#555553",lineHeight:1}}>ⓘ</button>
+          </div>
+          {portionHint&&<p style={{fontSize:11,color:"#888780",margin:"0 0 6px",lineHeight:1.5}}>How many meals can it feed you? e.g. big enough to take home as another meal = 2</p>}
           <input type="number" min="0.5" step="0.5" value={f.portions} onChange={e=>inp("portions",e.target.value)} style={S.wb}/>
           {sub&&!f.portions&&<div style={S.err}>Required</div>}
         </div>
