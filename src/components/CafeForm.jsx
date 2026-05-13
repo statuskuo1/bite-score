@@ -318,7 +318,7 @@ export function CafeForm({initial,initialDineWith=[],onSave,onSaveAndContinue,on
     return true;
   }
 
-  const NOTE_PILLS = ["great service","good ambiance","bad service","cozy","loud","date night","good for groups","beautiful presentation","unique","great drinks","great desserts","overrated"];
+  const NOTE_PILLS = ["cozy","wifi","no laptops","work friendly","loud","great service","bad service","good ambiance","bathroom","outdoor seating","date spot","dog friendly","overrated"];
   function save() {
     if (!validate()) return;
     onSave(buildEntry());
