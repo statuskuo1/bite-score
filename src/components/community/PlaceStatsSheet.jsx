@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../config/supabaseClient.js";
 import { calcBiteOutOf10, calcCafeOutOf10, scoreColor, scoreLabel } from "../../utils/scoring.js";
-import { toUSD, fromUSD, CURRENCY_SYMBOLS } from "../../utils/currency.js";
+import { toUSD, fromUSD, CURRENCY_SYMBOLS, getCurrencyForCity } from "../../utils/currency.js";
 import { FLAGS } from "../../constants/cuisineConstants.js";
 import { Avatar } from "./Avatar.jsx";
 import { MapsLink } from "./MapsLink.jsx";
@@ -28,6 +28,11 @@ const STOP_WORDS = new Set([
   "into","through","after","before","between","other","used","good","great","nice","bad",
   "food","place","service","back","new","one","two","out","up","down","over","still","even",
   "long","ordered","tried","got","went","came","had","was","felt","think","thought","pretty",
+  "spot","joint","area","eatery",
+]);
+
+const KNOWN_SINGLE_WORD_VIBES = new Set([
+  "cozy","loud","unique","overrated","crowded","quiet","romantic","trendy","casual","lively",
 ]);
 
 function avg(arr) {
@@ -62,7 +67,10 @@ function parsePeopleSay(notesArr) {
       } else {
         for (const piece of seg.split(",").map(s => s.trim()).filter(Boolean)) {
           if (isPhrase(piece)) {
-            countPhrase(vibeCounts, piece);
+            const wordCount = piece.trim().split(/\s+/).length;
+            if (wordCount >= 2 || KNOWN_SINGLE_WORD_VIBES.has(piece.trim().toLowerCase())) {
+              countPhrase(vibeCounts, piece);
+            }
           } else {
             for (const w of piece.toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/)) {
               if (w.length >= 3 && !STOP_WORDS.has(w))
@@ -168,23 +176,17 @@ export function PlaceStatsSheet({ post, restaurantWeights, drinkWeights, sweetWe
       return counts.indexOf(Math.max(...counts));
     })();
 
-    // Determine the modal currency so costs display correctly (e.g. NT$ for Taiwan)
-    const currencyFreq = {};
-    for (const v of valid) {
-      const c = v.currency_code || "USD";
-      currencyFreq[c] = (currencyFreq[c] || 0) + 1;
-    }
-    const modalCurrency = Object.keys(currencyFreq).length
-      ? Object.entries(currencyFreq).sort((a, b) => b[1] - a[1])[0][0]
-      : "USD";
+    // Currency is determined by the place's city (authoritative) so a mis-logged visit
+    // currency can't corrupt the display (e.g. one MYR visit won't make Oakland show RM).
+    const displayCurrency = getCurrencyForCity(post.city || "");
 
-    // Average cost in USD (for BITE scoring) and in modal currency (for display)
+    // Average cost in USD (for BITE scoring) and in display currency (for display)
     const avgCostUSD = avg(valid.map(v => toUSD(+v.cost, v.currency_code || "USD")));
-    const avgCostDisplay = avgCostUSD != null ? fromUSD(avgCostUSD, modalCurrency) : null;
-    const costSymbol = CURRENCY_SYMBOLS[modalCurrency] || modalCurrency + " ";
+    const avgCostDisplay = avgCostUSD != null ? fromUSD(avgCostUSD, displayCurrency) : null;
+    const costSymbol = CURRENCY_SYMBOLS[displayCurrency] || displayCurrency + " ";
 
     return {
-      avgTaste, avgCostUSD, avgCostDisplay, costSymbol, modalCurrency,
+      avgTaste, avgCostUSD, avgCostDisplay, costSymbol, modalCurrency: displayCurrency,
       avgWait, avgPortions, minTaste, maxTaste, useRMajority, repeatMode,
       validCount: valid.length,
     };
