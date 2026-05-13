@@ -4,8 +4,7 @@ export function CategoryTabs({ active, onChange }) {
   const { t } = useLang();
   const tabs = [
     ["restaurants", "🍽 " + t.restaurants],
-    ["drinks", "☕ " + t.drinks],
-    ["sweets", "🥐 " + t.sweets],
+    ["cafes", "☕ " + t.cafes],
   ];
 
   return (

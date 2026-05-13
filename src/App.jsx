@@ -200,7 +200,7 @@ export default function App() {
   ), [user?.id, profile?.username, profile?.display_name, profile?.avatar_url]);
 
   // ── URL-derived view state ────────────────────────────────────────────────
-  const logTab = pathname === "/log/drinks" ? "drinks" : pathname === "/log/sweets" ? "sweets" : "restaurants";
+  const logTab = (pathname === "/log/cafes" || pathname === "/log/drinks" || pathname === "/log/sweets") ? "cafes" : "restaurants";
   const [showSuggest, setShowSuggest] = useState(false);
   const [cafes, setCafes] = useState([]);
   /** Shared cross-user catalog for PlacePicker. Loaded once on auth boot. */
@@ -342,16 +342,7 @@ export default function App() {
         try { localStorage.setItem(`bite_drinkWeights_${user.id}`, JSON.stringify(w)); localStorage.setItem("bite_drinkWeights_bootstrap", JSON.stringify(w)); } catch {}
       }
     }
-    if (profile.pref_weight_sweet_taste) {
-      let hasLocal = false;
-      try { hasLocal = !!localStorage.getItem(`bite_sweetWeights_${user.id}`); } catch {}
-      if (!hasLocal) {
-        const w = normalizeWeights({ taste: profile.pref_weight_sweet_taste, bpb: profile.pref_weight_sweet_bpb, wait: profile.pref_weight_sweet_wait });
-        setSweetWeights(w);
-        try { localStorage.setItem(`bite_sweetWeights_${user.id}`, JSON.stringify(w)); localStorage.setItem("bite_sweetWeights_bootstrap", JSON.stringify(w)); } catch {}
-      }
-    }
-  }, [profile?.pref_weight_drink_taste, profile?.pref_weight_drink_bpb, profile?.pref_weight_drink_wait, profile?.pref_weight_sweet_taste, profile?.pref_weight_sweet_bpb, profile?.pref_weight_sweet_wait]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [profile?.pref_weight_drink_taste, profile?.pref_weight_drink_bpb, profile?.pref_weight_drink_wait]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!profile) return;
@@ -1210,6 +1201,14 @@ export default function App() {
       navigate("/community/explore/global", { replace: true });
       return;
     }
+    if (pathname === "/log/drinks" || pathname === "/log/sweets") {
+      navigate("/log/cafes", { replace: true });
+      return;
+    }
+    if (pathname === "/taste/drinks" || pathname === "/taste/sweets") {
+      navigate("/taste/cafes", { replace: true });
+      return;
+    }
   }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -1264,6 +1263,12 @@ export default function App() {
   const [addType, setAddType] = useState("restaurant");
   const [addSaveErr, setAddSaveErr] = useState(null);
   useEffect(() => { setAddSaveErr(null); }, [addType]);
+  // Surface DB write failures from the /log Edit save handlers. Without this,
+  // PostgREST errors / RLS denials / canMutateVisit short-circuits would
+  // silently no-op while the local optimistic update made the row look saved
+  // until the next reload.
+  const [editSaveErr, setEditSaveErr] = useState(null);
+  useEffect(() => { setEditSaveErr(null); }, [editR?.id, editC?.id]);
   const [sortBy, setSortBy] = useState("bite");
   const [sortAsc, setSortAsc] = useState(false);
   const [tiers, setTiers] = useState(new Set());
@@ -1279,17 +1284,12 @@ export default function App() {
   const [search, setSearch] = useState("");
   const [contextRestaurant, setContextRestaurant] = useState(null); // { name, idx } for ±3 ranking view
   const [contextDrink, setContextDrink] = useState(null);
-  const [contextSweet, setContextSweet] = useState(null);
   const [weights, setWeights] = useState(() => {
     try { const v = localStorage.getItem("bite_restaurantWeights_bootstrap"); if (v) return normalizeWeights(JSON.parse(v)); } catch {}
     return { ...RESTAURANT_WEIGHT_DEFAULTS };
   });
   const [drinkWeights, setDrinkWeights] = useState(() => {
     try { const v = localStorage.getItem("bite_drinkWeights_bootstrap"); if (v) return normalizeWeights(JSON.parse(v)); } catch {}
-    return { ...CAFE_WEIGHT_DEFAULTS };
-  });
-  const [sweetWeights, setSweetWeights] = useState(() => {
-    try { const v = localStorage.getItem("bite_sweetWeights_bootstrap"); if (v) return normalizeWeights(JSON.parse(v)); } catch {}
     return { ...CAFE_WEIGHT_DEFAULTS };
   });
   const questL = useMemo(
@@ -1335,20 +1335,12 @@ export default function App() {
   const [cafeFilterBean, setCafeFilterBean] = useState("");
   const [cafeCityFilter, setCafeCityFilter] = useState(new Set());
   const [cafeSearch, setCafeSearch] = useState("");
-  const [sweetsSearch, setSweetsSearch] = useState("");
-  const [sweetsSortBy, setSweetsSortBy] = useState("bite");
-  const [sweetsSortAsc, setSweetsSortAsc] = useState(false);
-  const [sweetsTiers, setSweetsTiers] = useState(new Set());
-  const [sweetsCityFilter, setSweetsCityFilter] = useState(new Set());
   const [guestSortBy, setGuestSortBy] = useState("bite");
   const [guestSortAsc, setGuestSortAsc] = useState(false);
   const [guestSearch, setGuestSearch] = useState("");
   const [guestCafeSortBy, setGuestCafeSortBy] = useState("bite");
   const [guestCafeSortAsc, setGuestCafeSortAsc] = useState(false);
   const [guestCafeSearch, setGuestCafeSearch] = useState("");
-  const [guestSweetsSortBy, setGuestSweetsSortBy] = useState("bite");
-  const [guestSweetsSortAsc, setGuestSweetsSortAsc] = useState(false);
-  const [guestSweetsSearch, setGuestSweetsSearch] = useState("");
 
   useEffect(() => {
     if (!authReady) return;
@@ -1424,10 +1416,6 @@ export default function App() {
             const dw = localStorage.getItem(`bite_drinkWeights_${user.id}`);
             if (dw) setDrinkWeights(normalizeWeights(JSON.parse(dw)));
           } catch (e) { console.error("drink weights load:", e); }
-          try {
-            const sw = localStorage.getItem(`bite_sweetWeights_${user.id}`);
-            if (sw) setSweetWeights(normalizeWeights(JSON.parse(sw)));
-          } catch (e) { console.error("sweet weights load:", e); }
           try {
             const ts = localStorage.getItem(`bite_tasteHalfStep_${user.id}`);
             if (ts !== null) setTasteHalfStep(JSON.parse(ts));
@@ -1522,17 +1510,6 @@ export default function App() {
         .then(({ error }) => { if (error) console.warn("[BITE] drink weight sync:", error); });
     }
   }
-  function replaceSweetWeights(next) {
-    const clamped = clampWeights(next);
-    setSweetWeights(clamped);
-    if (user?.id) {
-      try { localStorage.setItem(`bite_sweetWeights_${user.id}`, JSON.stringify(clamped)); localStorage.setItem("bite_sweetWeights_bootstrap", JSON.stringify(clamped)); }
-      catch (e) { console.error("sweet weights save:", e); }
-      supabase.from("profiles").update({ pref_weight_sweet_taste: clamped.taste, pref_weight_sweet_bpb: clamped.bpb, pref_weight_sweet_wait: clamped.wait }).eq("id", user.id)
-        .then(({ error }) => { if (error) console.warn("[BITE] sweet weight sync:", error); });
-    }
-  }
-
   function toggleQ() {} // A-Z quest is now auto-derived from logged cuisines
 
   const sortedR = [...st.entries].sort((a,b)=>{
@@ -1563,37 +1540,9 @@ export default function App() {
     return true;
   });
 
-  const DRINK_CATS = ["Coffee","Tea","Other"];
-  const drinkCityCounts = useMemo(() => {
+  const cafeCityCounts = useMemo(() => {
     const m = new Map();
     cafes.forEach((e) => {
-      if (!DRINK_CATS.includes(e.category)) return;
-      const c = resolveCity(e.city || "") || "New York City";
-      m.set(c, (m.get(c) || 0) + 1);
-    });
-    return [...m.entries()].sort((a, b) => b[1] - a[1]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cafes]);
-  const sortedDrinks = [...cafes].filter(e=>DRINK_CATS.includes(e.category)).sort((a,b)=>{
-    let d=0;
-    if(cafeSortBy==="bite") d=(calcCafeOutOf10(b.taste,b.cost,b.portions,b.wait,b.useR,b.repeatability,drinkWeights,b.currency_code||"USD")??0)-(calcCafeOutOf10(a.taste,a.cost,a.portions,a.wait,a.useR,a.repeatability,drinkWeights,a.currency_code||"USD")??0);
-    else if(cafeSortBy==="taste") d=b.taste-a.taste;
-    else if(cafeSortBy==="bpb") d=(a.cost/a.portions)-(b.cost/b.portions);
-    else if(cafeSortBy==="wait") d=a.wait-b.wait;
-    else if(cafeSortBy==="repeat") d=b.repeatability-a.repeatability;
-    return cafeSortAsc?-d:d;
-  }).filter(e=>{
-    if(cafeFilterMilk&&e.milkLevel!==cafeFilterMilk)return false;
-    if(cafeFilterBean){const origins=Array.isArray(e.beanRegion)?e.beanRegion:(e.beanRegion?[e.beanRegion]:[]);if(!origins.some(o=>regionOf(o)===cafeFilterBean))return false;}
-    if(cafeCityFilter.size>0&&!cafeCityFilter.has(resolveCity(e.city||"")||"New York City"))return false;
-    if(cafeSearch.trim()){const q=cafeSearch.trim().toLowerCase();return e.name.toLowerCase().includes(q)||e.order.toLowerCase().includes(q)||(e.city||"New York City").toLowerCase().includes(q);}
-    return true;
-  });
-
-  const sweetCityCounts = useMemo(() => {
-    const m = new Map();
-    cafes.forEach((e) => {
-      if (e.category !== "Sweets") return;
       const c = resolveCity(e.city || "") || "New York City";
       m.set(c, (m.get(c) || 0) + 1);
     });
@@ -1609,18 +1558,19 @@ export default function App() {
     for (const e of cafes)      { const c = resolveCity((e?.city || "").trim()); if (c) set.add(c); }
     return [...set].sort();
   }, [st.entries, cafes]);
-  const sortedSweets = [...cafes].filter(e=>e.category==="Sweets").sort((a,b)=>{
+  const sortedCafes = [...cafes].sort((a,b)=>{
     let d=0;
-    if(sweetsSortBy==="bite") d=(calcCafeOutOf10(b.taste,b.cost,b.portions,b.wait,b.useR,b.repeatability,sweetWeights,b.currency_code||"USD")??0)-(calcCafeOutOf10(a.taste,a.cost,a.portions,a.wait,a.useR,a.repeatability,sweetWeights,a.currency_code||"USD")??0);
-    else if(sweetsSortBy==="taste") d=b.taste-a.taste;
-    else if(sweetsSortBy==="bpb") d=(a.cost/a.portions)-(b.cost/b.portions);
-    else if(sweetsSortBy==="wait") d=a.wait-b.wait;
-    else if(sweetsSortBy==="repeat") d=b.repeatability-a.repeatability;
-    return sweetsSortAsc?-d:d;
+    if(cafeSortBy==="bite") d=(calcCafeOutOf10(b.taste,b.cost,b.portions,b.wait,b.useR,b.repeatability,drinkWeights,b.currency_code||"USD")??0)-(calcCafeOutOf10(a.taste,a.cost,a.portions,a.wait,a.useR,a.repeatability,drinkWeights,a.currency_code||"USD")??0);
+    else if(cafeSortBy==="taste") d=b.taste-a.taste;
+    else if(cafeSortBy==="bpb") d=(a.cost/a.portions)-(b.cost/b.portions);
+    else if(cafeSortBy==="wait") d=a.wait-b.wait;
+    else if(cafeSortBy==="repeat") d=b.repeatability-a.repeatability;
+    return cafeSortAsc?-d:d;
   }).filter(e=>{
-    if(sweetsTiers.size>0&&!sweetsTiers.has(scoreLabel(calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,sweetWeights,e.currency_code||"USD"),t)))return false;
-    if(sweetsCityFilter.size>0&&!sweetsCityFilter.has(resolveCity(e.city||"")||"New York City"))return false;
-    if(sweetsSearch.trim()){const q=sweetsSearch.trim().toLowerCase();return e.name.toLowerCase().includes(q)||e.order.toLowerCase().includes(q)||(e.city||"New York City").toLowerCase().includes(q);}
+    if(cafeFilterMilk&&e.milkLevel!==cafeFilterMilk)return false;
+    if(cafeFilterBean){const origins=Array.isArray(e.beanRegion)?e.beanRegion:(e.beanRegion?[e.beanRegion]:[]);if(!origins.some(o=>regionOf(o)===cafeFilterBean))return false;}
+    if(cafeCityFilter.size>0&&!cafeCityFilter.has(resolveCity(e.city||"")||"New York City"))return false;
+    if(cafeSearch.trim()){const q=cafeSearch.trim().toLowerCase();return e.name.toLowerCase().includes(q)||e.order.toLowerCase().includes(q)||(e.city||"New York City").toLowerCase().includes(q);}
     return true;
   });
 
@@ -1675,10 +1625,9 @@ export default function App() {
     [restaurantGroupsAll],
   );
 
-  const drinkGroupsAll = useMemo(() => {
-    const drinks = cafes.filter(e => DRINK_CATS.includes(e.category));
+  const cafeGroupsAll = useMemo(() => {
     const groups = {};
-    drinks.forEach(e => { const k = e.name; if (!groups[k]) groups[k] = []; groups[k].push(e); });
+    cafes.forEach(e => { const k = e.name; if (!groups[k]) groups[k] = []; groups[k].push(e); });
     const getSortVal = (grp) => {
       const avg = (fn) => grp.reduce((a, e) => a + fn(e), 0) / grp.length;
       if (cafeSortBy === "taste") return avg(e => e.taste);
@@ -1690,29 +1639,9 @@ export default function App() {
     return Object.entries(groups).sort((a, b) => cafeSortAsc ? getSortVal(a[1]) - getSortVal(b[1]) : getSortVal(b[1]) - getSortVal(a[1]));
   }, [cafes, cafeSortBy, cafeSortAsc, drinkWeights]);
 
-  const drinkRankMap = useMemo(
-    () => new Map(drinkGroupsAll.map(([name], i) => [name, i + 1])),
-    [drinkGroupsAll],
-  );
-
-  const sweetGroupsAll = useMemo(() => {
-    const sweets = cafes.filter(e => e.category === "Sweets");
-    const groups = {};
-    sweets.forEach(e => { const k = e.name; if (!groups[k]) groups[k] = []; groups[k].push(e); });
-    const getSortVal = (grp) => {
-      const avg = (fn) => grp.reduce((a, e) => a + fn(e), 0) / grp.length;
-      if (sweetsSortBy === "taste") return avg(e => e.taste);
-      if (sweetsSortBy === "bpb") return -avg(e => e.cost / e.portions);
-      if (sweetsSortBy === "wait") return -avg(e => e.wait);
-      if (sweetsSortBy === "repeat") return avg(e => e.repeatability) + (grp.length * 0.001);
-      return avg(e => calcCafeOutOf10(e.taste, e.cost, e.portions, e.wait, e.useR, e.repeatability, sweetWeights, e.currency_code||"USD") ?? 0);
-    };
-    return Object.entries(groups).sort((a, b) => sweetsSortAsc ? getSortVal(a[1]) - getSortVal(b[1]) : getSortVal(b[1]) - getSortVal(a[1]));
-  }, [cafes, sweetsSortBy, sweetsSortAsc, sweetWeights]);
-
-  const sweetRankMap = useMemo(
-    () => new Map(sweetGroupsAll.map(([name], i) => [name, i + 1])),
-    [sweetGroupsAll],
+  const cafeRankMap = useMemo(
+    () => new Map(cafeGroupsAll.map(([name], i) => [name, i + 1])),
+    [cafeGroupsAll],
   );
 
   const myRestaurantPlaceIds = useMemo(
@@ -1723,9 +1652,9 @@ export default function App() {
     [st.entries, cafes],
   );
 
-  const drinkGroups = useMemo(() => {
+  const cafeGroups = useMemo(() => {
     const groups = {};
-    sortedDrinks.forEach((e) => { const k = e.name; if (!groups[k]) groups[k] = []; groups[k].push(e); });
+    sortedCafes.forEach((e) => { const k = e.name; if (!groups[k]) groups[k] = []; groups[k].push(e); });
     const getSortVal = (grp) => {
       const avg = (fn) => grp.reduce((a, e) => a + fn(e), 0) / grp.length;
       if (cafeSortBy === "taste") return avg((e) => e.taste);
@@ -1735,21 +1664,7 @@ export default function App() {
       return avg((e) => calcCafeOutOf10(e.taste, e.cost, e.portions, e.wait, e.useR, e.repeatability, drinkWeights, e.currency_code||"USD") ?? 0);
     };
     return Object.entries(groups).sort((a, b) => cafeSortAsc ? getSortVal(a[1]) - getSortVal(b[1]) : getSortVal(b[1]) - getSortVal(a[1]));
-  }, [sortedDrinks, cafeSortBy, cafeSortAsc, drinkWeights]);
-
-  const sweetGroups = useMemo(() => {
-    const groups = {};
-    sortedSweets.forEach((e) => { const k = e.name; if (!groups[k]) groups[k] = []; groups[k].push(e); });
-    const getSortVal = (grp) => {
-      const avg = (fn) => grp.reduce((a, e) => a + fn(e), 0) / grp.length;
-      if (sweetsSortBy === "taste") return avg((e) => e.taste);
-      if (sweetsSortBy === "bpb") return -avg((e) => e.cost / e.portions);
-      if (sweetsSortBy === "wait") return -avg((e) => e.wait);
-      if (sweetsSortBy === "repeat") return avg((e) => e.repeatability) + (grp.length * 0.001);
-      return avg((e) => calcCafeOutOf10(e.taste, e.cost, e.portions, e.wait, e.useR, e.repeatability, sweetWeights, e.currency_code||"USD") ?? 0);
-    };
-    return Object.entries(groups).sort((a, b) => sweetsSortAsc ? getSortVal(a[1]) - getSortVal(b[1]) : getSortVal(b[1]) - getSortVal(a[1]));
-  }, [sortedSweets, sweetsSortBy, sweetsSortAsc, sweetWeights]);
+  }, [sortedCafes, cafeSortBy, cafeSortAsc, drinkWeights]);
 
   /** Pagination tails. Reset on every sort/filter/search/tab change so the
    *  user lands at the top of the new results. */
@@ -1757,13 +1672,9 @@ export default function App() {
     restaurantGroups,
     `${sortBy}|${sortAsc}|${[...cityFilter].sort().join(",")}|${search}|${[...tiers].join(",")}|${logTab}`,
   );
-  const drinkGroupsPage = usePaginatedList(
-    drinkGroups,
+  const cafeGroupsPage = usePaginatedList(
+    cafeGroups,
     `${cafeSortBy}|${cafeSortAsc}|${cafeFilterMilk}|${cafeFilterBean}|${[...cafeCityFilter].sort().join(",")}|${cafeSearch}|${logTab}`,
-  );
-  const sweetGroupsPage = usePaginatedList(
-    sweetGroups,
-    `${sweetsSortBy}|${sweetsSortAsc}|${[...sweetsTiers].join(",")}|${[...sweetsCityFilter].sort().join(",")}|${sweetsSearch}|${logTab}`,
   );
 
   const tierFilterRows = rating010FilterRows(t);
@@ -1814,7 +1725,7 @@ export default function App() {
         name: entry.name,
         city: entry.city || "",
       });
-      const cafeWeights = entry.category === "Sweets" ? sweetWeights : drinkWeights;
+      const cafeWeights = drinkWeights;
       const { data, error } = await supabase
         .from("cafe_visits")
         .insert([cafeVisitInsertPayload(placeId, user.id, entry, cafeWeights)])
@@ -2004,10 +1915,9 @@ export default function App() {
               </>
             );
           })()}
-          {logTab === "drinks" && (() => {
-            const drinks = guestCafes.filter(e => e.category !== "Sweets");
+          {logTab === "cafes" && (() => {
             const q = guestCafeSearch.trim().toLowerCase();
-            const filtered = q ? drinks.filter(e => e.name.toLowerCase().includes(q) || e.order.toLowerCase().includes(q) || (e.city||"").toLowerCase().includes(q)) : drinks;
+            const filtered = q ? guestCafes.filter(e => e.name.toLowerCase().includes(q) || e.order.toLowerCase().includes(q) || (e.city||"").toLowerCase().includes(q)) : guestCafes;
             const sorted = [...filtered].sort((a,b)=>{
               let d=0;
               if(guestCafeSortBy==="bite") d=(calcCafeOutOf10(b.taste,b.cost,b.portions,b.wait,b.useR,b.repeatability,drinkWeights,b.currency_code||"USD")??0)-(calcCafeOutOf10(a.taste,a.cost,a.portions,a.wait,a.useR,a.repeatability,drinkWeights,a.currency_code||"USD")??0);
@@ -2030,40 +1940,6 @@ export default function App() {
                 />
                 {sorted.map(e => (
                   <CafeGroupRow key={e.id} group={[e]} cafeSortBy={guestCafeSortBy} weights={drinkWeights}
-                    user={GUEST_USER}
-                    onEdit={entry => { setEditC(entry); setEditDineWith([]); window.scrollTo({top:0,behavior:"smooth"}); }}
-                    onDelete={id => setGuestCafes(p => p.filter(x => x.id !== id))}
-                  />
-                ))}
-              </>
-            );
-          })()}
-          {logTab === "sweets" && (() => {
-            const sweets = guestCafes.filter(e => e.category === "Sweets");
-            const q = guestSweetsSearch.trim().toLowerCase();
-            const filtered = q ? sweets.filter(e => e.name.toLowerCase().includes(q) || e.order.toLowerCase().includes(q) || (e.city||"").toLowerCase().includes(q)) : sweets;
-            const sorted = [...filtered].sort((a,b)=>{
-              let d=0;
-              if(guestSweetsSortBy==="bite") d=(calcCafeOutOf10(b.taste,b.cost,b.portions,b.wait,b.useR,b.repeatability,sweetWeights,b.currency_code||"USD")??0)-(calcCafeOutOf10(a.taste,a.cost,a.portions,a.wait,a.useR,a.repeatability,sweetWeights,a.currency_code||"USD")??0);
-              else if(guestSweetsSortBy==="taste") d=b.taste-a.taste;
-              else if(guestSweetsSortBy==="bpb") d=(a.cost/a.portions)-(b.cost/b.portions);
-              else if(guestSweetsSortBy==="wait") d=a.wait-b.wait;
-              else if(guestSweetsSortBy==="repeat") d=b.repeatability-a.repeatability;
-              return guestSweetsSortAsc?-d:d;
-            });
-            return (
-              <>
-                <SortFilterToolbar
-                  viewBy={guestSweetsSortBy}
-                  onViewBy={setGuestSweetsSortBy}
-                  viewOptions={[["bite","BITE"],["taste",t.taste],["bpb",t.bangBuck],["wait",t.wait],["repeat",t.repeatability]]}
-                  search={guestSweetsSearch}
-                  onSearch={setGuestSweetsSearch}
-                  sortAsc={guestSweetsSortAsc}
-                  onToggleSortAsc={()=>setGuestSweetsSortAsc(a=>!a)}
-                />
-                {sorted.map(e => (
-                  <CafeGroupRow key={e.id} group={[e]} cafeSortBy={guestSweetsSortBy} weights={sweetWeights}
                     user={GUEST_USER}
                     onEdit={entry => { setEditC(entry); setEditDineWith([]); window.scrollTo({top:0,behavior:"smooth"}); }}
                     onDelete={id => setGuestCafes(p => p.filter(x => x.id !== id))}
@@ -2213,13 +2089,13 @@ export default function App() {
             </div>
           )}
 
-          {logTab==="drinks"&&(
+          {logTab==="cafes"&&(
             <div>
               <SortFilterToolbar
                 viewBy={cafeSortBy}
                 onViewBy={setCafeSortBy}
                 viewOptions={[["bite","BITE"],["taste",t.taste],["bpb",t.bangBuck],["wait",t.wait],["repeat",t.repeatability]]}
-                cityCounts={drinkCityCounts}
+                cityCounts={cafeCityCounts}
                 selectedCities={cafeCityFilter}
                 onCitiesChange={setCafeCityFilter}
                 search={cafeSearch}
@@ -2252,11 +2128,11 @@ export default function App() {
                 sortAsc={cafeSortAsc}
                 onToggleSortAsc={()=>setCafeSortAsc(a=>!a)}
               />
-              {!sortedDrinks.length&&<p style={{color:"#888780",fontSize:14}}>{cafes.some(e=>DRINK_CATS.includes(e.category))?t.noEntries:t.noDrinks}</p>}
+              {!sortedCafes.length&&<p style={{color:"#888780",fontSize:14}}>{cafes.length?t.noEntries:t.noCafes}</p>}
               {contextDrink ? (
                 <div>
                   <button type="button" onClick={()=>setContextDrink(null)} style={{fontSize:12,color:"#F0997B",background:"none",border:"none",cursor:"pointer",padding:"4px 0 10px",display:"flex",alignItems:"center",gap:4}}>← Back to full list</button>
-                  {drinkGroupsAll.slice(Math.max(0,contextDrink.idx-3),contextDrink.idx+4).map(([name,grp],i)=>{
+                  {cafeGroupsAll.slice(Math.max(0,contextDrink.idx-3),contextDrink.idx+4).map(([name,grp],i)=>{
                     const absRank=Math.max(1,contextDrink.idx-2)+i;
                     const isCenter=name===contextDrink.name;
                     return(
@@ -2268,90 +2144,20 @@ export default function App() {
                 </div>
               ) : (
                 <>
-                  {drinkGroupsPage.visible.map(([name,grp],i)=>(
+                  {cafeGroupsPage.visible.map(([name,grp],i)=>(
                     <div key={name}>
                       <CafeGroupRow rank={i+1} group={grp} cafeSortBy={cafeSortBy} weights={drinkWeights} user={user} dinedWithForEntry={(id)=>dinedWithMap.get(id)||[]} viewerProfile={viewerProfile} onEdit={e=>{setEditC(e);setEditDineWith(dinedWithMap.get(e.id)||[]);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={id=>{const row=cafes.find(x=>x.id===id);if(!canMutateVisit(row,user))return;setPendingDelete({onConfirm:async()=>{try{await supabase.from("cafe_visits").delete().eq("id",id);}catch(err){console.error("cafe delete threw:",err);}setCafes(p=>p.filter(x=>x.id!==id));}});}}/>
                       {cafeSearch.trim()&&(
-                        <button type="button" onClick={()=>{const idx=drinkGroupsAll.findIndex(([n])=>n===name);if(idx>=0){setCafeSearch("");setContextDrink({name,idx});}}} style={{fontSize:11,color:"#F0997B",background:"none",border:"none",cursor:"pointer",padding:"2px 0 6px 58px",display:"block"}}>
-                          Show ±3 rankings around #{drinkRankMap.get(name)}
+                        <button type="button" onClick={()=>{const idx=cafeGroupsAll.findIndex(([n])=>n===name);if(idx>=0){setCafeSearch("");setContextDrink({name,idx});}}} style={{fontSize:11,color:"#F0997B",background:"none",border:"none",cursor:"pointer",padding:"2px 0 6px 58px",display:"block"}}>
+                          Show ±3 rankings around #{cafeRankMap.get(name)}
                         </button>
                       )}
                     </div>
                   ))}
                   <ShowMoreButton
-                    remaining={drinkGroupsPage.remaining}
-                    pageSize={drinkGroupsPage.pageSize}
-                    onClick={drinkGroupsPage.showMore}
-                  />
-                </>
-              )}
-            </div>
-          )}
-
-          {logTab==="sweets"&&(
-            <div>
-              <SortFilterToolbar
-                viewBy={sweetsSortBy}
-                onViewBy={setSweetsSortBy}
-                viewOptions={[["bite","BITE"],["taste",t.taste],["bpb",t.bangBuck],["wait",t.wait],["repeat",t.repeatability]]}
-                cityCounts={sweetCityCounts}
-                selectedCities={sweetsCityFilter}
-                onCitiesChange={setSweetsCityFilter}
-                search={sweetsSearch}
-                onSearch={(v)=>{setSweetsSearch(v);setContextSweet(null);}}
-                filterContent={
-                  <>
-                    <div style={{padding:"6px 10px",borderBottom:"0.5px solid rgba(255,255,255,0.1)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <span style={S.sm}>{t.filterByTier}</span>
-                      {sweetsTiers.size>0&&<button type="button" onClick={()=>setSweetsTiers(new Set())} style={{fontSize:11,color:"#F0997B",background:"none",border:"none",cursor:"pointer",padding:0}}>{t.clear}</button>}
-                    </div>
-                    {tierFilterRows.map(([tier,col])=>{
-                      const on=sweetsTiers.has(tier);
-                      const cnt=cafes.filter(e=>e.category==="Sweets"&&scoreLabel(calcCafeOutOf10(e.taste,e.cost,e.portions,e.wait,e.useR,e.repeatability,sweetWeights,e.currency_code||"USD"),t)===tier).length;
-                      return(
-                        <div key={tier} onClick={()=>setSweetsTiers(p=>{const n=new Set(p);on?n.delete(tier):n.add(tier);return n;})} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderBottom:"0.5px solid rgba(255,255,255,0.1)",cursor:"pointer",background:on?"rgba(255,255,255,0.03)":"transparent"}}>
-                          <div style={{width:13,height:13,borderRadius:3,border:"1.5px solid "+(on?col:"rgba(255,255,255,0.1)"),background:on?col:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{on&&<span style={{color:"#141413",fontSize:9,fontWeight:700,lineHeight:1}}>✓</span>}</div>
-                          <span style={{flex:1,fontSize:12,color:on?col:"#F1EFE8",fontWeight:on?500:400}}>{tier}</span>
-                          <span style={S.sm}>{cnt}</span>
-                        </div>
-                      );
-                    })}
-                  </>
-                }
-                filterActive={sweetsTiers.size>0}
-                sortAsc={sweetsSortAsc}
-                onToggleSortAsc={()=>setSweetsSortAsc(a=>!a)}
-              />
-              {!sortedSweets.length&&<p style={{color:"#888780",fontSize:14}}>{cafes.some(e=>e.category==="Sweets")?t.noEntries:t.noSweets}</p>}
-              {contextSweet ? (
-                <div>
-                  <button type="button" onClick={()=>setContextSweet(null)} style={{fontSize:12,color:"#F0997B",background:"none",border:"none",cursor:"pointer",padding:"4px 0 10px",display:"flex",alignItems:"center",gap:4}}>← Back to full list</button>
-                  {sweetGroupsAll.slice(Math.max(0,contextSweet.idx-3),contextSweet.idx+4).map(([name,grp],i)=>{
-                    const absRank=Math.max(1,contextSweet.idx-2)+i;
-                    const isCenter=name===contextSweet.name;
-                    return(
-                      <div key={name} style={isCenter?{outline:"1.5px solid #F0997B",borderRadius:10,marginBottom:6}:{marginBottom:6}}>
-                        <CafeGroupRow rank={absRank} group={grp} cafeSortBy={sweetsSortBy} weights={sweetWeights} user={user} dinedWithForEntry={(id)=>dinedWithMap.get(id)||[]} viewerProfile={viewerProfile} onEdit={e=>{setEditC(e);setEditDineWith(dinedWithMap.get(e.id)||[]);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={id=>{const row=cafes.find(x=>x.id===id);if(!canMutateVisit(row,user))return;setPendingDelete({onConfirm:async()=>{try{await supabase.from("cafe_visits").delete().eq("id",id);}catch(err){console.error("cafe delete threw:",err);}setCafes(p=>p.filter(x=>x.id!==id));}});}}/>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <>
-                  {sweetGroupsPage.visible.map(([name,grp],i)=>(
-                    <div key={name}>
-                      <CafeGroupRow rank={i+1} group={grp} cafeSortBy={sweetsSortBy} weights={sweetWeights} user={user} dinedWithForEntry={(id)=>dinedWithMap.get(id)||[]} viewerProfile={viewerProfile} onEdit={e=>{setEditC(e);setEditDineWith(dinedWithMap.get(e.id)||[]);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={id=>{const row=cafes.find(x=>x.id===id);if(!canMutateVisit(row,user))return;setPendingDelete({onConfirm:async()=>{try{await supabase.from("cafe_visits").delete().eq("id",id);}catch(err){console.error("cafe delete threw:",err);}setCafes(p=>p.filter(x=>x.id!==id));}});}}/>
-                      {sweetsSearch.trim()&&(
-                        <button type="button" onClick={()=>{const idx=sweetGroupsAll.findIndex(([n])=>n===name);if(idx>=0){setSweetsSearch("");setContextSweet({name,idx});}}} style={{fontSize:11,color:"#F0997B",background:"none",border:"none",cursor:"pointer",padding:"2px 0 6px 58px",display:"block"}}>
-                          Show ±3 rankings around #{sweetRankMap.get(name)}
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  <ShowMoreButton
-                    remaining={sweetGroupsPage.remaining}
-                    pageSize={sweetGroupsPage.pageSize}
-                    onClick={sweetGroupsPage.showMore}
+                    remaining={cafeGroupsPage.remaining}
+                    pageSize={cafeGroupsPage.pageSize}
+                    onClick={cafeGroupsPage.showMore}
                   />
                 </>
               )}
@@ -2369,7 +2175,7 @@ export default function App() {
           myRestaurantPlaceIds={myRestaurantPlaceIds}
           restaurantWeights={weights}
           drinkWeights={drinkWeights}
-          sweetWeights={sweetWeights}
+          sweetWeights={drinkWeights}
           unseenFollowers={unseenFollowers}
           onMarkFollowersSeen={handleMarkFollowersSeen}
           onFollowChange={handleFollowChange}
@@ -2387,42 +2193,56 @@ export default function App() {
         />
       )}
 
-      {pathname.startsWith("/log")&&editR&&<RestForm initial={editR} initialDineWith={editDineWith} weights={weights} existingEntries={!user ? guestEntries : st.entries} existingCities={!user ? [...new Set(guestEntries.map(e=>e.city).filter(Boolean))] : existingCities} places={!user ? [] : restaurantPlaces}
+      {pathname.startsWith("/log")&&editR&&<>
+      {editSaveErr&&<div style={{background:"#3C1F13",border:"1px solid #F0997B",borderRadius:8,padding:"10px 14px",marginBottom:12,fontSize:13,color:"#F0997B"}}>{editSaveErr}</div>}
+      <RestForm initial={editR} initialDineWith={editDineWith} weights={weights} existingEntries={!user ? guestEntries : st.entries} existingCities={!user ? [...new Set(guestEntries.map(e=>e.city).filter(Boolean))] : existingCities} places={!user ? [] : restaurantPlaces}
         user={user} tasteBudIds={tasteBudIds}
         onPlaceCreated={(p)=>{ if (user) upsertPlace(setRestaurantPlaces, p.id, p); }}
         onSave={async e=>{
+        setEditSaveErr(null);
         if (!user) {
           setGuestEntries(p => p.map(x => x.id === editR.id ? { ...x, ...e } : x));
           setEditR(null); setEditDineWith([]);
           window.scrollTo({ top:0, behavior:"smooth" });
           return;
         }
+        if (!canMutateVisit(e, user)) {
+          setEditSaveErr("Can't save — you don't own this entry.");
+          return;
+        }
         let resolvedPlaceId = e.placeId;
-        if(canMutateVisit(e,user)) {
-          try {
-            resolvedPlaceId = await ensureRestaurantPlace(supabase, {
-              placeId: e.placeId || null,
-              name: e.name,
-              cuisine: e.cuisine,
-              cuisine2: e.cuisine2 || "",
-              isFusion: e.isFusion || false,
-              city: e.city || "",
-            });
-            upsertPlace(setRestaurantPlaces, resolvedPlaceId, {
-              name: e.name,
-              city: e.city || "",
-              cuisine: e.cuisine || "",
-              cuisine2: e.cuisine2 || "",
-              isFusion: !!e.isFusion,
-            });
-            const { error } = await supabase
-              .from("restaurant_visits")
-              .update(restaurantVisitUpdatePayload(resolvedPlaceId, e))
-              .eq("id", e.id);
-            if (error) console.error("restaurant update error:", error);
-          } catch (err) {
-            console.error("restaurant update threw:", err);
+        let dbErr = null;
+        try {
+          resolvedPlaceId = await ensureRestaurantPlace(supabase, {
+            placeId: e.placeId || null,
+            name: e.name,
+            cuisine: e.cuisine,
+            cuisine2: e.cuisine2 || "",
+            isFusion: e.isFusion || false,
+            city: e.city || "",
+          });
+          upsertPlace(setRestaurantPlaces, resolvedPlaceId, {
+            name: e.name,
+            city: e.city || "",
+            cuisine: e.cuisine || "",
+            cuisine2: e.cuisine2 || "",
+            isFusion: !!e.isFusion,
+          });
+          const { error } = await supabase
+            .from("restaurant_visits")
+            .update(restaurantVisitUpdatePayload(resolvedPlaceId, e))
+            .eq("id", e.id);
+          if (error) {
+            console.error("restaurant update error:", error);
+            dbErr = error.message || "Save failed — check console";
           }
+        } catch (err) {
+          console.error("restaurant update threw:", err);
+          dbErr = err?.message || "Save failed — check console";
+        }
+        if (dbErr) {
+          setEditSaveErr(dbErr);
+          return;
         }
         dispatch({ type: "UPD", e: { ...e, placeId: resolvedPlaceId, ownerId: e.ownerId ?? user?.id ?? null } });
         const prevRestIds = new Set((editDineWith || []).map((p) => p.id));
@@ -2449,12 +2269,16 @@ export default function App() {
           setCoDinersRefreshKey((k) => k + 1);
         }
         setEditR(null); setEditDineWith([]);
-      }} onCancel={()=>{setEditR(null);setEditDineWith([]);window.scrollTo({top:0,behavior:"smooth"});}} tasteStep={tasteHalfStep?0.5:0.1} onTasteStepChange={saveTasteStep}/>}
-      {pathname.startsWith("/log")&&editC&&<CafeForm initial={editC} initialDineWith={editDineWith} weights={editC?.category==="Sweets"?sweetWeights:drinkWeights}
+      }} onCancel={()=>{setEditR(null);setEditDineWith([]);setEditSaveErr(null);window.scrollTo({top:0,behavior:"smooth"});}} tasteStep={tasteHalfStep?0.5:0.1} onTasteStepChange={saveTasteStep}/>
+      </>}
+      {pathname.startsWith("/log")&&editC&&<>
+      {editSaveErr&&<div style={{background:"#3C1F13",border:"1px solid #F0997B",borderRadius:8,padding:"10px 14px",marginBottom:12,fontSize:13,color:"#F0997B"}}>{editSaveErr}</div>}
+      <CafeForm initial={editC} initialDineWith={editDineWith} weights={drinkWeights}
         user={user} tasteBudIds={tasteBudIds}
         onPlaceCreated={(p)=>{ if (user) upsertPlace(setCafePlaces, p.id, p); }}
         existingCafes={!user ? guestCafes : cafes} existingCities={!user ? [...new Set(guestCafes.map(e=>e.city).filter(Boolean))] : existingCities} places={!user ? [] : cafePlaces}
         onSave={async e=>{
+        setEditSaveErr(null);
         if (!user) {
           setGuestCafes(p => p.map(x => x.id === editC.id ? { ...x, ...e } : x));
           setEditC(null); setEditDineWith([]);
@@ -2462,26 +2286,37 @@ export default function App() {
           return;
         }
         if (e.city) persistLastCity(e.city);
+        if (!canMutateVisit(e, user)) {
+          setEditSaveErr("Can't save — you don't own this entry.");
+          return;
+        }
         let resolvedPlaceId = e.placeId;
-        if(canMutateVisit(e,user)) {
-          try {
-            resolvedPlaceId = await ensureCafePlace(supabase, {
-              placeId: e.placeId || null,
-              name: e.name,
-              city: e.city || "",
-            });
-            upsertPlace(setCafePlaces, resolvedPlaceId, {
-              name: e.name,
-              city: e.city || "",
-            });
-            const { error } = await supabase
-              .from("cafe_visits")
-              .update(cafeVisitUpdatePayload(resolvedPlaceId, e))
-              .eq("id", e.id);
-            if (error) console.error("cafe update error:", error, "id:", e.id);
-          } catch (err) {
-            console.error("cafe update threw:", err);
+        let dbErr = null;
+        try {
+          resolvedPlaceId = await ensureCafePlace(supabase, {
+            placeId: e.placeId || null,
+            name: e.name,
+            city: e.city || "",
+          });
+          upsertPlace(setCafePlaces, resolvedPlaceId, {
+            name: e.name,
+            city: e.city || "",
+          });
+          const { error } = await supabase
+            .from("cafe_visits")
+            .update(cafeVisitUpdatePayload(resolvedPlaceId, e))
+            .eq("id", e.id);
+          if (error) {
+            console.error("cafe update error:", error, "id:", e.id);
+            dbErr = error.message || "Save failed — check console";
           }
+        } catch (err) {
+          console.error("cafe update threw:", err);
+          dbErr = err?.message || "Save failed — check console";
+        }
+        if (dbErr) {
+          setEditSaveErr(dbErr);
+          return;
         }
         setCafes(p=>p.map(x=>x.id===e.id?{...e,id:x.id,placeId:resolvedPlaceId??x.placeId,ownerId:e.ownerId??user?.id??x.ownerId}:x));
         const prevCafeIds = new Set((editDineWith || []).map((p) => p.id));
@@ -2504,15 +2339,29 @@ export default function App() {
         setEditC(null); setEditDineWith([]);
       }}
       onSaveAndContinue={async e=>{
+        setEditSaveErr(null);
         if (e.city) persistLastCity(e.city);
+        if (!canMutateVisit(e, user)) {
+          setEditSaveErr("Can't save — you don't own this entry.");
+          return;
+        }
         let resolvedPlaceId = e.placeId;
-        if(canMutateVisit(e,user)) {
-          try {
-            resolvedPlaceId = await ensureCafePlace(supabase, { placeId: e.placeId||null, name: e.name, city: e.city||"" });
-            upsertPlace(setCafePlaces, resolvedPlaceId, { name: e.name, city: e.city||"" });
-            const { error } = await supabase.from("cafe_visits").update(cafeVisitUpdatePayload(resolvedPlaceId, e)).eq("id", e.id);
-            if (error) console.error("cafe update error:", error, "id:", e.id);
-          } catch (err) { console.error("cafe update threw:", err); }
+        let dbErr = null;
+        try {
+          resolvedPlaceId = await ensureCafePlace(supabase, { placeId: e.placeId||null, name: e.name, city: e.city||"" });
+          upsertPlace(setCafePlaces, resolvedPlaceId, { name: e.name, city: e.city||"" });
+          const { error } = await supabase.from("cafe_visits").update(cafeVisitUpdatePayload(resolvedPlaceId, e)).eq("id", e.id);
+          if (error) {
+            console.error("cafe update error:", error, "id:", e.id);
+            dbErr = error.message || "Save failed — check console";
+          }
+        } catch (err) {
+          console.error("cafe update threw:", err);
+          dbErr = err?.message || "Save failed — check console";
+        }
+        if (dbErr) {
+          setEditSaveErr(dbErr);
+          return;
         }
         setCafes(p=>p.map(x=>x.id===e.id?{...e,id:x.id,placeId:resolvedPlaceId??x.placeId,ownerId:e.ownerId??user?.id??x.ownerId}:x));
         const prevIds = new Set((editDineWith||[]).map(p=>p.id));
@@ -2537,7 +2386,8 @@ export default function App() {
         setAddType("cafe");
         navigate("/add");
       }}
-      onCancel={()=>{setEditC(null);setEditDineWith([]);window.scrollTo({top:0,behavior:"smooth"});}} tasteStep={tasteHalfStep?0.5:0.1} onTasteStepChange={saveTasteStep}/>}
+      onCancel={()=>{setEditC(null);setEditDineWith([]);setEditSaveErr(null);window.scrollTo({top:0,behavior:"smooth"});}} tasteStep={tasteHalfStep?0.5:0.1} onTasteStepChange={saveTasteStep}/>
+      </>}
 
       {/* ── Add Rating ── */}
       {pathname==="/add"&&!user&&(
@@ -2789,7 +2639,7 @@ export default function App() {
                       dine_with_count: (e.dineWith || []).length,
                     });
                   }
-                  navigate(e.category==="Sweets"?"/log/sweets":"/log/drinks");
+                  navigate("/log/cafes");
                 }}
                 onSaveAndContinue={async e=>{
                   setAddPrefill(null);
@@ -2856,8 +2706,6 @@ export default function App() {
           replaceRestaurantWeights={replaceRestaurantWeights}
           drinkWeights={drinkWeights}
           replaceDrinkWeights={replaceDrinkWeights}
-          sweetWeights={sweetWeights}
-          replaceSweetWeights={replaceSweetWeights}
           questL={new Set()}
           toggleQ={() => {}}
           onOpenSuggest={() => {}}
@@ -2871,8 +2719,6 @@ export default function App() {
           replaceRestaurantWeights={replaceRestaurantWeights}
           drinkWeights={drinkWeights}
           replaceDrinkWeights={replaceDrinkWeights}
-          sweetWeights={sweetWeights}
-          replaceSweetWeights={replaceSweetWeights}
           questL={questL}
           toggleQ={toggleQ}
           onOpenSuggest={()=>setShowSuggest(true)}
@@ -3041,7 +2887,7 @@ export default function App() {
         viewerId={user?.id}
         restaurantWeights={weights}
         drinkWeights={drinkWeights}
-        sweetWeights={sweetWeights}
+        sweetWeights={drinkWeights}
         onClose={() => setHeartSheetTarget(null)}
       />
     )}

@@ -5,8 +5,7 @@ import { FLAGS, REGION_MAP, CUISINE_REGIONS, REGION_COLORS } from "../constants/
 import { calcBiteOutOf10, meanRestaurantBiteOutOf10, RESTAURANT_WEIGHT_DEFAULTS, normalizeWeights, weightsToPercents } from "../utils/scoring.js";
 import { S } from "../styles/sharedStyles.js";
 import { DonutChart } from "./DonutChart.jsx";
-import { DrinksPalette } from "./DrinksPalette.jsx";
-import { SweetsPalette } from "./SweetsPalette.jsx";
+import { CafePalette } from "./CafePalette.jsx";
 import { CategoryTabs } from "./CategoryTabs.jsx";
 import { WeightSliders } from "./WeightSliders.jsx";
 import { StatCard } from "./StatCard.jsx";
@@ -24,8 +23,6 @@ export function PaletteView({
   replaceRestaurantWeights,
   drinkWeights,
   replaceDrinkWeights,
-  sweetWeights,
-  replaceSweetWeights,
   questL,
   toggleQ,
   onOpenSuggest,
@@ -34,7 +31,7 @@ export function PaletteView({
   const {t} = useLang();
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const paletteTab = pathname === "/taste/drinks" ? "drinks" : pathname === "/taste/sweets" ? "sweets" : "restaurants";
+  const paletteTab = (pathname === "/taste/cafes" || pathname === "/taste/drinks" || pathname === "/taste/sweets") ? "cafes" : "restaurants";
   const [editingW,setEditingW] = useState(false);
   const [draftW,setDraftW] = useState(()=>normalizeWeights(weights));
   const [roastMode,setRoastMode] = useState(false);
@@ -217,8 +214,7 @@ export function PaletteView({
         </div>
       )}
 
-      {paletteTab==="drinks"&&<DrinksPalette cafes={cafes} drinkWeights={drinkWeights} replaceDrinkWeights={replaceDrinkWeights} homeCurrency={homeCurrency}/>}
-      {paletteTab==="sweets"&&<SweetsPalette cafes={cafes} sweetWeights={sweetWeights} replaceSweetWeights={replaceSweetWeights} homeCurrency={homeCurrency}/>}
+      {paletteTab==="cafes"&&<CafePalette cafes={cafes} cafeWeights={drinkWeights} replaceCafeWeights={replaceDrinkWeights} homeCurrency={homeCurrency}/>}
     </div>
   );
 }
