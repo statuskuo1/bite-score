@@ -73,7 +73,7 @@ function parsePeopleSay(notesArr) {
             }
           } else {
             for (const w of piece.toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/)) {
-              if (w.length >= 3 && !STOP_WORDS.has(w))
+              if (w.length >= 3 && !STOP_WORDS.has(w) && KNOWN_SINGLE_WORD_VIBES.has(w))
                 vibeCounts[w] = (vibeCounts[w] || 0) + 1;
             }
           }
