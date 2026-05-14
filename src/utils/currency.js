@@ -251,9 +251,13 @@ export function getCurrencyForCity(city) {
   if (!city) return "USD";
   const low = city.trim().toLowerCase();
   for (const [cities, code] of CITY_CURRENCY_MAP) {
-    if (cities.some((c) => low === c || low.includes(c) || c.includes(low))) {
-      return code;
-    }
+    if (cities.some((c) => {
+      if (low === c) return true;
+      // Short abbreviations (≤3 chars like "kl", "hk", "sf") must be exact matches only —
+      // substring matching would make "oakland".includes("kl") → MYR which is wrong.
+      if (c.length <= 3) return false;
+      return low.includes(c) || c.includes(low);
+    })) return code;
   }
   return "USD";
 }

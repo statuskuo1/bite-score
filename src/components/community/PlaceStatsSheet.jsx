@@ -53,7 +53,9 @@ function parsePeopleSay(notesArr) {
 
   function countPhrase(map, raw) {
     const key = raw.toLowerCase().replace(/[^a-z\s]/g, "").trim();
-    if (key.length >= 3 && !STOP_WORDS.has(key.split(/\s+/)[0]))
+    const words = key.split(/\s+/);
+    // Multi-word phrases always pass; single words filtered if they're a stop word
+    if (key.length >= 3 && (words.length >= 2 || !STOP_WORDS.has(words[0])))
       map[key] = (map[key] || 0) + 1;
   }
 
