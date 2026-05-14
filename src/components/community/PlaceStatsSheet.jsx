@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../config/supabaseClient.js";
 import { calcBiteOutOf10, calcCafeOutOf10, scoreColor, scoreLabel } from "../../utils/scoring.js";
-import { toUSD, fromUSD, CURRENCY_SYMBOLS, getCurrencyForCity } from "../../utils/currency.js";
+import { toUSD, fromUSD, CURRENCY_SYMBOLS } from "../../utils/currency.js";
 import { FLAGS } from "../../constants/cuisineConstants.js";
 import { Avatar } from "./Avatar.jsx";
 import { MapsLink } from "./MapsLink.jsx";
@@ -178,17 +178,23 @@ export function PlaceStatsSheet({ post, restaurantWeights, drinkWeights, sweetWe
       return counts.indexOf(Math.max(...counts));
     })();
 
-    // Currency is determined by the place's city (authoritative) so a mis-logged visit
-    // currency can't corrupt the display (e.g. one MYR visit won't make Oakland show RM).
-    const displayCurrency = getCurrencyForCity(post.city || "");
+    // Use the most frequently logged currency across all visits for display
+    const currencyFreq = {};
+    for (const v of valid) {
+      const c = v.currency_code || "USD";
+      currencyFreq[c] = (currencyFreq[c] || 0) + 1;
+    }
+    const modalCurrency = Object.keys(currencyFreq).length
+      ? Object.entries(currencyFreq).sort((a, b) => b[1] - a[1])[0][0]
+      : "USD";
 
-    // Average cost in USD (for BITE scoring) and in display currency (for display)
+    // Average cost in USD (for BITE scoring) and in modal currency (for display)
     const avgCostUSD = avg(valid.map(v => toUSD(+v.cost, v.currency_code || "USD")));
-    const avgCostDisplay = avgCostUSD != null ? fromUSD(avgCostUSD, displayCurrency) : null;
-    const costSymbol = CURRENCY_SYMBOLS[displayCurrency] || displayCurrency + " ";
+    const avgCostDisplay = avgCostUSD != null ? fromUSD(avgCostUSD, modalCurrency) : null;
+    const costSymbol = CURRENCY_SYMBOLS[modalCurrency] || modalCurrency + " ";
 
     return {
-      avgTaste, avgCostUSD, avgCostDisplay, costSymbol, modalCurrency: displayCurrency,
+      avgTaste, avgCostUSD, avgCostDisplay, costSymbol, modalCurrency,
       avgWait, avgPortions, minTaste, maxTaste, useRMajority, repeatMode,
       validCount: valid.length,
     };
