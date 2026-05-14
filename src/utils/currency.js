@@ -235,12 +235,21 @@ const CITY_CURRENCY_MAP = [
   [["tbilisi", "batumi", "kutaisi"], "GEL"],
   // UAH
   [["kyiv", "kiev", "lviv", "odesa", "odessa", "kharkiv", "dnipro"], "UAH"],
-  // USD (fallback for common US cities)
+  // USD — common US cities (unambiguous ones only; cities that share names with EUR/etc. cities
+  //       require word-boundary matching to disambiguate — TODO for future improvement)
   [["nyc", "new york", "los angeles", "la", "chicago", "houston", "miami", "san francisco", "sf",
      "seattle", "boston", "austin", "denver", "atlanta", "las vegas", "washington", "philadelphia",
      "portland", "phoenix", "nashville", "new orleans", "minneapolis", "detroit", "pittsburgh",
      "charlotte", "raleigh", "salt lake city", "kansas city", "san diego", "tampa", "orlando",
-     "sacramento", "richmond", "indianapolis", "columbus", "louisville", "memphis", "baltimore"], "USD"],
+     "sacramento", "richmond", "indianapolis", "columbus", "louisville", "memphis", "baltimore",
+     "oakland", "berkeley", "san jose", "fremont", "hayward", "alameda", "palo alto",
+     "mountain view", "sunnyvale", "santa clara", "san mateo", "redwood city", "burlingame",
+     "daly city", "pasadena", "long beach", "anaheim", "irvine", "santa monica", "santa barbara",
+     "fresno", "bakersfield", "stockton", "riverside", "san bernardino", "modesto",
+     "boise", "tucson", "albuquerque", "el paso", "fort worth", "san antonio", "dallas",
+     "cleveland", "cincinnati", "st louis", "st. louis", "eugene", "salem", "albany",
+     "charleston", "columbia", "springfield", "madison", "lincoln", "aurora", "henderson",
+     "jersey city", "honolulu", "anchorage"], "USD"],
 ];
 
 /**
