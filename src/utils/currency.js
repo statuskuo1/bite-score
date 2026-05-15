@@ -154,6 +154,30 @@ export function formatCost(rawAmount, fromCurrency, homeCurrency) {
   return sym + converted.toFixed(decimals);
 }
 
+// ── Country code → currency lookup ───────────────────────────────────────────
+// Uses ISO 3166-1 alpha-2 country codes returned by Google Places addressComponents.
+// More reliable than city-name matching — no substring ambiguity.
+
+const EUR_COUNTRIES = ["AT","BE","HR","CY","EE","FI","FR","DE","GR","IE","IT",
+  "LV","LT","LU","MT","NL","PT","SK","SI","ES","AD","MC","SM","VA","ME","XK"];
+
+const COUNTRY_CURRENCY_MAP = {
+  US: "USD", CA: "CAD", GB: "GBP", AU: "AUD", NZ: "NZD", SG: "SGD",
+  JP: "JPY", KR: "KRW", CN: "CNY", TW: "TWD", HK: "HKD", MO: "HKD",
+  MY: "MYR", TH: "THB", VN: "VND", PH: "PHP", ID: "IDR",
+  IN: "INR", PK: "PKR", BD: "BDT", LK: "LKR",
+  CH: "CHF", SE: "SEK", NO: "NOK", DK: "DKK",
+  MX: "MXN", BR: "BRL", AE: "AED", SA: "SAR", IL: "ILS",
+  TR: "TRY", EG: "EGP", NG: "NGN", ZA: "ZAR", KZ: "KZT",
+  GE: "GEL", UA: "UAH", KH: "KHR", MM: "MMK", LA: "LAK",
+  ...Object.fromEntries(EUR_COUNTRIES.map(c => [c, "EUR"])),
+};
+
+export function getCurrencyForCountry(countryCode) {
+  if (!countryCode) return null;
+  return COUNTRY_CURRENCY_MAP[countryCode.toUpperCase()] || null;
+}
+
 // ── City → currency lookup ────────────────────────────────────────────────────
 
 const CITY_CURRENCY_MAP = [

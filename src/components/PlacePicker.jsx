@@ -176,6 +176,7 @@ export function PlacePicker({
       cuisine2: place.cuisine2 || "",
       isFusion: !!place.isFusion,
       googlePlaceId: place.googlePlaceId || "",
+      countryCode: place.countryCode || "",
     });
     setShow(false);
   }
@@ -204,7 +205,7 @@ export function PlacePicker({
     if (typeof onPlaceCreated === "function") {
       onPlaceCreated(resolved);
     }
-    pick(resolved);
+    pick({ ...resolved, countryCode: prediction.details?.countryCode || "" });
   }
 
   function addNew() {

@@ -12,7 +12,7 @@ import { FieldLabel } from "./FieldLabel.jsx";
 import { FormScoreHeader } from "./FormScoreHeader.jsx";
 import { CityInput } from "./CityInput.jsx";
 import { DineWithPicker } from "./DineWithPicker.jsx";
-import { getCurrencyForCity, CURRENCY_SYMBOLS } from "../utils/currency.js";
+import { getCurrencyForCity, getCurrencyForCountry, CURRENCY_SYMBOLS } from "../utils/currency.js";
 import { parseVisitDateInput, formatVisitDateInput } from "../utils/visitDate.js";
 
 function maskDate(raw) {
@@ -117,7 +117,7 @@ export function RestForm({initial,initialDineWith=[],onSave,onCancel,onFormChang
           places={places||[]}
           cityHint={f.city||""}
           onPlaceCreated={onPlaceCreated}
-          onChange={({name, placeId, city, cuisine: pickedCuisine, cuisine2: pickedCuisine2, isFusion: pickedFusion})=>{
+          onChange={({name, placeId, city, cuisine: pickedCuisine, cuisine2: pickedCuisine2, isFusion: pickedFusion, countryCode})=>{
             if(!placeId){
               setF(p=>({...p, name, placeId: null}));
               return;
@@ -137,6 +137,8 @@ export function RestForm({initial,initialDineWith=[],onSave,onCancel,onFormChang
               cuisine2,
               isFusion,
             }));
+            const resolvedCurrency = getCurrencyForCountry(countryCode) || getCurrencyForCity(cty || "");
+            setCurrencyCode(resolvedCurrency);
             const match=(existingEntries||[]).find(e=>e.placeId===placeId);
             if(match){
               setF(p=>({

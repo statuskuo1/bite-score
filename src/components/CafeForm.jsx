@@ -13,7 +13,7 @@ import { FormScoreHeader } from "./FormScoreHeader.jsx";
 import { BEAN_ORIGINS, BEAN_ORIGIN_GROUPS } from "../constants/coffeeConstants.js";
 import { CityInput } from "./CityInput.jsx";
 import { DineWithPicker } from "./DineWithPicker.jsx";
-import { getCurrencyForCity, CURRENCY_SYMBOLS } from "../utils/currency.js";
+import { getCurrencyForCity, getCurrencyForCountry, CURRENCY_SYMBOLS } from "../utils/currency.js";
 import { parseVisitDateInput, formatVisitDateInput } from "../utils/visitDate.js";
 
 function maskDate(raw) {
@@ -415,16 +415,16 @@ export function CafeForm({initial,initialDineWith=[],onSave,onSaveAndContinue,on
           places={places||[]}
           cityHint={f.city||""}
           onPlaceCreated={onPlaceCreated}
-          onChange={({name, placeId, city})=>{
+          onChange={({name, placeId, city, countryCode})=>{
             setF(p=>({
               ...p,
               name,
               placeId: placeId||null,
               ...(city ? {city} : {}),
             }));
-            /** Pull autofill from the user's own past visits at this place
-             *  (keyed by placeId — survives casing/whitespace drift). */
             if(placeId){
+              const resolvedCurrency = getCurrencyForCountry(countryCode) || getCurrencyForCity(city || "");
+              setCurrencyCode(resolvedCurrency);
               const matches=(existingCafes||[]).filter(e=>e.placeId===placeId);
               if(matches.length>0){
                 const last=matches[matches.length-1];

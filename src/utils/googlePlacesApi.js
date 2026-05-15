@@ -114,6 +114,12 @@ function cityFromAddressComponents(components) {
   );
 }
 
+function countryCodeFromAddressComponents(components) {
+  if (!Array.isArray(components)) return "";
+  const c = components.find((c) => Array.isArray(c.types) && c.types.includes("country"));
+  return c?.shortText || "";
+}
+
 /** Race a promise against a timer so a hung network call doesn't leave the
  *  picker stuck loading forever. */
 function withTimeout(promise, ms, fallback) {
@@ -206,6 +212,7 @@ export async function searchGooglePlaces(client, { kind, query, cityHint, sessio
           verifiedName: p.displayName.text,
           verifiedAddress: p.formattedAddress || "",
           verifiedCity: cityFromAddressComponents(p.addressComponents || []),
+          countryCode: countryCodeFromAddressComponents(p.addressComponents || []),
           verifiedCuisine: cuisineFromTypes(p.primaryType, p.types),
           lat: p.location?.latitude ?? null,
           lng: p.location?.longitude ?? null,
