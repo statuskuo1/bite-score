@@ -52,7 +52,7 @@ function parseSavedNotes(notes, pillVocab) {
   return { favOrder, shouldntGet, pills, rest };
 }
 
-export function RestForm({initial,initialDineWith=[],onSave,onCancel,onFormChange,weights,addType,setAddType,existingEntries,existingCities,places,onPlaceCreated,user,tasteBudIds,tasteStep=0.1,onTasteStepChange}) {
+export function RestForm({initial,initialDineWith=[],onSave,onCancel,onChangeType,onFormChange,weights,existingEntries,existingCities,places,onPlaceCreated,user,tasteBudIds,tasteStep=0.1,onTasteStepChange}) {
   const {t} = useLang();
   const isEdit = !!initial.id;
   const [f,setF] = useState(() => {
@@ -96,14 +96,21 @@ export function RestForm({initial,initialDineWith=[],onSave,onCancel,onFormChang
   }
   return (
     <div style={{...S.card,marginBottom:12}}>
-      <SectionLabel>{t.theBasics}</SectionLabel>
       <FormScoreHeader
-        addType={addType}
-        setAddType={setAddType}
         score={score}
         scoreColor={scoreColor(score)}
         scoreLabel={scoreLabel(score,t)}
       />
+      {onChangeType && (
+        <button
+          type="button"
+          onClick={onChangeType}
+          style={{background:"none",border:"none",cursor:"pointer",fontSize:12,color:"#888780",padding:0,marginBottom:12,textDecoration:"underline",textDecorationStyle:"dotted"}}
+        >
+          ← Change
+        </button>
+      )}
+      <SectionLabel>{t.theBasics}</SectionLabel>
       <div style={{marginBottom:16}}>
         <FieldLabel>{t.city||"City"} *</FieldLabel>
         <CityInput value={f.city||""} onChange={val=>{ inp("city",val); setCurrencyCode(getCurrencyForCity(val)); }} existingCities={existingCities} />

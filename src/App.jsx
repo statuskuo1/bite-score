@@ -44,6 +44,7 @@ import { MouthLogo } from "./components/MouthLogo.jsx";
 import { RestRow } from "./components/RestRow.jsx";
 import { RestForm } from "./components/RestForm.jsx";
 import { CafeForm } from "./components/CafeForm.jsx";
+import { AddEntryTypeChoice } from "./components/AddEntryTypeChoice.jsx";
 import { CafeGroupRow } from "./components/CafeGroupRow.jsx";
 import { SuggestView } from "./components/SuggestView.jsx";
 import { PaletteView } from "./components/PaletteView.jsx";
@@ -524,6 +525,7 @@ export default function App() {
     setAddDraftData(null);
     setAddFormKey(k => k + 1);
     setAddType(entryType === "cafe" ? "cafe" : "restaurant");
+    setAddChoiceMade(true);
     navigate("/add");
   }
 
@@ -576,6 +578,7 @@ export default function App() {
       setAddDraftData(null);
       setAddFormKey((k) => k + 1);
       setAddType(isCafe ? "cafe" : "restaurant");
+      setAddChoiceMade(true);
       navigate("/add");
       return;
     }
@@ -643,6 +646,7 @@ export default function App() {
     setAddDraftData(null);
     setAddFormKey((k) => k + 1);
     setAddType(isCafe ? "cafe" : "restaurant");
+    setAddChoiceMade(true);
     navigate("/add");
   }
 
@@ -1241,7 +1245,13 @@ export default function App() {
       setAddTagTaggerId(null);
       setAddGroupVisitId(null);
     } else {
-      // Navigated TO /add — restore draft if no prefill is active
+      // Navigated TO /add — restore draft if no prefill is active. Also
+      // decide whether to show the AddEntryTypeChoice picker: only skip it
+      // when we have an explicit kind hint (notif/tag prefill with a
+      // place name/id, group_visit, tagger, dined-with seed, or a
+      // restorable draft). City-only prefill from onboarding still shows
+      // the picker so first-time users can choose their first kind.
+      let draftRestored = false;
       if (user?.id && !addPrefill) {
         try {
           const raw = localStorage.getItem(`bite_addRating_draft_${user.id}`);
@@ -1250,10 +1260,16 @@ export default function App() {
             if (draft?.f?.name) {
               setAddDraftData(draft);
               setAddType(draft.addType || "restaurant");
+              draftRestored = true;
             }
           }
         } catch {}
       }
+      const hasPrefillIdentity = !!(addPrefill?.name || addPrefill?.placeId)
+        || addInitialDineWith.length > 0
+        || !!addGroupVisitId
+        || !!addTagTaggerId;
+      setAddChoiceMade(draftRestored || hasPrefillIdentity);
     }
   }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1263,6 +1279,11 @@ export default function App() {
   const [editC, setEditC] = useState(null);
   const [editDineWith, setEditDineWith] = useState([]);
   const [addType, setAddType] = useState("restaurant");
+  // Gates the AddEntryTypeChoice picker. False = picker visible, true = form
+  // visible. Flipped to true automatically by any prefill path (notif tag,
+  // group_visit, edit "Move to" hop, draft restore) so users with incoming
+  // context skip the picker. Reset to false on /add entry with no context.
+  const [addChoiceMade, setAddChoiceMade] = useState(false);
   const [addSaveErr, setAddSaveErr] = useState(null);
   useEffect(() => { setAddSaveErr(null); }, [addType]);
   // Surface DB write failures from the /log Edit save handlers. Without this,
@@ -2420,6 +2441,7 @@ export default function App() {
         setEditC(null); setEditDineWith([]);
         setAddPrefill({ name: e.name, city: e.city||"", placeId: resolvedPlaceId||null, category: e.category });
         setAddType("cafe");
+        setAddChoiceMade(true);
         navigate("/add");
       }}
       onCancel={()=>{setEditC(null);setEditDineWith([]);setEditSaveErr(null);window.scrollTo({top:0,behavior:"smooth"});}} tasteStep={tasteHalfStep?0.5:0.1} onTasteStepChange={saveTasteStep}/>
@@ -2502,11 +2524,14 @@ export default function App() {
                 });
               } else {
                 setAddType(type);
+                setAddChoiceMade(true);
               }
             }}
           />}
           {addSaveErr&&<div style={{background:"#3C1F13",border:"1px solid #F0997B",borderRadius:8,padding:"10px 14px",marginBottom:12,fontSize:13,color:"#F0997B"}}>{addSaveErr}</div>}
-          {addType==="restaurant"
+          {!addChoiceMade
+            ? <AddEntryTypeChoice onPick={(type)=>{setAddType(type);setAddChoiceMade(true);}}/>
+            : addType==="restaurant"
             ?<RestForm key={addFormKey} initial={{...INIT_REST,city:lastCity.current||profile?.home_city||"",...(addPrefill||(addDraftData?.addType==="restaurant"?addDraftData.f:null)||{})}} initialDineWith={addInitialDineWith.length?addInitialDineWith:(addDraftData?.addType==="restaurant"&&!addPrefill?addDraftData.dineWith||[]:[])} weights={weights} existingEntries={st.entries} existingCities={existingCities} places={restaurantPlaces}
                 onPlaceCreated={(p)=>upsertPlace(setRestaurantPlaces, p.id, p)}
                 onFormChange={(s)=>{formStateRef.current=s;}}
@@ -2615,7 +2640,7 @@ export default function App() {
                 }}
                 onCancel={()=>{formStateRef.current=null;setAddPrefill(null);setAddInitialDineWith([]);setAddTagTaggerId(null);navigate("/log");}}
                 tasteStep={tasteHalfStep?0.5:0.1} onTasteStepChange={saveTasteStep}
-                addType={addType} setAddType={setAddType}
+                onChangeType={()=>{formStateRef.current=null;setAddDraftData(null);setAddFormKey(k=>k+1);setAddChoiceMade(false);}}
               />
             :<CafeForm key={addFormKey} initial={{...INIT_CAFE,city:lastCity.current||profile?.home_city||"",...(addPrefill||(addDraftData?.addType==="cafe"?addDraftData.f:null)||{})}} initialDineWith={addInitialDineWith.length?addInitialDineWith:(addDraftData?.addType==="cafe"&&!addPrefill?addDraftData.dineWith||[]:[])} weights={drinkWeights}
                 onPlaceCreated={(p)=>upsertPlace(setCafePlaces, p.id, p)}
@@ -2718,7 +2743,7 @@ export default function App() {
                   window.scrollTo({top:0,behavior:"smooth"});
                 }}
                 onCancel={()=>{formStateRef.current=null;setAddPrefill(null);setAddInitialDineWith([]);setAddTagTaggerId(null);navigate("/log");}}
-                addType={addType} setAddType={setAddType}
+                onChangeType={()=>{formStateRef.current=null;setAddDraftData(null);setAddFormKey(k=>k+1);setAddChoiceMade(false);}}
                 existingCafes={cafes}
                 existingCities={existingCities}
                 places={cafePlaces}
