@@ -51,6 +51,7 @@ export function EntryCard({
   viewerProfile,
   mutable,
   onEdit,
+  onMove,
   onDelete,
   rank,
 }) {
@@ -63,7 +64,7 @@ export function EntryCard({
     if (!exp) setShowDiners(false);
   }, [exp]);
   return (
-    <SwipeRow mutable={mutable} onEdit={onEdit} onDelete={onDelete}>
+    <SwipeRow mutable={mutable} onEdit={onEdit} onMove={onMove} onDelete={onDelete}>
       <div style={{
         background: "#1E1E1C",
         border: "0.5px solid rgba(255,255,255,0.1)",

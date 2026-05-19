@@ -1258,6 +1258,7 @@ export default function App() {
   }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [pendingDelete, setPendingDelete] = useState(null);
+  const [pendingMove, setPendingMove] = useState(null);
   const [editR, setEditR] = useState(null);
   const [editC, setEditC] = useState(null);
   const [editDineWith, setEditDineWith] = useState([]);
@@ -1698,6 +1699,38 @@ export default function App() {
    *  for a row we already had under a different lookup) — but never overwrite
    *  existing non-empty values, so user-typed fallbacks aren't clobbered by
    *  empty Google data. */
+  function triggerMove(row, fromKind) {
+    if (!canMutateVisit(row, user)) return;
+    const toLabel = fromKind === "restaurant" ? "café" : "restaurant";
+    const hasGroup = (dinedWithMap.get(row.id) || []).length > 0;
+    const body = (
+      <>
+        <span>Your scores and notes will carry over. {fromKind === "restaurant" ? "Café" : "Restaurant"}-specific fields start blank — you can fill them in after.</span>
+        {hasGroup && <><br/><br/><span style={{color:"#F0997B"}}>Note: this will disconnect your log from the group dining event.</span></>}
+      </>
+    );
+    setPendingMove({
+      title: `Move to ${toLabel}?`,
+      body,
+      onConfirm: async () => {
+        try {
+          const moved = await moveVisit(supabase, { visit: row, fromKind, user });
+          if (fromKind === "restaurant") {
+            dispatch({ type: "DEL", id: row.id });
+            setCafes(p => [...p, moved]);
+            upsertPlace(setCafePlaces, moved.placeId, { name: moved.name, city: moved.city });
+          } else {
+            setCafes(p => p.filter(x => x.id !== row.id));
+            dispatch({ type: "ADD", e: moved });
+            upsertPlace(setRestaurantPlaces, moved.placeId, { name: moved.name, city: moved.city, cuisine: moved.cuisine || "", cuisine2: moved.cuisine2 || "", isFusion: !!moved.isFusion });
+          }
+        } catch (err) {
+          console.error("[BITE] moveVisit:", err);
+        }
+      },
+    });
+  }
+
   function upsertPlace(setter, placeId, fields) {
     setter((cur) => {
       const idx = cur.findIndex((p) => p.id === placeId);
@@ -2036,6 +2069,7 @@ export default function App() {
                       <div key={e.id} style={isCenter?{outline:"1.5px solid #F0997B",borderRadius:10,marginBottom:6}:{marginBottom:6}}>
                         <RestRow rank={absRank} e={e} display={display} user={user} visits={visits} group={grp} weights={weights} homeCurrency={homeCurrency} dinedWithForEntry={(id)=>dinedWithMap.get(id)||[]} viewerProfile={viewerProfile}
                           onEdit={v=>{const entry=v||e;setEditR(entry);setEditDineWith(dinedWithMap.get(entry.id)||[]);window.scrollTo({top:0,behavior:"smooth"});}}
+                          onMove={id=>{const row=st.entries.find(x=>x.id===(id||e.id));triggerMove(row,"restaurant");}}
                           onDelete={id=>{
                             const did=id||e.id;
                             const row=st.entries.find(x=>x.id===did);
@@ -2059,6 +2093,7 @@ export default function App() {
                       <div key={e.id}>
                         <RestRow rank={restaurantRankMap.get(e.name) ?? i+1} e={e} display={display} user={user} visits={visits} group={grp} weights={weights} homeCurrency={homeCurrency} dinedWithForEntry={(id)=>dinedWithMap.get(id)||[]} viewerProfile={viewerProfile}
                           onEdit={v=>{const entry=v||e;setEditR(entry);setEditDineWith(dinedWithMap.get(entry.id)||[]);window.scrollTo({top:0,behavior:"smooth"});}}
+                          onMove={id=>{const row=st.entries.find(x=>x.id===(id||e.id));triggerMove(row,"restaurant");}}
                           onDelete={id=>{
                             const did=id||e.id;
                             const row=st.entries.find(x=>x.id===did);
@@ -2138,7 +2173,7 @@ export default function App() {
                     const isCenter=name===contextDrink.name;
                     return(
                       <div key={name} style={isCenter?{outline:"1.5px solid #F0997B",borderRadius:10,marginBottom:6}:{marginBottom:6}}>
-                        <CafeGroupRow rank={absRank} group={grp} cafeSortBy={cafeSortBy} weights={drinkWeights} user={user} dinedWithForEntry={(id)=>dinedWithMap.get(id)||[]} viewerProfile={viewerProfile} onEdit={e=>{setEditC(e);setEditDineWith(dinedWithMap.get(e.id)||[]);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={id=>{const row=cafes.find(x=>x.id===id);if(!canMutateVisit(row,user))return;setPendingDelete({onConfirm:async()=>{try{await supabase.from("cafe_visits").delete().eq("id",id);}catch(err){console.error("cafe delete threw:",err);}setCafes(p=>p.filter(x=>x.id!==id));}});}}/>
+                        <CafeGroupRow rank={absRank} group={grp} cafeSortBy={cafeSortBy} weights={drinkWeights} user={user} dinedWithForEntry={(id)=>dinedWithMap.get(id)||[]} viewerProfile={viewerProfile} onEdit={e=>{setEditC(e);setEditDineWith(dinedWithMap.get(e.id)||[]);window.scrollTo({top:0,behavior:"smooth"});}} onMove={id=>{const row=cafes.find(x=>x.id===id);triggerMove(row,"cafe");}} onDelete={id=>{const row=cafes.find(x=>x.id===id);if(!canMutateVisit(row,user))return;setPendingDelete({onConfirm:async()=>{try{await supabase.from("cafe_visits").delete().eq("id",id);}catch(err){console.error("cafe delete threw:",err);}setCafes(p=>p.filter(x=>x.id!==id));}});}}/>
                       </div>
                     );
                   })}
@@ -2147,7 +2182,7 @@ export default function App() {
                 <>
                   {cafeGroupsPage.visible.map(([name,grp],i)=>(
                     <div key={name}>
-                      <CafeGroupRow rank={i+1} group={grp} cafeSortBy={cafeSortBy} weights={drinkWeights} user={user} dinedWithForEntry={(id)=>dinedWithMap.get(id)||[]} viewerProfile={viewerProfile} onEdit={e=>{setEditC(e);setEditDineWith(dinedWithMap.get(e.id)||[]);window.scrollTo({top:0,behavior:"smooth"});}} onDelete={id=>{const row=cafes.find(x=>x.id===id);if(!canMutateVisit(row,user))return;setPendingDelete({onConfirm:async()=>{try{await supabase.from("cafe_visits").delete().eq("id",id);}catch(err){console.error("cafe delete threw:",err);}setCafes(p=>p.filter(x=>x.id!==id));}});}}/>
+                      <CafeGroupRow rank={i+1} group={grp} cafeSortBy={cafeSortBy} weights={drinkWeights} user={user} dinedWithForEntry={(id)=>dinedWithMap.get(id)||[]} viewerProfile={viewerProfile} onEdit={e=>{setEditC(e);setEditDineWith(dinedWithMap.get(e.id)||[]);window.scrollTo({top:0,behavior:"smooth"});}} onMove={id=>{const row=cafes.find(x=>x.id===id);triggerMove(row,"cafe");}} onDelete={id=>{const row=cafes.find(x=>x.id===id);if(!canMutateVisit(row,user))return;setPendingDelete({onConfirm:async()=>{try{await supabase.from("cafe_visits").delete().eq("id",id);}catch(err){console.error("cafe delete threw:",err);}setCafes(p=>p.filter(x=>x.id!==id));}});}}/>
                       {cafeSearch.trim()&&(
                         <button type="button" onClick={()=>{const idx=cafeGroupsAll.findIndex(([n])=>n===name);if(idx>=0){setCafeSearch("");setContextDrink({name,idx});}}} style={{fontSize:11,color:"#F0997B",background:"none",border:"none",cursor:"pointer",padding:"2px 0 6px 58px",display:"block"}}>
                           Show ±3 rankings around #{cafeRankMap.get(name)}
@@ -2199,20 +2234,6 @@ export default function App() {
       <RestForm initial={editR} initialDineWith={editDineWith} weights={weights} existingEntries={!user ? guestEntries : st.entries} existingCities={!user ? [...new Set(guestEntries.map(e=>e.city).filter(Boolean))] : existingCities} places={!user ? [] : restaurantPlaces}
         user={user} tasteBudIds={tasteBudIds}
         onPlaceCreated={(p)=>{ if (user) upsertPlace(setRestaurantPlaces, p.id, p); }}
-        onMove={user && editR?.id ? async () => {
-          try {
-            const moved = await moveVisit(supabase, { visit: editR, fromKind: "restaurant", user });
-            dispatch({ type: "DEL", id: editR.id });
-            setCafes(p => [...p, moved]);
-            upsertPlace(setCafePlaces, moved.placeId, { name: moved.name, city: moved.city });
-          } catch (err) {
-            console.error("[BITE] moveVisit rest→cafe:", err);
-            setEditSaveErr(err?.message || "Move failed — check console");
-            return;
-          }
-          setEditR(null); setEditDineWith([]); setEditSaveErr(null);
-          window.scrollTo({ top: 0, behavior: "smooth" });
-        } : undefined}
         onSave={async e=>{
         setEditSaveErr(null);
         if (!user) {
@@ -2292,20 +2313,6 @@ export default function App() {
         user={user} tasteBudIds={tasteBudIds}
         onPlaceCreated={(p)=>{ if (user) upsertPlace(setCafePlaces, p.id, p); }}
         existingCafes={!user ? guestCafes : cafes} existingCities={!user ? [...new Set(guestCafes.map(e=>e.city).filter(Boolean))] : existingCities} places={!user ? [] : cafePlaces}
-        onMove={user && editC?.id ? async () => {
-          try {
-            const moved = await moveVisit(supabase, { visit: editC, fromKind: "cafe", user });
-            setCafes(p => p.filter(x => x.id !== editC.id));
-            dispatch({ type: "ADD", e: moved });
-            upsertPlace(setRestaurantPlaces, moved.placeId, { name: moved.name, city: moved.city, cuisine: moved.cuisine || "", cuisine2: moved.cuisine2 || "", isFusion: !!moved.isFusion });
-          } catch (err) {
-            console.error("[BITE] moveVisit cafe→rest:", err);
-            setEditSaveErr(err?.message || "Move failed — check console");
-            return;
-          }
-          setEditC(null); setEditDineWith([]); setEditSaveErr(null);
-          window.scrollTo({ top: 0, behavior: "smooth" });
-        } : undefined}
         onSave={async e=>{
         setEditSaveErr(null);
         if (!user) {
@@ -2771,6 +2778,15 @@ export default function App() {
         <ConfirmSheet
           onConfirm={async()=>{setPendingDelete(null);await pendingDelete.onConfirm();}}
           onCancel={()=>setPendingDelete(null)}
+        />
+      )}
+      {pendingMove && (
+        <ConfirmSheet
+          title={pendingMove.title}
+          body={pendingMove.body}
+          confirmLabel="Move"
+          onConfirm={async()=>{setPendingMove(null);await pendingMove.onConfirm();}}
+          onCancel={()=>setPendingMove(null)}
         />
       )}
     </div>

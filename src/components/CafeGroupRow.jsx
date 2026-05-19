@@ -6,7 +6,7 @@ import { canSwipeGroup } from "../utils/rowAccess.js";
 import { EntryCard } from "./EntryCard.jsx";
 import { VisitsModal } from "./VisitsModal.jsx";
 
-export function CafeGroupRow({ group, cafeSortBy, onEdit, onDelete, user, weights, showAuthor = false, dinedWithForEntry, viewerProfile, rank }) {
+export function CafeGroupRow({ group, cafeSortBy, onEdit, onMove, onDelete, user, weights, showAuthor = false, dinedWithForEntry, viewerProfile, rank }) {
   const { t } = useLang();
   const [showVisits, setShowVisits] = useState(false);
   const icon = getCafeIcon(group[0].category, group[0].order);
@@ -99,6 +99,7 @@ export function CafeGroupRow({ group, cafeSortBy, onEdit, onDelete, user, weight
         viewerProfile={viewerProfile}
         mutable={swipeOk}
         onEdit={() => onEdit(group[group.length - 1])}
+        onMove={onMove ? () => onMove(group[group.length - 1].id) : undefined}
         onDelete={() => onDelete(group[group.length - 1].id)}
       />
     </>

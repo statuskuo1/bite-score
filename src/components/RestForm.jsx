@@ -52,7 +52,7 @@ function parseSavedNotes(notes, pillVocab) {
   return { favOrder, shouldntGet, pills, rest };
 }
 
-export function RestForm({initial,initialDineWith=[],onSave,onCancel,onMove,onFormChange,weights,addType,setAddType,existingEntries,existingCities,places,onPlaceCreated,user,tasteBudIds,tasteStep=0.1,onTasteStepChange}) {
+export function RestForm({initial,initialDineWith=[],onSave,onCancel,onFormChange,weights,addType,setAddType,existingEntries,existingCities,places,onPlaceCreated,user,tasteBudIds,tasteStep=0.1,onTasteStepChange}) {
   const {t} = useLang();
   const isEdit = !!initial.id;
   const [f,setF] = useState(() => {
@@ -68,7 +68,6 @@ export function RestForm({initial,initialDineWith=[],onSave,onCancel,onMove,onFo
   });
   const [sub,setSub] = useState(false);
   const [portionHint,setPortionHint] = useState(false);
-  const [showMoveConfirm,setShowMoveConfirm] = useState(false);
   const [dineWith,setDineWith] = useState(initialDineWith);
   const [selectedPills,setSelectedPills] = useState(() => {
     if (!isEdit) return [];
@@ -267,38 +266,6 @@ export function RestForm({initial,initialDineWith=[],onSave,onCancel,onMove,onFo
         </div>
         <textarea value={f.notes} onChange={e=>inp("notes",e.target.value)} placeholder="anything else to add?" rows={3} style={{width:"100%",boxSizing:"border-box",resize:"vertical"}}/>
       </div>
-      {isEdit && onMove && (
-        <div style={{marginBottom:12}}>
-          {!showMoveConfirm ? (
-            <button type="button" onClick={()=>setShowMoveConfirm(true)}
-              style={{background:"none",border:"none",cursor:"pointer",fontSize:12,color:"#888780",padding:0,textDecoration:"underline",textDecorationStyle:"dotted"}}>
-              Logged this as a restaurant? Move to café →
-            </button>
-          ) : (
-            <div style={{background:"#1E1E1C",border:"0.5px solid rgba(255,255,255,0.15)",borderRadius:8,padding:"12px 14px"}}>
-              <div style={{fontSize:13,color:"#F1EFE8",fontWeight:500,marginBottom:6}}>Move to café?</div>
-              <div style={{fontSize:12,color:"#888780",marginBottom:initialDineWith.length>0?6:10,lineHeight:1.5}}>
-                Your scores and notes will carry over. Café-specific fields (drink type, bean notes) will start blank — you can fill them in after.
-              </div>
-              {initialDineWith.length>0&&(
-                <div style={{fontSize:12,color:"#F0997B",marginBottom:10,lineHeight:1.5}}>
-                  Note: this will disconnect your log from the group dining event.
-                </div>
-              )}
-              <div style={{display:"flex",gap:8}}>
-                <button type="button" onClick={()=>setShowMoveConfirm(false)}
-                  style={{flex:1,padding:"7px",background:"transparent",color:"#888780",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:7,fontSize:13,cursor:"pointer"}}>
-                  Cancel
-                </button>
-                <button type="button" onClick={onMove}
-                  style={{flex:1,padding:"7px",background:"#3C1F13",color:"#F0997B",border:"0.5px solid rgba(240,153,123,0.3)",borderRadius:7,fontSize:13,cursor:"pointer"}}>
-                  Move to café
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
       <div style={S.row8}>
         <button onClick={onCancel} style={{flex:1,padding:"10px",background:"transparent",color:"#888780",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:8,fontSize:14,cursor:"pointer"}}>{t.cancel}</button>
         <button onClick={save} style={{flex:2,padding:"10px",background:"#F0997B",color:"#141413",border:"none",borderRadius:8,fontSize:15,fontWeight:500,cursor:"pointer"}}>{t.save}</button>

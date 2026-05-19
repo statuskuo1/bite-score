@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useLang } from "../contexts/LangContext.jsx";
 
-export function SwipeRow({children,onEdit,onDelete,mutable=true}) {
+export function SwipeRow({children,onEdit,onMove,onDelete,mutable=true}) {
   const {t} = useLang();
   const [off,setOff] = useState(0);
   const sx = useRef(null);
   const sy = useRef(null);
   const ref = useRef(null);
-  const T = 160;
+  const T = onMove ? 240 : 160;
   const innerRef = useRef(null);
   useEffect(()=>{
     function h(e){if(ref.current&&!ref.current.contains(e.target))setOff(0);}
@@ -39,6 +39,7 @@ export function SwipeRow({children,onEdit,onDelete,mutable=true}) {
     <div ref={ref} style={{position:"relative",overflow:"hidden",borderRadius:10,marginBottom:8,isolation:"isolate"}}>
       <div style={{position:"absolute",right:0,top:0,bottom:0,display:"flex",alignItems:"stretch",zIndex:0}}>
         <button onClick={()=>{setOff(0);onEdit();}} style={{width:80,background:"#185FA5",color:"#F1EFE8",border:"none",fontSize:12,fontWeight:500,cursor:"pointer"}}>Edit</button>
+        {onMove&&<button onClick={()=>{setOff(0);onMove();}} style={{width:80,background:"#1E5C42",color:"#F1EFE8",border:"none",fontSize:12,fontWeight:500,cursor:"pointer"}}>Move</button>}
         <button onClick={()=>{setOff(0);onDelete();}} style={{width:80,background:"#A32D2D",color:"#F1EFE8",border:"none",fontSize:12,fontWeight:500,cursor:"pointer"}}>{t.deleteLabel}</button>
       </div>
       <div

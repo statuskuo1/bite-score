@@ -7,7 +7,7 @@ import { EntryCard } from "./EntryCard.jsx";
 import { VisitsModal } from "./VisitsModal.jsx";
 import { formatCost } from "../utils/currency.js";
 
-export function RestRow({ e, display, onEdit, onDelete, user, visits = 1, group, weights, showAuthor = false, homeCurrency = "USD", dinedWithForEntry, viewerProfile, rank }) {
+export function RestRow({ e, display, onEdit, onMove, onDelete, user, visits = 1, group, weights, showAuthor = false, homeCurrency = "USD", dinedWithForEntry, viewerProfile, rank }) {
   const { t } = useLang();
   const [showVisits, setShowVisits] = useState(false);
   const flag = FLAGS[e.cuisine] || (e.letter || e.cuisine?.[0])?.toUpperCase() || "?";
@@ -96,6 +96,7 @@ export function RestRow({ e, display, onEdit, onDelete, user, visits = 1, group,
             window.scrollTo({ top: 0, behavior: "smooth" });
           }
         }}
+        onMove={onMove ? () => onMove(e.id) : undefined}
         onDelete={() => onDelete(e.id)}
       />
     </div>
