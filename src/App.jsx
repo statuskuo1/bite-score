@@ -5,6 +5,7 @@ import { useAuth } from "./contexts/AuthContext.jsx";
 import { T } from "./translations.js";
 import { supabase } from "./config/supabaseClient.js";
 import { canMutateVisit } from "./utils/rowAccess.js";
+import { moveVisit } from "./utils/moveVisitApi.js";
 import {
   fetchRestaurantVisitsJoined,
   fetchCafeVisitsJoined,
@@ -2198,6 +2199,20 @@ export default function App() {
       <RestForm initial={editR} initialDineWith={editDineWith} weights={weights} existingEntries={!user ? guestEntries : st.entries} existingCities={!user ? [...new Set(guestEntries.map(e=>e.city).filter(Boolean))] : existingCities} places={!user ? [] : restaurantPlaces}
         user={user} tasteBudIds={tasteBudIds}
         onPlaceCreated={(p)=>{ if (user) upsertPlace(setRestaurantPlaces, p.id, p); }}
+        onMove={user && editR?.id ? async () => {
+          try {
+            const moved = await moveVisit(supabase, { visit: editR, fromKind: "restaurant", user });
+            dispatch({ type: "DEL", id: editR.id });
+            setCafes(p => [...p, moved]);
+            upsertPlace(setCafePlaces, moved.placeId, { name: moved.name, city: moved.city });
+          } catch (err) {
+            console.error("[BITE] moveVisit rest→cafe:", err);
+            setEditSaveErr(err?.message || "Move failed — check console");
+            return;
+          }
+          setEditR(null); setEditDineWith([]); setEditSaveErr(null);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        } : undefined}
         onSave={async e=>{
         setEditSaveErr(null);
         if (!user) {
@@ -2277,6 +2292,20 @@ export default function App() {
         user={user} tasteBudIds={tasteBudIds}
         onPlaceCreated={(p)=>{ if (user) upsertPlace(setCafePlaces, p.id, p); }}
         existingCafes={!user ? guestCafes : cafes} existingCities={!user ? [...new Set(guestCafes.map(e=>e.city).filter(Boolean))] : existingCities} places={!user ? [] : cafePlaces}
+        onMove={user && editC?.id ? async () => {
+          try {
+            const moved = await moveVisit(supabase, { visit: editC, fromKind: "cafe", user });
+            setCafes(p => p.filter(x => x.id !== editC.id));
+            dispatch({ type: "ADD", e: moved });
+            upsertPlace(setRestaurantPlaces, moved.placeId, { name: moved.name, city: moved.city, cuisine: moved.cuisine || "", cuisine2: moved.cuisine2 || "", isFusion: !!moved.isFusion });
+          } catch (err) {
+            console.error("[BITE] moveVisit cafe→rest:", err);
+            setEditSaveErr(err?.message || "Move failed — check console");
+            return;
+          }
+          setEditC(null); setEditDineWith([]); setEditSaveErr(null);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        } : undefined}
         onSave={async e=>{
         setEditSaveErr(null);
         if (!user) {
