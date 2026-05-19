@@ -28,7 +28,7 @@ function meanCafeBiteOutOf10(entries, wts) {
   for (const e of entries) {
     const v = calcCafeOutOf10(
       +e.taste, +e.cost, +e.portions, +(e.wait || 0),
-      e.use_r !== false, +e.repeatability,
+      e.useR !== false, +e.repeatability,
       wts, e.currency_code || "USD",
     );
     if (v != null && !Number.isNaN(v)) {
@@ -68,7 +68,7 @@ export async function fetchUsersBiteAtPlace(client, userIds, post) {
 
   const profilesP = client
     .from("profiles")
-    .select("id, pref_weight_taste, pref_weight_bpb, pref_weight_wait")
+    .select("id, pref_weight_taste, pref_weight_bpb, pref_weight_wait, pref_weight_drink_taste, pref_weight_drink_bpb, pref_weight_drink_wait")
     .in("id", ids);
 
   const [visitsRes, profilesRes] = await Promise.all([visitsP, profilesP]);
@@ -91,11 +91,10 @@ export async function fetchUsersBiteAtPlace(client, userIds, post) {
   /** Index weights by user; missing rows fall back to defaults via normalizeWeights. */
   const weightsByUser = new Map();
   for (const p of profilesRes.data || []) {
-    weightsByUser.set(p.id, normalizeWeights({
-      taste: p.pref_weight_taste,
-      bpb: p.pref_weight_bpb,
-      wait: p.pref_weight_wait,
-    }));
+    const wts = isCafe
+      ? normalizeWeights({ taste: p.pref_weight_drink_taste, bpb: p.pref_weight_drink_bpb, wait: p.pref_weight_drink_wait })
+      : normalizeWeights({ taste: p.pref_weight_taste, bpb: p.pref_weight_bpb, wait: p.pref_weight_wait });
+    weightsByUser.set(p.id, wts);
   }
 
   for (const uid of ids) {
