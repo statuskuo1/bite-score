@@ -1,21 +1,27 @@
 import { ScoreDisplay } from "./ScoreDisplay.jsx";
 
 /**
- * Top-of-form chrome: live score preview on the right, blank spacer on the
- * left. Used by both RestForm and CafeForm in add + edit modes.
+ * Live score preview pinned to the top-right of the parent form card so it
+ * sits inline with the "← Change" link and "THE BASICS" section label on the
+ * left. Renders a small "BITE Score" caption above the value.
  *
- * The restaurant/cafe toggle pill that used to live here was removed when
- * the AddEntryTypeChoice picker took over kind selection on /add. The
- * "← Change" link in the form (when `onChangeType` is provided) is the new
- * way to switch kinds.
+ * The parent card must set `position: "relative"` for this absolute anchor
+ * to work. Used by both RestForm and CafeForm in add + edit modes.
  */
 export function FormScoreHeader({ score, scoreColor, scoreLabel }) {
   return (
     <div style={{
-      display: "flex", justifyContent: "space-between",
-      alignItems: "center", marginBottom: 16,
+      position: "absolute",
+      top: "1rem",
+      right: "1.25rem",
+      textAlign: "right",
     }}>
-      <div />
+      <div style={{
+        fontSize: 10, color: "#888780", letterSpacing: "0.06em",
+        textTransform: "uppercase", marginBottom: 4,
+      }}>
+        BITE Score
+      </div>
       <ScoreDisplay value={score} label={scoreLabel} color={scoreColor} size="lg" />
     </div>
   );

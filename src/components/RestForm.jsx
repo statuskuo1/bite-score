@@ -95,7 +95,7 @@ export function RestForm({initial,initialDineWith=[],onSave,onCancel,onChangeTyp
     onSave({...f,placeId:f.placeId||null,taste:+f.taste,cost:+f.cost,currency_code:currencyCode,portions:+f.portions,wait:+f.wait,repeatability:+f.repeatability,dineWith,visitedAt:visitDateIso||null,notes:fullNotes});
   }
   return (
-    <div style={{...S.card,marginBottom:12}}>
+    <div style={{...S.card,marginBottom:12,position:"relative"}}>
       <FormScoreHeader
         score={score}
         scoreColor={scoreColor(score)}

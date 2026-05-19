@@ -393,7 +393,7 @@ export function CafeForm({initial,initialDineWith=[],onSave,onSaveAndContinue,on
 
 
   return (
-    <div style={{...S.card,marginBottom:12}}>
+    <div style={{...S.card,marginBottom:12,position:"relative"}}>
       <FormScoreHeader
         score={score}
         scoreColor={cafeScoreColor(score)}
