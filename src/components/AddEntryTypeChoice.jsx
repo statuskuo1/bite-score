@@ -17,13 +17,13 @@ export function AddEntryTypeChoice({ onPick }) {
       <div style={{ fontSize: 11, fontWeight: 600, color: "#D85A30", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>
         New entry
       </div>
-      <div style={{ fontSize: 22, fontWeight: 500, color: "#F1EFE8", marginBottom: 6, lineHeight: 1.2 }}>
+      <div style={{ fontSize: 20, fontWeight: 500, color: "#F1EFE8", marginBottom: 4, lineHeight: 1.2 }}>
         What are you logging?
       </div>
-      <div style={{ fontSize: 13, color: "#888780", lineHeight: 1.5, marginBottom: 20 }}>
+      <div style={{ fontSize: 12, color: "#888780", lineHeight: 1.4, marginBottom: 12 }}>
         Pick the type to load the right scoring fields.
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {CARDS.map((card) => (
           <ChoiceCard key={card.type} card={card} onPick={onPick} />
         ))}
@@ -85,8 +85,8 @@ function ChoiceCard({ card, onPick }) {
   const baseStyle = {
     width: "100%",
     textAlign: "left",
-    padding: "22px 20px",
-    borderRadius: 14,
+    padding: "14px 16px",
+    borderRadius: 12,
     background: active ? card.hoverBg : card.bg,
     border: `1px ${card.borderStyle || "solid"} ${active ? card.hoverBorder : card.border}`,
     cursor: disabled ? "default" : "pointer",
@@ -102,12 +102,12 @@ function ChoiceCard({ card, onPick }) {
 
   const content = (
     <>
-      <div style={{ fontSize: 44, lineHeight: 1, flexShrink: 0 }}>{card.icon}</div>
+      <div style={{ fontSize: 34, lineHeight: 1, flexShrink: 0 }}>{card.icon}</div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
           display: "inline-block",
-          padding: "3px 8px",
-          borderRadius: 6,
+          padding: "2px 7px",
+          borderRadius: 5,
           fontSize: 10,
           fontWeight: 600,
           letterSpacing: "0.06em",
@@ -115,14 +115,14 @@ function ChoiceCard({ card, onPick }) {
           background: card.pillBg,
           color: card.accent,
           border: `0.5px solid ${card.pillBorder}`,
-          marginBottom: 6,
+          marginBottom: 4,
         }}>
           {card.tag}
         </div>
-        <div style={{ fontSize: 18, fontWeight: 500, color: card.accent, marginBottom: 3, lineHeight: 1.3 }}>
+        <div style={{ fontSize: 16, fontWeight: 500, color: card.accent, marginBottom: 2, lineHeight: 1.3 }}>
           {card.name}
         </div>
-        <div style={{ fontSize: 13, color: "#888780", lineHeight: 1.5 }}>
+        <div style={{ fontSize: 12, color: "#888780", lineHeight: 1.4 }}>
           {card.desc}
         </div>
       </div>
