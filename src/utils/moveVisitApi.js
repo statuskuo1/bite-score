@@ -123,7 +123,25 @@ export async function moveVisit(client, { visit, fromKind, user }) {
     .single();
   if (insertErr) throw insertErr;
 
-  // 4. Delete source visit. FK cascade nulls group_visit_members automatically.
+  // 3b. Re-link any group_visit_members rows that referenced the old visit so
+  //     the mover stays connected to the shared dining event after the move.
+  //     We null the old FK and set the new one in a single UPDATE — satisfying
+  //     the at-most-one constraint without a transient violation.
+  const oldCol = `${fromKind}_visit_id`;
+  const newCol = `${toKind}_visit_id`;
+  const { data: members } = await client
+    .from("group_visit_members")
+    .select("id")
+    .eq(oldCol, visit.id);
+  if (members?.length) {
+    await client
+      .from("group_visit_members")
+      .update({ [newCol]: newRow.id, [oldCol]: null })
+      .in("id", members.map((m) => m.id));
+  }
+
+  // 4. Delete source visit. The FK cascade is now a no-op since we already
+  //    nulled the old column in group_visit_members above.
   const { error: deleteErr } = await client
     .from(srcTable)
     .delete()
